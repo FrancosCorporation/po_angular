@@ -9,9 +9,11 @@ import {
 
 @Component({
   selector: 'sample-po-multiselect-labs',
-  templateUrl: './sample-po-multiselect-labs.component.html'
+  templateUrl: './sample-po-multiselect-labs.component.html',
+  standalone: false
 })
 export class SamplePoMultiselectLabsComponent implements OnInit {
+  helperText: string;
   customLiterals: PoMultiselectLiterals;
   event: string;
   filterMode: string;
@@ -24,6 +26,12 @@ export class SamplePoMultiselectLabsComponent implements OnInit {
   placeholder: string;
   placeholderSearch: string;
   properties: Array<string>;
+  fieldErrorMessage: string;
+  filterService: string;
+  fieldLabel: string;
+  fieldValue: string;
+  size: string;
+  listboxPosition: string = 'bottom';
 
   public readonly filterModeOptions: Array<PoRadioGroupOption> = [
     { label: 'Starts With', value: 'startsWith' },
@@ -31,12 +39,29 @@ export class SamplePoMultiselectLabsComponent implements OnInit {
     { label: 'Ends With', value: 'endsWith' }
   ];
 
+  public readonly listboxPositionOptions: Array<any> = [
+    { label: 'top', value: 'top' },
+    { label: 'bottom', value: 'bottom' }
+  ];
+
   public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [
     { value: 'required', label: 'Required' },
+    { value: 'showRequired', label: 'Show Required' },
     { value: 'disabled', label: 'Disabled' },
     { value: 'optional', label: 'Optional' },
     { value: 'hideSearch', label: 'Hide Search' },
-    { value: 'sort', label: 'Sort' }
+    { value: 'autoHeight', label: 'Auto Height' },
+    { value: 'sort', label: 'Sort' },
+    { value: 'hideSelectAll', label: 'Hide Select All' },
+    { value: 'errorLimit', label: 'Limit Error Message' },
+    { value: 'labelTextWrap', label: 'Label Text Wrap' },
+    { value: 'loading', label: 'Loading' },
+    { value: 'compactLabel', label: 'Compact Label' }
+  ];
+
+  public readonly sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
   ];
 
   ngOnInit() {
@@ -61,6 +86,7 @@ export class SamplePoMultiselectLabsComponent implements OnInit {
   }
 
   restore() {
+    this.helperText = '';
     this.customLiterals = undefined;
     this.help = '';
     this.filterMode = undefined;
@@ -69,11 +95,16 @@ export class SamplePoMultiselectLabsComponent implements OnInit {
     this.placeholder = '';
     this.placeholderSearch = undefined;
     this.properties = [];
+    this.fieldErrorMessage = '';
+    this.filterService = '';
+    this.fieldLabel = '';
+    this.fieldValue = '';
 
     this.option = { label: undefined, value: undefined };
     this.options = [];
 
     this.event = '';
     this.multiselect = [];
+    this.size = 'medium';
   }
 }

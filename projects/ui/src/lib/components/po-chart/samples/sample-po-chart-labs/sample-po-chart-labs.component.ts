@@ -1,81 +1,487 @@
 import { Component, OnInit } from '@angular/core';
 
-import { PoChartSerie, PoChartType, PoSelectOption, PoChartOptions } from '@po-ui/ng-components';
+import {
+  PoChartSerie,
+  PoChartType,
+  PoSelectOption,
+  PoChartOptions,
+  PoChartDataLabel,
+  PoChartLabelFormat
+} from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-chart-labs',
-  templateUrl: './sample-po-chart-labs.component.html'
+  templateUrl: './sample-po-chart-labs.component.html',
+  standalone: false
 })
 export class SamplePoChartLabsComponent implements OnInit {
-  allCategories: Array<string> = [];
-  categories: string;
+  color: string;
+  stackGroupName: string;
   data;
-  event: string;
-  height: number;
   label: string;
-  series: Array<PoChartSerie>;
-  serieType: PoChartType;
-  title: string;
   tooltip: string;
   type: PoChartType;
+  serieType: PoChartType;
+  valueGauge: number;
+  fromGauge: number;
+  toGauge: number;
+  allCategories: Array<string> = [];
+  radarConfig: any = {
+    indicator: []
+  };
+
+  categories: string;
+  min: number;
+  max: number;
+  colorIndicator: string;
+  event: string;
+  height: number;
+  series: Array<PoChartSerie>;
+  title: string;
+  dataLabel: PoChartDataLabel;
+  isTypeGauge = false;
+  isTypeRadar = false;
+  disabledTooltip = false;
+  disabledType = false;
+  selectedSplitArea = false;
+  selectedAreaStyle = false;
   options: PoChartOptions = {
     axis: {
       minRange: undefined,
       maxRange: undefined,
-      gridLines: undefined
-    }
+      gridLines: undefined,
+      labelType: undefined,
+      paddingBottom: undefined,
+      paddingLeft: undefined,
+      paddingRight: undefined,
+      rotateLegend: undefined,
+      showXAxis: undefined,
+      showYAxis: undefined,
+      showAxisDetails: undefined
+    },
+    header: {
+      hideExpand: undefined,
+      hideExportCsv: undefined,
+      hideExportImage: undefined,
+      hideTableDetails: undefined
+    },
+    dataZoom: undefined,
+    fillPoints: undefined,
+    firstColumnName: undefined,
+    innerRadius: undefined,
+    borderRadius: undefined,
+    textCenterGraph: undefined,
+    descriptionChart: undefined,
+    subtitleGauge: undefined,
+    legend: undefined,
+    legendPosition: undefined,
+    legendVerticalPosition: undefined,
+    bottomDataZoom: undefined,
+    rendererOption: undefined,
+    pointer: undefined,
+    stacked: undefined,
+    roseType: undefined,
+    showFromToLegend: undefined
   };
 
+  selectedValuesDataLabel: Array<string> = [];
+  selectedValuesAxis: Array<string> = [];
+  selectedValuesHeader: Array<string> = [];
+  selectedValuesDataZoom: Array<string> = [];
+  selectedValuesFillPoints: Array<string> = [];
+  selectedRoseType: Array<string> = [];
+  selectedFromToLegend: Array<string> = [];
+  selectedPointer: Array<string> = [];
+  selectedStacked: Array<string> = [];
+  selectedValuesLegend: Array<string> = ['legend'];
+  selectedLegendVerticalPosition: PoChartOptions['legendVerticalPosition'] = 'bottom';
+  selectedLegendPosition: PoChartOptions['legendPosition'] = 'center';
+  selectedLegendType: PoChartOptions['legendPositionlegendType'] = 'plain';
+  selectedRendererOption: PoChartOptions['rendererOption'] = 'canvas';
+  selectedShapeOption = 'polygon';
+  helpRadar = 'Example: ["Bold", "Keen", "Calm", "Wise"]';
+  helpGeneric = 'Example: ["Jan", "Feb", "Mar", "Apr"]';
+
+  optionsAxis = [
+    { value: 'showXAxis', label: 'showXAxis' },
+    { value: 'showYAxis', label: 'showYAxis' },
+    { value: 'showAxisDetails', label: 'showAxisDetails' }
+  ];
+
+  optionsHeader = [
+    { value: 'hideTableDetails', label: 'hideTableDetails' },
+    { value: 'hideExpand', label: 'hideExpand' },
+    { value: 'hideExportCsv', label: 'hideExportCsv' },
+    { value: 'hideExportImage', label: 'hideExportImage' }
+  ];
+
+  optionsDataZoom = [
+    { value: 'dataZoom', label: 'dataZoom' },
+    { value: 'bottomDataZoom', label: 'bottomDataZoom' }
+  ];
+
+  optionsLegendVerticalPosition = [
+    { value: 'top', label: 'top' },
+    { value: 'bottom', label: 'bottom' }
+  ];
+
+  optionsLegendPosition = [
+    { value: 'left', label: 'left' },
+    { value: 'center', label: 'center' },
+    { value: 'right', label: 'right' }
+  ];
+
+  optionsLegendType = [
+    { value: 'plain', label: 'plain' },
+    { value: 'scroll', label: 'scroll' }
+  ];
+
+  optionsRendererOption = [
+    { value: 'canvas', label: 'canvas' },
+    { value: 'svg', label: 'svg' }
+  ];
+
+  optionsShapeOption = [
+    { value: 'polygon', label: 'polygon' },
+    { value: 'circle', label: 'circle' }
+  ];
+
   readonly typeOptions: Array<PoSelectOption> = [
+    { label: 'Line', value: PoChartType.Line },
+    { label: 'Area', value: PoChartType.Area },
+    { label: 'Bar', value: PoChartType.Bar },
+    { label: 'Column', value: PoChartType.Column },
     { label: 'Donut', value: PoChartType.Donut },
     { label: 'Pie', value: PoChartType.Pie },
-    { label: 'Line', value: PoChartType.Line },
-    { label: 'Column', value: PoChartType.Column },
-    { label: 'Bar', value: PoChartType.Bar }
+    { label: 'Gauge', value: PoChartType.Gauge },
+    { label: 'Radar', value: PoChartType.Radar }
   ];
+
+  readonly labelTypeOptions: Array<PoSelectOption> = [
+    { label: 'Number', value: PoChartLabelFormat.Number },
+    { label: 'Currency', value: PoChartLabelFormat.Currency }
+  ];
+
+  changeDataLabelOptions() {
+    this.dataLabel = {
+      ...this.dataLabel,
+      fixed: this.selectedValuesDataLabel.includes('fixed')
+    };
+  }
+
+  changeAxisOptions() {
+    const newAxis = {
+      showXAxis: this.selectedValuesAxis.includes('showXAxis'),
+      showYAxis: this.selectedValuesAxis.includes('showYAxis'),
+      showAxisDetails: this.selectedValuesAxis.includes('showAxisDetails')
+    };
+
+    this.options = {
+      ...this.options,
+      axis: newAxis
+    };
+  }
+
+  changeHeaderOptions() {
+    const newHeader = {
+      hideExpand: this.selectedValuesHeader.includes('hideExpand'),
+      hideExportCsv: this.selectedValuesHeader.includes('hideExportCsv'),
+      hideExportImage: this.selectedValuesHeader.includes('hideExportImage'),
+      hideTableDetails: this.selectedValuesHeader.includes('hideTableDetails')
+    };
+
+    this.options = {
+      ...this.options,
+      header: newHeader
+    };
+  }
+
+  changeDataZoomOptions() {
+    this.options = {
+      ...this.options,
+      dataZoom: this.selectedValuesDataZoom.includes('dataZoom'),
+      bottomDataZoom: this.selectedValuesDataZoom.includes('bottomDataZoom')
+    };
+
+    this.options = { ...this.options };
+  }
+
+  changeFillPointsOptions() {
+    this.options = {
+      ...this.options,
+      fillPoints: this.selectedValuesFillPoints.includes('fillPoints')
+    };
+  }
+
+  changeLegendOptions() {
+    this.options = {
+      ...this.options,
+      legend: this.selectedValuesLegend.includes('legend')
+    };
+  }
+
+  changeRoseTypeOptions() {
+    this.options = {
+      ...this.options,
+      roseType: this.selectedRoseType.includes('roseType')
+    };
+  }
+
+  changeShowFromToLegend() {
+    this.options = {
+      ...this.options,
+      showFromToLegend: this.selectedFromToLegend.includes('showFromToLegend')
+    };
+  }
+
+  changePointer() {
+    this.options = {
+      ...this.options,
+      pointer: this.selectedPointer.includes('pointer')
+    };
+  }
+
+  changeStacked() {
+    this.options = {
+      ...this.options,
+      stacked: this.selectedStacked.includes('stacked')
+    };
+  }
+
+  changeLegendVerticalPosition() {
+    this.options = {
+      ...this.options,
+      legendVerticalPosition: this.selectedLegendVerticalPosition
+    };
+  }
+
+  changeLegendPosition() {
+    this.options = {
+      ...this.options,
+      legendPosition: this.selectedLegendPosition
+    };
+  }
+
+  changeLegendType() {
+    this.options = {
+      ...this.options,
+      legendType: this.selectedLegendType
+    };
+  }
+
+  changeRendererOption() {
+    this.options = {
+      ...this.options,
+      rendererOption: this.selectedRendererOption
+    };
+  }
+
+  changeType(event) {
+    if (event === PoChartType.Gauge) {
+      this.isTypeGauge = true;
+      this.changeSwitchGauge(true);
+    }
+    if (event === PoChartType.Radar) {
+      this.isTypeRadar = true;
+      this.changeSwitchRadar(true);
+    }
+  }
+
+  changeSwitchGauge(event) {
+    this.restore(true);
+    this.disabledTooltip = event;
+    this.disabledType = event;
+    if (event) {
+      this.serieType = PoChartType.Gauge;
+      this.type = PoChartType.Gauge;
+      this.isTypeRadar = false;
+    } else {
+      this.serieType = undefined;
+      this.type = undefined;
+    }
+  }
+
+  changeSwitchRadar(event) {
+    this.restore(true, true);
+    this.disabledType = event;
+    if (event) {
+      this.serieType = PoChartType.Radar;
+      this.type = PoChartType.Radar;
+      this.isTypeGauge = false;
+    } else {
+      this.serieType = undefined;
+      this.type = undefined;
+    }
+  }
+
+  changeValueGauge(event) {
+    if (this.series?.length === 1 && !this.toGauge) {
+      this.series[0].data = event;
+      this.series = [...this.series];
+    }
+  }
 
   ngOnInit() {
     this.restore();
   }
 
-  addOptions() {
-    this.options = { ...this.options };
+  addOptions(actionOptions?: PoChartOptions) {
+    this.options = { ...this.options, ...(actionOptions ? { ...actionOptions } : {}) };
   }
 
   addCategories() {
     this.allCategories = this.convertToArray(this.categories);
   }
 
+  addIndicators() {
+    if (!this.categories) {
+      this.radarConfig = { indicator: [] };
+      return;
+    }
+
+    const arr = this.convertToArray(this.categories);
+
+    this.radarConfig = {
+      indicator: arr.map(item => ({ name: item, min: this.min, max: this.max, color: this.colorIndicator })),
+      shape: this.selectedShapeOption,
+      splitArea: this.selectedSplitArea
+    };
+  }
+
   addData() {
-    const data = isNaN(this.data) ? this.convertToArray(this.data) : Math.floor(this.data);
     const type = this.serieType ?? this.type;
 
-    this.series = [...this.series, { label: this.label, data, tooltip: this.tooltip, type }];
+    let data;
+
+    if (type === 'radar') {
+      const arr = this.convertToArray(this.data);
+      data = arr.map(v => Number(v));
+      this.addIndicators();
+    } else {
+      data = isNaN(this.data) ? this.convertToArray(this.data) : Math.floor(this.data);
+    }
+
+    const serie = {
+      label: this.label,
+      data,
+      tooltip: this.tooltip,
+      ...(this.color ? { color: this.color } : {}),
+      type,
+      stackGroupName: this.stackGroupName,
+      from: this.fromGauge,
+      to: this.toGauge,
+      areaStyle: this.selectedAreaStyle ?? undefined
+    };
+
+    this.series = [...this.series, serie];
+
+    this.label = undefined;
+    this.color = undefined;
+    this.data = undefined;
+    this.tooltip = undefined;
+    this.stackGroupName = undefined;
+    this.fromGauge = undefined;
+    this.toGauge = undefined;
+
+    if (!this.isTypeGauge) {
+      this.type = undefined;
+    }
+  }
+
+  isTypeGrid(): boolean {
+    return (
+      this.type === PoChartType.Line ||
+      this.type === PoChartType.Area ||
+      this.type === PoChartType.Column ||
+      this.type === PoChartType.Bar ||
+      this.type === PoChartType.Radar
+    );
   }
 
   changeEvent(eventName: string, serieEvent: PoChartSerie): void {
     this.event = `${eventName}: ${JSON.stringify(serieEvent)}`;
   }
 
-  restore() {
+  restore(fromGauge = false, keepRadar = false) {
+    this.color = undefined;
+    this.data = undefined;
+    this.label = undefined;
+    this.tooltip = undefined;
     this.type = undefined;
     this.serieType = undefined;
-    this.label = undefined;
+    this.fromGauge = undefined;
+    this.toGauge = undefined;
+    this.valueGauge = undefined;
+    this.allCategories = [];
     this.categories = undefined;
     this.event = undefined;
     this.height = undefined;
     this.series = [];
     this.title = undefined;
-    this.tooltip = undefined;
-    this.data = undefined;
-    this.allCategories = [];
+    this.disabledTooltip = false;
+    this.disabledType = false;
+
+    this.dataLabel = { fixed: false };
+
     this.options = {
+      ...this.options,
       axis: {
         minRange: undefined,
         maxRange: undefined,
-        gridLines: undefined
-      }
+        gridLines: undefined,
+        labelType: undefined,
+        paddingBottom: undefined,
+        paddingLeft: undefined,
+        paddingRight: undefined,
+        rotateLegend: undefined,
+        showXAxis: undefined,
+        showYAxis: undefined,
+        showAxisDetails: undefined
+      },
+      header: {
+        hideExpand: undefined,
+        hideExportCsv: undefined,
+        hideExportImage: undefined,
+        hideTableDetails: undefined
+      },
+      dataZoom: undefined,
+      fillPoints: undefined,
+      firstColumnName: undefined,
+      innerRadius: undefined,
+      borderRadius: undefined,
+      textCenterGraph: undefined,
+      descriptionChart: undefined,
+      subtitleGauge: undefined,
+      legend: undefined,
+      legendPosition: undefined,
+      legendVerticalPosition: undefined,
+      bottomDataZoom: undefined,
+      rendererOption: undefined,
+      pointer: undefined,
+      stacked: undefined,
+      roseType: undefined,
+      showFromToLegend: undefined
     };
+
+    this.selectedValuesDataLabel = [];
+    this.selectedValuesAxis = [];
+    this.selectedValuesHeader = [];
+    this.selectedValuesDataZoom = [];
+    this.selectedValuesFillPoints = [];
+    this.selectedValuesLegend = [];
+    this.selectedRoseType = [];
+
+    if (!fromGauge) {
+      this.selectedFromToLegend = [];
+      this.selectedPointer = [];
+      this.isTypeGauge = false;
+    }
+
+    if (!keepRadar) {
+      this.isTypeRadar = false;
+      this.categories = undefined;
+      this.radarConfig = [];
+    }
   }
 
   private convertToArray(value: string): Array<any> {

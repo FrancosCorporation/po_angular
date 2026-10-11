@@ -1,14 +1,15 @@
-import { Directive } from '@angular/core';
+import { ChangeDetectorRef, Directive } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, of, throwError } from 'rxjs';
 
-import { expectPropertiesValues } from '../../../../util-test/util-expect.spec';
-import { PoTableColumnSort } from '../../../po-table/interfaces/po-table-column-sort.interface';
-import { PoTableColumnSortType } from '../../../po-table/enums/po-table-column-sort-type.enum';
-import { PoLanguageService } from '../../../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../../../services/po-language/po-language.constant';
-
-import { poLookupLiteralsDefault, PoLookupModalBaseComponent } from './po-lookup-modal-base.component';
+import { PoLanguageService } from '../../../../services/po-language/po-language.service';
+import { configureTestSuite, expectPropertiesValues } from '../../../../util-test/util-expect.spec';
+import { PoTableColumnSortType } from '../../../po-table/enums/po-table-column-sort-type.enum';
+import { PoTableColumnSort } from '../../../po-table/interfaces/po-table-column-sort.interface';
 import { PoLookupResponseApi } from '../interfaces/po-lookup-response-api.interface';
+import { poLookupLiteralsDefault, PoLookupModalBaseComponent } from './po-lookup-modal-base.component';
+import { convertToBoolean } from 'projects/ui/src/lib/utils/util';
 
 @Directive()
 class PoLookupModalComponent extends PoLookupModalBaseComponent {
@@ -18,19 +19,20 @@ class PoLookupModalComponent extends PoLookupModalBaseComponent {
 
 describe('PoLookupModalBaseComponent:', () => {
   let component: PoLookupModalComponent;
-  let fakeSubscription;
+  let fixture: ComponentFixture<PoLookupModalComponent>;
+
+  let fakeSubscription = <any>{ unsubscribe: () => {} };
   let items;
 
   beforeEach(() => {
-    component = new PoLookupModalComponent(new PoLanguageService());
+    const changeDetector: any = { detectChanges: () => {} };
+    component = new PoLookupModalComponent(new PoLanguageService(), changeDetector);
 
     component.filterService = {
       getFilteredItems: ({ filter, pageSize }) => of({ items: [], hasNext: false }),
       getObjectByValue: () => of()
     };
-
     fakeSubscription = { unsubscribe: () => {} };
-
     items = [
       { value: 1, label: 'Água' },
       { value: 2, label: 'Café' },
@@ -38,6 +40,8 @@ describe('PoLookupModalBaseComponent:', () => {
       { value: 4, label: 'Suco Natural' },
       { value: 5, label: 'Suco em lata' }
     ];
+
+    component.poTable = <any>{ selectRowItem: cb => cb({}) };
 
     component.ngOnInit();
   });
@@ -54,7 +58,7 @@ describe('PoLookupModalBaseComponent:', () => {
 
   describe('Properties:', () => {
     it('literals: should return literals default if `_literals` is undefined', () => {
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component['_literals'] = undefined;
 
@@ -64,7 +68,7 @@ describe('PoLookupModalBaseComponent:', () => {
     it('literals: should set title with value of `literals.modalTitle`', () => {
       const literals = { 'modalTitle': 'title' };
 
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component.literals = literals;
 
@@ -73,7 +77,7 @@ describe('PoLookupModalBaseComponent:', () => {
 
     it('literals: shouldn`t define a title if a modalTitle is not defined', () => {
       const literals = { 'modalPrimaryActionLabel': 'action' };
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component.literals = literals;
 
@@ -81,7 +85,7 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('literals: should be in portuguese if browser is setted with an unsupported language', () => {
-      component['language'] = 'zw';
+      Object.defineProperty(component, 'language', { value: 'zw', configurable: true });
 
       component.literals = {};
 
@@ -89,7 +93,7 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('literals: should be in portuguese if browser is setted with `pt`', () => {
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component.literals = {};
 
@@ -97,7 +101,7 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('literals: should be in english if browser is setted with `en`', () => {
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       component.literals = {};
 
@@ -105,7 +109,7 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('literals: should accept custom literals and call `setTableLiterals`', () => {
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       spyOn(component, <any>'setTableLiterals');
 
@@ -120,7 +124,7 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('literals: should be in spanish if browser is setted with `es`', () => {
-      component['language'] = 'es';
+      Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
       component.literals = {};
 
@@ -128,7 +132,7 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('literals: should be in russian if browser is setted with `ru`', () => {
-      component['language'] = 'ru';
+      Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
 
       component.literals = {};
 
@@ -138,7 +142,7 @@ describe('PoLookupModalBaseComponent:', () => {
     it('literals: should update property with default literals if is setted with invalid values', () => {
       const invalidValues = [null, undefined, false, true, '', 'literals', 0, 10, [], [1, 2], () => {}];
 
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       expectPropertiesValues(component, 'literals', invalidValues, poLookupLiteralsDefault[poLocaleDefault]);
     });
@@ -251,6 +255,16 @@ describe('PoLookupModalBaseComponent:', () => {
       expect(advancedFilters).toEqual(expectedValue);
     });
 
+    it('getAdvancedFilters: should return correct page after uses AdvancedFilter, call `showMore` and call the AdvancedFilter again', () => {
+      component.primaryActionAdvancedFilter.action();
+      component.showMoreEvent();
+
+      expect(component.page).toBe(2);
+
+      component.primaryActionAdvancedFilter.action();
+      expect(component.page).toBe(1);
+    });
+
     it('getAdvancedFilters: should return undefined if advancedParams length is equal to 0', () => {
       const emptyAdvancedParams = [];
       const advancedFilters = component['getAdvancedFilters'](emptyAdvancedParams);
@@ -267,6 +281,7 @@ describe('PoLookupModalBaseComponent:', () => {
 
       component.search();
 
+      expect(component.appliedSearchValue).toBe('Suco');
       expect(component['getFilteredItems']).toHaveBeenCalledWith('Suco');
       expect(component.items.length).toBe(2);
       expect(component.hasNext).toBeTruthy();
@@ -277,7 +292,7 @@ describe('PoLookupModalBaseComponent:', () => {
         items: [{ value: 1, label: 'Suco' }],
         hasNext: false
       };
-      component.searchValue = 'Suco';
+      component.appliedSearchValue = 'Suco';
 
       spyOn(component, <any>'getFilteredItems').and.returnValue(of(data));
       const spySetLookupResponseProperties = spyOn(component, <any>'setLookupResponseProperties');
@@ -290,16 +305,19 @@ describe('PoLookupModalBaseComponent:', () => {
     it('search: should call `setLookupResponseProperties` without param if the service returns with an error', () => {
       component.searchValue = 'Suco';
 
-      spyOn(component, <any>'getFilteredItems').and.returnValue(throwError(''));
+      spyOn(component, <any>'getFilteredItems').and.returnValue(throwError(() => new Error('')));
+      const spySearchFilteredItems = spyOn(component, <any>'searchFilteredItems').and.callThrough();
       const spySetLookupResponseProperties = spyOn(component, <any>'setLookupResponseProperties');
 
       component.search();
 
+      expect(component.appliedSearchValue).toBe('Suco');
+      expect(spySearchFilteredItems).toHaveBeenCalled();
       expect(spySetLookupResponseProperties).toHaveBeenCalled();
     });
 
     it('search: should call `initializeData` if `searchValue` is falsy.', () => {
-      component.searchValue = undefined;
+      component.appliedSearchValue = undefined;
 
       spyOn(component, <any>'initializeData');
 
@@ -309,7 +327,7 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('showMoreEvent: should apply false to `hasNext` and `isLoading` if the service returns with an error', () => {
-      component.searchValue = 'Suco';
+      component.appliedSearchValue = 'Suco';
       component.hasNext = true;
       component.isLoading = true;
 
@@ -326,7 +344,7 @@ describe('PoLookupModalBaseComponent:', () => {
       const returnedItems = [{ value: 6, label: 'Chocolate quente' }];
       component.page = 1;
       component.items = [].concat(items);
-      component.searchValue = searchValue;
+      component.appliedSearchValue = searchValue;
 
       spyOn(component, <any>'getFilteredItems').and.returnValue(of({ items: returnedItems }));
 
@@ -336,6 +354,26 @@ describe('PoLookupModalBaseComponent:', () => {
       expect(component.items.length).toBe([...items, ...returnedItems].length);
       expect(component.page).toBe(2);
       expect(component.isLoading).toBeFalsy();
+    });
+
+    it('setSelectedItems: should call `selectRowItem`', () => {
+      component.selecteds = [{ value: 1495832652942 }, { value: 1495832596999 }];
+
+      const spySelectRowItem = spyOn(component.poTable, 'selectRowItem').and.callThrough();
+
+      component.setSelectedItems();
+
+      expect(spySelectRowItem).toHaveBeenCalled();
+    });
+
+    it('setSelectedItems: should call `selectRowItem` if is multiple', () => {
+      component.selecteds = [{ value: 1495832652942 }, { value: 1495832596999 }];
+      component.multiple = true;
+      const spySelectRowItem = spyOn(component.poTable, 'selectRowItem').and.callThrough();
+
+      component.setSelectedItems();
+
+      expect(spySelectRowItem).toHaveBeenCalled();
     });
 
     it('setTableLiterals: should set table literals.', () => {
@@ -447,7 +485,7 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('onChangeDisclaimerGroup: should call searchFilteredItems if searchValue is empty', () => {
-      component.searchValue = undefined;
+      component.appliedSearchValue = undefined;
       const spySearch = spyOn(component, <any>'searchFilteredItems');
 
       component.onChangeDisclaimerGroup();
@@ -456,7 +494,7 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('onChangeDisclaimerGroup: should not call searchFilteredItems if searchValue is not empty', () => {
-      component.searchValue = 'hasValue';
+      component.appliedSearchValue = 'hasValue';
       const spySearch = spyOn(component, <any>'searchFilteredItems');
 
       component.onChangeDisclaimerGroup();
@@ -481,16 +519,244 @@ describe('PoLookupModalBaseComponent:', () => {
     });
 
     it('addDisclaimer: should create disclaimer and disclaimerGroup.disclaimer with parameters', () => {
-      const expectedValueDisclaimer = { property: 'propertyTest', value: 'valueTest' };
+      component.advancedFilters = [{ property: 'propertyTest' }];
+      const expectedValueDisclaimer = {
+        property: 'propertyTest',
+        value: 'valueTest',
+        label: 'PropertyTest: valueTest'
+      };
       const expectedValueDisclaimerGroup = {
         title: 'titleTest',
-        disclaimers: [{ property: 'propertyTest', value: 'valueTest' }]
+        disclaimers: [{ property: 'propertyTest', value: 'valueTest', label: 'PropertyTest: valueTest' }]
       };
 
       component.addDisclaimer('valueTest', 'propertyTest');
 
       expect(component.disclaimer).toEqual(expectedValueDisclaimer);
       expect(component.disclaimerGroup.disclaimers).toEqual(expectedValueDisclaimerGroup.disclaimers);
+    });
+
+    it("addDisclaimer: should return formated currency in locale default if field type is 'currency'", () => {
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
+      component.advancedFilters = [{ property: 'value', type: 'currency' }];
+      const expectedValueDisclaimer = { property: 'value', value: 321, label: 'Value: 321,00' };
+      const expectedValueDisclaimerGroup = {
+        title: 'titleTest',
+        disclaimers: [{ property: 'value', value: 321, label: 'Value: 321,00' }]
+      };
+
+      component.addDisclaimer(321, 'value');
+
+      expect(component.disclaimer).toEqual(expectedValueDisclaimer);
+      expect(component.disclaimerGroup.disclaimers).toEqual(expectedValueDisclaimerGroup.disclaimers);
+    });
+
+    it("addDisclaimer: should return formated currency in locale 'En' if field type is 'currency' and locale is 'en'", () => {
+      component.advancedFilters = [{ property: 'value', type: 'currency', locale: 'en' }];
+      const expectedValueDisclaimer = { property: 'value', value: 321, label: 'Value: 321.00' };
+      const expectedValueDisclaimerGroup = {
+        title: 'titleTest',
+        disclaimers: [{ property: 'value', value: 321, label: 'Value: 321.00' }]
+      };
+
+      component.addDisclaimer(321, 'value');
+
+      expect(component.disclaimer).toEqual(expectedValueDisclaimer);
+      expect(component.disclaimerGroup.disclaimers).toEqual(expectedValueDisclaimerGroup.disclaimers);
+    });
+
+    it('addDisclaimer: should return label of option if options and label are defined', () => {
+      component.advancedFilters = [
+        {
+          property: 'company',
+          options: [
+            { label: 'Totvs', value: 1 },
+            { label: 'PO UI', value: 2 }
+          ]
+        }
+      ];
+      const expectedValueDisclaimer = { property: 'company', value: 1, label: 'Company: Totvs' };
+      const expectedValueDisclaimerGroup = {
+        title: 'titleTest',
+        disclaimers: [{ property: 'company', value: 1, label: 'Company: Totvs' }]
+      };
+
+      component.addDisclaimer(1, 'company');
+
+      expect(component.disclaimer).toEqual(expectedValueDisclaimer);
+      expect(component.disclaimerGroup.disclaimers).toEqual(expectedValueDisclaimerGroup.disclaimers);
+    });
+
+    it('addDisclaimer: should return value of option if options is defined and label is undefined', () => {
+      component.advancedFilters = [
+        {
+          property: 'company',
+          options: [{ value: 1 }, { value: 2 }]
+        }
+      ];
+      const expectedValueDisclaimer = { property: 'company', value: 1, label: 'Company: 1' };
+      const expectedValueDisclaimerGroup = {
+        title: 'titleTest',
+        disclaimers: [{ property: 'company', value: 1, label: 'Company: 1' }]
+      };
+
+      component.addDisclaimer(1, 'company');
+
+      expect(component.disclaimer).toEqual(expectedValueDisclaimer);
+      expect(component.disclaimerGroup.disclaimers).toEqual(expectedValueDisclaimerGroup.disclaimers);
+    });
+
+    it('addDisclaimer: should return option label if options and label are defined and optionsMulti is true', () => {
+      component.advancedFilters = [
+        {
+          property: 'company',
+          label: 'The company',
+          optionsMulti: true,
+          options: [
+            { label: 'Totvs', value: 1 },
+            { label: 'PO UI', value: 2 }
+          ]
+        }
+      ];
+      const expectedValueDisclaimer = { property: 'company', value: [1, 2], label: 'The company: Totvs, PO UI' };
+      const expectedValueDisclaimerGroup = {
+        title: 'titleTest',
+        disclaimers: [{ property: 'company', value: [1, 2], label: 'The company: Totvs, PO UI' }]
+      };
+
+      component.addDisclaimer([1, 2], 'company');
+
+      expect(component.disclaimer).toEqual(expectedValueDisclaimer);
+      expect(component.disclaimerGroup.disclaimers).toEqual(expectedValueDisclaimerGroup.disclaimers);
+    });
+
+    it('addDisclaimer: should add disclaimer for boolean property when value is true', () => {
+      component.advancedFilters = [{ property: 'isApproved', type: 'boolean', label: 'Is Approved' }];
+
+      component.addDisclaimer(true, 'isApproved');
+
+      expect(component.disclaimer.label).toBe('Is Approved: true');
+    });
+
+    it('addDisclaimer: should add disclaimer for boolean property when value is false', () => {
+      component.advancedFilters = [{ property: 'isActive', type: 'boolean', label: 'Is Active' }];
+
+      component.addDisclaimer(false, 'isActive');
+
+      expect(component.disclaimer.label).toBe('Is Active: false');
+    });
+
+    it('formatValueToBoolean: should format value to boolean when filterValue is truthy', () => {
+      const filterValue = true;
+      const field = {
+        label: 'Field Label',
+        booleanTrue: 'Yes',
+        property: 'fieldProperty'
+      };
+
+      component['formatValueToBoolean'](field, filterValue);
+
+      expect(component['disclaimerLabel']).toBe('Yes');
+    });
+
+    it('formatValueToBoolean: should format value to boolean when filterValue is falsy', () => {
+      const filterValue = false;
+      const field = {
+        label: 'Field Label',
+        booleanFalse: 'No',
+        property: 'fieldProperty'
+      };
+
+      component['formatValueToBoolean'](field, filterValue);
+
+      expect(component['disclaimerLabel']).toBe('No');
+    });
+
+    it('formatValueToBoolean: should format value to property when label is not provided', () => {
+      const filterValue = true;
+      const field = {
+        property: 'fieldProperty'
+      };
+
+      component['formatValueToBoolean'](field, filterValue);
+
+      expect(component['disclaimerLabel']).toBe('true');
+    });
+
+    it('p-hide-columns-manager: should update property `p-hide-columns-manager` with valid value', () => {
+      component.hideColumnsManager = convertToBoolean(1);
+
+      expect(component.hideColumnsManager).toBe(true);
+    });
+
+    it('p-hide-columns-manager: should update property `p-hide-columns-manager` with invalid value', () => {
+      component.hideColumnsManager = convertToBoolean(21211);
+
+      expect(component.hideColumnsManager).toBe(false);
+    });
+
+    it('p-infinite-scroll: should update property `p-infinite-scroll` with valid value', () => {
+      component.infiniteScroll = convertToBoolean(1);
+
+      expect(component.infiniteScroll).toBe(true);
+    });
+
+    it('p-infinite-scroll: should update property `p-infinite-scroll` with invalid value', () => {
+      component.infiniteScroll = convertToBoolean(21211);
+
+      expect(component.infiniteScroll).toBe(false);
+    });
+
+    it('setDisclaimersItems: should set selecteds with component.selectedItems if component.selectedItems is array', () => {
+      const expectSelecteds = { value: 123, label: '123' };
+      component.multiple = false;
+      component.selectedItems = expectSelecteds;
+
+      component.setDisclaimersItems();
+
+      expect(component.selecteds[0]).toEqual(expectSelecteds);
+    });
+
+    it('setDisclaimersItems: should set selecteds with component.selectedItems if component.selectedItems is array and is multiple', () => {
+      const expectSelecteds = [{ value: 123, label: '123' }];
+      component.multiple = true;
+      component.selectedItems = [...expectSelecteds];
+
+      component.setDisclaimersItems();
+
+      expect(component.selecteds).toEqual(expectSelecteds);
+    });
+
+    it('setDisclaimersItems: should set selecteds with [component.selectedItems] if selectedItems isnt array', () => {
+      const expectSelecteds = [123456789];
+      component.multiple = true;
+      component.selectedItems = 123456789;
+
+      component.setDisclaimersItems();
+
+      expect(component.selecteds).toEqual(expectSelecteds);
+    });
+
+    it('setDisclaimersItems: should set selecteds with selectedItems if selecteds is empty and selectedItems is an array with elements', () => {
+      const expectSelecteds = [{ value: 123, label: '123' }];
+      component.selecteds = [];
+      component.selectedItems = [...expectSelecteds];
+
+      component.setDisclaimersItems();
+
+      expect(component.selecteds).toEqual(expectSelecteds);
+    });
+
+    it('Should emit item selected when component is not multiple ', () => {
+      component.selecteds = [{ value: 123456789 }];
+      component.multiple = true;
+      component.poModal = <any>{ close: () => {} };
+
+      spyOn(component.model, 'emit');
+
+      component.primaryAction.action();
+
+      expect(component.model.emit).toHaveBeenCalledWith([{ value: 123456789 }]);
     });
   });
 });

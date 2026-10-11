@@ -1,15 +1,49 @@
+import { Component } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+
+import { PoThemeA11yEnum } from '../../services';
 import { expectPropertiesValues } from '../../util-test/util-expect.spec';
+import { convertToBoolean } from '../../utils/util';
 
 import { PoProgressBaseComponent } from './po-progress-base.component';
 
+@Component({
+  template: '',
+  standalone: false
+})
+class TestHostComponent extends PoProgressBaseComponent {}
+
 describe('PoProgressBaseComponent:', () => {
-  const component = new PoProgressBaseComponent();
+  let component: TestHostComponent;
+  let fixture: ComponentFixture<TestHostComponent>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      declarations: [TestHostComponent]
+    });
+
+    fixture = TestBed.createComponent(TestHostComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
 
   it('should be created', () => {
     expect(component instanceof PoProgressBaseComponent).toBeTruthy();
   });
 
   describe('Properties:', () => {
+    it('p-disabled-cancel: should update property with `true` if valid values', () => {
+      component.disabledCancel = convertToBoolean(1);
+
+      expect(component.disabledCancel).toBe(true);
+    });
+
+    it('p-disabled-cancel: should update property with `false` if invalid values', () => {
+      component.disabledCancel = convertToBoolean(3);
+
+      expect(component.disabledCancel).toBe(false);
+    });
+
     it('p-indeterminate: should update property with `true` if valid values', () => {
       const validValues = [true, 'true', 1, ''];
 
@@ -22,6 +56,65 @@ describe('PoProgressBaseComponent:', () => {
       expectPropertiesValues(component, 'indeterminate', invalidValues, false);
     });
 
+    describe('p-size-actions', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.sizeActions = 'small';
+        expect(component.sizeActions).toBe('small');
+
+        component.sizeActions = 'medium';
+        expect(component.sizeActions).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.sizeActions = 'small';
+        expect(component.sizeActions).toBe('medium');
+
+        component.sizeActions = 'medium';
+        expect(component.sizeActions).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_sizeActions'] = undefined;
+        expect(component.sizeActions).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_sizeActions'] = undefined;
+        expect(component.sizeActions).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_sizeActions'] = undefined;
+        expect(component.sizeActions).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeActionsBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeActionsBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeActionsBasedOnA11y).toHaveBeenCalled();
+      });
+    });
     it('p-value: should update property with valid values', () => {
       const validValues = ['1', 25, 100, '50'];
       const expectedValues = [1, 25, 100, 50];
@@ -33,6 +126,159 @@ describe('PoProgressBaseComponent:', () => {
       const validValues = [150, 'test', -1, 1000];
 
       expectPropertiesValues(component, 'value', validValues, 0);
+    });
+
+    it('p-shape: should have default value as bar', () => {
+      expect(component.shape()).toBe('bar');
+    });
+
+    it('p-shape: should update with valid values', () => {
+      fixture.componentRef.setInput('p-shape', 'bar');
+      fixture.detectChanges();
+      expect(component.shape()).toBe('bar');
+
+      fixture.componentRef.setInput('p-shape', 'circle');
+      fixture.detectChanges();
+      expect(component.shape()).toBe('circle');
+    });
+
+    it('p-shape: should default to bar if has not valid values', () => {
+      fixture.componentRef.setInput('p-shape', 'square');
+      fixture.detectChanges();
+      expect(component.shape()).toBe('bar');
+
+      fixture.componentRef.setInput('p-shape', 'triangle');
+      fixture.detectChanges();
+      expect(component.shape()).toBe('bar');
+
+      fixture.componentRef.setInput('p-shape', 'hexagon');
+      fixture.detectChanges();
+      expect(component.shape()).toBe('bar');
+    });
+
+    it('p-radius: should have default value as 0', () => {
+      expect(component.radius()).toBe(0);
+    });
+
+    it('p-radius: should accept valid positive values', () => {
+      fixture.componentRef.setInput('p-radius', 30);
+      fixture.detectChanges();
+      expect(component.radius()).toBe(30);
+
+      fixture.componentRef.setInput('p-radius', 60);
+      fixture.detectChanges();
+      expect(component.radius()).toBe(60);
+    });
+
+    it('p-radius: should return 0 (default) for zero or negative values', () => {
+      fixture.componentRef.setInput('p-radius', 0);
+      fixture.detectChanges();
+      expect(component.radius()).toBe(0);
+
+      fixture.componentRef.setInput('p-radius', -10);
+      fixture.detectChanges();
+      expect(component.radius()).toBe(0);
+    });
+
+    it('p-radius: should apply minimum of 24 when value is positive but less than 24', () => {
+      fixture.componentRef.setInput('p-radius', 19);
+      fixture.detectChanges();
+      expect(component.radius()).toBe(24);
+
+      fixture.componentRef.setInput('p-radius', 1);
+      fixture.detectChanges();
+      expect(component.radius()).toBe(24);
+    });
+
+    it('p-radius: should convert string values to int', () => {
+      fixture.componentRef.setInput('p-radius', '50');
+      fixture.detectChanges();
+      expect(component.radius()).toBe(50);
+    });
+
+    it('p-radius: should return 0 for undefined or null values', () => {
+      fixture.componentRef.setInput('p-radius', undefined);
+      fixture.detectChanges();
+      expect(component.radius()).toBe(0);
+
+      fixture.componentRef.setInput('p-radius', null);
+      fixture.detectChanges();
+      expect(component.radius()).toBe(0);
+    });
+
+    it('should update property `p-size` with valid values', () => {
+      const validValues = ['large', 'medium'];
+
+      expectPropertiesValues(component, 'size', validValues, validValues);
+    });
+
+    it('should update property `p-size` with large if has not valid values', () => {
+      const invalidValues = ['extrasmall', 'huge', 'extralarge'];
+
+      expectPropertiesValues(component, 'size', invalidValues, 'large');
+    });
+
+    describe('p-custom-action:', () => {
+      it('should accept a valid PoProgressAction', () => {
+        const validCustomAction = {
+          label: 'Download',
+          icon: 'an an-download',
+          type: 'default',
+          visible: true,
+          disabled: false
+        };
+
+        component.customAction = validCustomAction;
+
+        expect(component.customAction).toEqual(validCustomAction);
+      });
+
+      it('should handle undefined or null values for customAction', () => {
+        const invalidValues = [null, undefined];
+
+        invalidValues.forEach(value => {
+          component.customAction = value;
+          expect(component.customAction).toBeFalsy();
+        });
+      });
+
+      it('should respect the visible property when it is a boolean', () => {
+        component.customAction = { label: 'Download', visible: true };
+
+        expect(component.customAction.visible).toBeTrue();
+      });
+
+      it('should respect the visible property when it is a function', () => {
+        component.customAction = { label: 'Download', visible: () => false };
+
+        const isVisible = (component.customAction.visible as Function)();
+
+        expect(isVisible).toBeFalse();
+      });
+
+      it('should respect the disabled property when it is a boolean', () => {
+        component.customAction = { label: 'Download', disabled: true };
+
+        expect(component.customAction.disabled).toBeTrue();
+      });
+
+      it('should respect the disabled property when it is a function', () => {
+        component.customAction = { label: 'Download', disabled: () => true };
+
+        const isDisabled = (component.customAction.disabled as Function)();
+
+        expect(isDisabled).toBeTrue();
+      });
+    });
+    describe('p-custom-action-click:', () => {
+      it('should emit when the event is triggered', () => {
+        spyOn(component.customActionClick, 'emit');
+
+        const mockFile = { name: 'example.txt' };
+        component.customActionClick.emit(mockFile);
+
+        expect(component.customActionClick.emit).toHaveBeenCalledWith(mockFile);
+      });
     });
   });
 

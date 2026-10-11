@@ -1,8 +1,10 @@
-import { Directive, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { Directive, EventEmitter, HostBinding, HostListener, Input, Output, ViewChild } from '@angular/core';
 
 import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
 import { PoLanguageService } from '../../../services/po-language/po-language.service';
 
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import { getDefaultSizeFn, validateSizeFn } from '../../../utils/util';
 import { PoBreadcrumb } from '../../po-breadcrumb/po-breadcrumb.interface';
 import { PoPageContentComponent } from '../po-page-content/po-page-content.component';
 import { PoPageEditLiterals } from './po-page-edit-literals.interface';
@@ -39,13 +41,23 @@ export const poPageEditLiteralsDefault = {
  * Os botões "Salvar" e "Salvar e Novo" podem ser habilitados/desabilitados utilizando a propriedade `p-disable-submit`.
  * Esta propriedade pode ser utilizada para desabilitar os botões caso exista um formulário inválido na página ou alguma
  * regra de negócio não tenha sido atendida.
+ *
+ * #### Tokens customizáveis
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade         | Descrição                                   | Valor Padrão                          |
+ * |---------------------|---------------------------------------------|---------------------------------------|
+ * | **Header**          |                                             |                                       |
+ * | `--padding`         | Espaçamento do header                       | `var(--spacing-xs) var(--spacing-md)` |
+ * | `--gap`             | Espaçamento entre os breadcrumbs e o título | `var(--spacing-md)`                   |
+ * | `--gap-actions`     | Espaçamento entre as ações                  | `var(--spacing-xs)`                   |
+ * | `--font-family`     | Família tipográfica do título               | `var(--font-family-theme)`            |
+ * | **Content**         |                                             |                                       |
+ * | `--padding-content` | Espaçamento do conteúdo                     | `var(--spacing-xs) var(--spacing-sm)` |
  */
 @Directive()
 export class PoPageEditBaseComponent {
-  private _literals: PoPageEditLiterals;
-  private _title: string;
-  private language: string;
-
   @ViewChild(PoPageContentComponent, { static: true }) poPageContent: PoPageContentComponent;
 
   /** Objeto com propriedades do breadcrumb. */
@@ -53,6 +65,73 @@ export class PoPageEditBaseComponent {
 
   /** Desabilita botões de submissão (save e saveNew) */
   @Input('p-disable-submit') disableSubmit?: boolean;
+
+  /**
+   * Evento que será disparado ao clicar no botão de "Cancelar".
+   *
+   * ```
+   * <po-page-edit (p-cancel)="myCancelFunction()">
+   * </po-page-edit>
+   * ```
+   *
+   * > Caso não utilizar esta propriedade, o botão de "Cancelar" não será exibido.
+   */
+  @Output('p-cancel') cancel = new EventEmitter();
+
+  /**
+   * Evento que será disparado ao clicar no botão de "Salvar".
+   *
+   * ```
+   * <po-page-edit (p-save)="mySaveFunction()">
+   * </po-page-edit>
+   * ```
+   *
+   * > Caso não utilizar esta propriedade, o botão de "Salvar" não será exibido.
+   */
+  @Output('p-save') save = new EventEmitter();
+
+  /**
+   * Evento que será disparado ao clicar no botão de "Salvar e Novo".
+   *
+   * ```
+   * <po-page-edit (p-save-new)="mySaveNewFunction()">
+   * </po-page-edit>
+   * ```
+   *
+   * > Caso não utilizar esta propriedade, o botão de "Salvar e Novo" não será exibido.
+   */
+  @Output('p-save-new') saveNew = new EventEmitter();
+
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _literals: PoPageEditLiterals;
+  private _title: string;
+  private readonly language: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
 
   /**
    * @optional
@@ -116,42 +195,35 @@ export class PoPageEditBaseComponent {
   }
 
   /**
-   * Evento que será disparado ao clicar no botão de "Cancelar".
+   * @optional
    *
-   * ```
-   * <po-page-edit (p-cancel)="myCancelFunction()">
-   * </po-page-edit>
+   * @description
+   *
+   * Subtitulo do Header da página.
+   *
+   * Suporta formatação básica com as tags `<b>` (negrito), `<strong>` (negrito), `<i>` (itálico), `<em>` (itálico) e
+   * `<u>` (sublinhado).
+   *
+   * Exemplo:
+   * ```typescript
+   * subtitle = 'Fields marked with <b>*</b> are <u>required</u>';
    * ```
    *
-   * > Caso não utilizar esta propriedade, o botão de "Cancelar" não será exibido.
+   * > Requer que `p-title` esteja definido.
    */
-  @Output('p-cancel') cancel? = new EventEmitter();
-
-  /**
-   * Evento que será disparado ao clicar no botão de "Salvar".
-   *
-   * ```
-   * <po-page-edit (p-save)="mySaveFunction()">
-   * </po-page-edit>
-   * ```
-   *
-   * > Caso não utilizar esta propriedade, o botão de "Salvar" não será exibido.
-   */
-  @Output('p-save') save? = new EventEmitter();
-
-  /**
-   * Evento que será disparado ao clicar no botão de "Salvar e Novo".
-   *
-   * ```
-   * <po-page-edit (p-save-new)="mySaveNewFunction()">
-   * </po-page-edit>
-   * ```
-   *
-   * > Caso não utilizar esta propriedade, o botão de "Salvar e Novo" não será exibido.
-   */
-  @Output('p-save-new') saveNew? = new EventEmitter();
+  @Input('p-subtitle') subtitle: string;
 
   constructor(languageService: PoLanguageService) {
     this.language = languageService.getShortLanguage();
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialComponentsSize, PoFieldSize);
+    this._componentsSize = size;
   }
 }

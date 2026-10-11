@@ -6,6 +6,7 @@ import { PoInputComponent } from './po-input.component';
 import { PoFieldContainerBottomComponent } from './../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
 import { PoFieldContainerComponent } from '../po-field-container/po-field-container.component';
 import { PoCleanComponent } from './../po-clean/po-clean.component';
+import { PoIconModule } from '../../po-icon';
 
 describe('PoInputComponent: ', () => {
   let component: PoInputComponent;
@@ -14,6 +15,7 @@ describe('PoInputComponent: ', () => {
 
   configureTestSuite(() => {
     TestBed.configureTestingModule({
+      imports: [PoIconModule],
       declarations: [PoInputComponent, PoFieldContainerComponent, PoCleanComponent, PoFieldContainerBottomComponent]
     });
   });
@@ -25,8 +27,6 @@ describe('PoInputComponent: ', () => {
     component.help = 'Help de teste';
     component.clean = true;
 
-    fixture.detectChanges();
-
     nativeElement = fixture.debugElement.nativeElement;
   });
 
@@ -35,14 +35,12 @@ describe('PoInputComponent: ', () => {
   });
 
   it('should create button clean', () => {
+    fixture.detectChanges();
     expect(nativeElement.querySelector('po-clean')).not.toBeNull();
   });
 
-  it('should have a Label', () => {
-    expect(fixture.debugElement.nativeElement.innerHTML).toContain('Label de teste');
-  });
-
   it('should have a Help', () => {
+    fixture.detectChanges();
     expect(fixture.debugElement.nativeElement.innerHTML).toContain('Help de teste');
   });
 
@@ -78,14 +76,14 @@ describe('PoInputComponent: ', () => {
     });
 
     it('should includes an icon.', () => {
-      component.icon = 'po-icon-settings';
+      component.icon = 'an-gear-six';
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('.po-icon-settings')).toBeTruthy();
+      expect(nativeElement.querySelector('.an-gear-six')).toBeTruthy();
     });
 
     it('should attribute `po-field-icon-disabled` class when input is disabled.', () => {
-      component.icon = 'po-icon-settings';
+      component.icon = 'an-gear-six';
       component.disabled = true;
       fixture.detectChanges();
 
@@ -93,41 +91,11 @@ describe('PoInputComponent: ', () => {
     });
 
     it('shouldn`t attribute `po-field-icon-disabled` class when input is not disabled.', () => {
-      component.icon = 'po-icon-settings';
+      component.icon = 'an-gear-six';
       component.disabled = false;
       fixture.detectChanges();
 
       expect(nativeElement.querySelector('.po-field-icon-disabled')).toBeFalsy();
-    });
-
-    it(`should show optional if the field isn't 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = false;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeTruthy();
-    });
-
-    it(`shouldn't show optional if the field is 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = true;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-    });
-
-    it(`shouldn't show optional if the field isn't 'required', has 'label' but 'p-optional' is false.`, () => {
-      component.required = true;
-      component.optional = false;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
     });
 
     it('should show po-clean if `clean` is true and `disabled` and `readonly` are false', () => {

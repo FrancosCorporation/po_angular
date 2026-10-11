@@ -7,15 +7,33 @@ module.exports = {
     classDoc.methods = [];
 
     //Extends
+    const resolvePropertiesRecursive = (classDoc, properties) => {
+      if (classDoc.docsExtends) {
+        let extendedDoc = allDocs.filter(doc => doc.name == classDoc.docsExtends)[0];
+
+        properties = resolvePropertiesRecursive(extendedDoc, properties);
+      }
+
+      properties = properties.concat(this.resolveProperties(classDoc));
+
+      return properties;
+    }
+
     if (classDoc.docsExtends) {
       let extendedDoc = allDocs.filter(doc => doc.name == classDoc.docsExtends)[0];
 
       if (extendedDoc) {
         let description = classDoc.description;
 
-        classDoc.description = `${extendedDoc.description} ${description}`;
-        classDoc.properties = this.resolveProperties(extendedDoc);
+        classDoc.properties = resolvePropertiesRecursive(extendedDoc, []);
         classDoc.methods = this.resolveMethods(extendedDoc);
+
+        if (classDoc.ignoreExtendedDescription == null) {
+          classDoc.description = `${extendedDoc.description} ${description}`;
+        } else {
+          classDoc.description = `${description}`;
+        }
+
       } else {
         console.warn(`Classe ${classDoc.docsExtends} extended by ${classDoc.name} não encontrada!`.red);
       }
@@ -23,7 +41,30 @@ module.exports = {
 
     // Resolve all methods and properties from the classDoc. Includes inherited docs.
     classDoc.methods = classDoc.methods.concat(this.resolveMethods(classDoc));
-    classDoc.properties = classDoc.properties.concat(this.resolveProperties(classDoc)).sort((a, b) => {
+
+    // Concatena propriedades da classe atual
+    const currentProperties = this.resolveProperties(classDoc);
+    classDoc.properties = classDoc.properties.concat(currentProperties);
+
+    // Remove propriedades duplicadas dando prioridade às que têm @override
+    const propertyMap = new Map();
+    for (const prop of classDoc.properties) {
+      const existing = propertyMap.get(prop.name);
+
+      if (!existing) {
+        propertyMap.set(prop.name, prop);
+        continue;
+      }
+
+      const hasOverrideTag = (prop.tags?.tags || []).some(tag => tag.tagName === 'override');
+
+      if (hasOverrideTag) {
+        propertyMap.set(prop.name, prop);
+      }
+    }
+
+    // Converte o Map de volta para array e ordena
+    classDoc.properties = Array.from(propertyMap.values()).sort((a, b) => {
       return a.name > b.name ? 1 : -1;
     });
 
@@ -54,11 +95,11 @@ module.exports = {
   processPropertyDoc: function (propertyDoc) {
     this.processPublicDoc(propertyDoc);
 
-    propertyDoc.isDirectiveInput = this.isDirectiveInput(propertyDoc);
-    propertyDoc.directiveInputAlias = this.getDirectiveInputAlias(propertyDoc);
+    propertyDoc.isDirectiveInput = this.isDirectiveInput(propertyDoc) || propertyDoc.isDirectiveInput;
+    propertyDoc.directiveInputAlias = this.getDirectiveInputAlias(propertyDoc) || propertyDoc.directiveInputAlias;
 
-    propertyDoc.isDirectiveOutput = this.isDirectiveOutput(propertyDoc);
-    propertyDoc.directiveOutputAlias = this.getDirectiveOutputAlias(propertyDoc);
+    propertyDoc.isDirectiveOutput = this.isDirectiveOutput(propertyDoc) || propertyDoc.isDirectiveOutput;
+    propertyDoc.directiveOutputAlias = this.getDirectiveOutputAlias(propertyDoc) || propertyDoc.directiveOutputAlias;
   },
 
   /**
@@ -79,12 +120,57 @@ module.exports = {
   resolveProperties: function (classDoc) {
     let properties = classDoc.members.filter(member => !member.hasOwnProperty('parameters'));
 
+    const inferTypeFromCode = codeLine => {
+      // Extrai tipo genérico
+      const genericMatch = codeLine.match(/(?:input(?:\.required)?|output|model)<((?:[^<>]|<[^>]*>)+)>/);
+      const genericRaw = genericMatch ? genericMatch[1].trim() : null;
+
+      // Extrai valor passado como primeiro argumento
+      const valueMatch = codeLine.match(/(?:input(?:\.required)?|output|model)(?:<(?:[^<>]|<[^>]*>)+>)?\(\s*([^,)]*)/);
+      const value = valueMatch ? valueMatch[1].trim() : '';
+
+      // Extrai alias (entre aspas simples ou duplas)
+      const aliasMatch = codeLine.match(/alias\s*:\s*['"]([^'"]+)['"]/);
+      const alias = aliasMatch ? aliasMatch[1] : null;
+
+      // Tipo via tipo genérico
+      if (genericRaw) {
+        const firstGenericType = genericRaw.split(',')[0].trim();
+        return { type: firstGenericType, alias };
+      }
+
+      // Tipo inferido por valor literal
+      if (value === 'true' || value === 'false') return { type: 'boolean', alias };
+      if (value.startsWith('"') || value.startsWith("'")) return { type: 'string', alias };
+      if (value !== '' && !isNaN(Number(value))) return { type: 'number', alias };
+
+      // Fallback
+      return { type: 'unknown', alias };
+    };
+
     properties.forEach(function (property, index) {
       if (property.type.includes('EventEmitter')) {
         properties[index].type = property.type = 'EventEmitter';
       }
+
       if (property.optional !== undefined) {
         property.isOptional = true;
+      }
+
+      // Tratamento input e model no Signal
+      if ((property.type.includes('input') || property.type.includes('model'))) {
+        const { type, alias } = inferTypeFromCode(property.type);
+        properties[index].type = type;
+        properties[index].directiveInputAlias = alias;
+        properties[index].isDirectiveInput = true;
+      }
+
+      // Tratamento output no Signal
+      if (property.type.includes('output')) {
+        const { type, alias } = inferTypeFromCode(property.type);
+        properties[index].type = 'EventEmitter';
+        properties[index].directiveOutputAlias = alias;
+        properties[index].isDirectiveOutput = true;
       }
     });
 
@@ -211,7 +297,14 @@ module.exports = {
   },
 
   getDirectiveInputAlias: function (doc) {
-    return this.isDirectiveInput(doc) ? doc.decorators.find(d => d.name == 'Input').arguments[0] : '';
+    if (this.isDirectiveInput(doc)) {
+      if (typeof doc.decorators.find(d => d?.name == 'Input').argumentInfo[0] === 'object') {
+        return doc.decorators.find(d => d?.name == 'Input').argumentInfo[0].alias
+      } else {
+        return doc.decorators.find(d => d?.name == 'Input').arguments[0]
+      }
+    }
+    return '';
   },
 
   getDirectiveOutputAlias: function (doc) {

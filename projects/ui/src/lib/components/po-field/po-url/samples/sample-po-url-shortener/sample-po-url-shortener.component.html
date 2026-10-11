@@ -7,12 +7,12 @@
   </div>
 
   <div class="po-row">
-    <po-button class="po-lg-2" p-label="Shorten URL" p-type="primary" [p-disabled]="f.invalid" (p-click)="shortenUrl()">
+    <po-button class="po-lg-2" p-label="Shorten URL" p-kind="primary" [p-disabled]="f.invalid" (p-click)="shortenUrl()">
     </po-button>
 
     <po-button
       class="po-offset-lg-4 po-offset-xl-4 po-lg-2"
-      p-icon="po-icon-copy"
+      p-icon="an an-copy"
       p-label="Copy"
       [p-disabled]="!shortenedUrl"
       (click)="copyToClipboard()"
@@ -21,6 +21,6 @@
   </div>
 </form>
 
-<hr />
+<po-divider />
 
-<po-table p-striped="true" [p-columns]="urlColumns" [p-items]="baseUrls"> </po-table>
+<po-table p-striped="true" [p-columns]="urlColumns" [p-items]="baseUrls" [p-hide-table-search]="false"> </po-table>

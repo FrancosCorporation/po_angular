@@ -1,15 +1,13 @@
-import { ViewContainerRef, Injectable, ComponentRef, ElementRef } from '@angular/core';
+import { ComponentRef, ElementRef, Injectable, ViewContainerRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
-import { configureTestSuite } from './../../util-test/util-expect.spec';
-
+import { PoToaster, PoToasterOrientation, PoToasterType } from '../../components/po-toaster';
+import { PoToasterBaseComponent } from '../../components/po-toaster/po-toaster-base.component';
 import { PoNotificationBaseService } from './po-notification-base.service';
-import { PoToasterOrientation } from './po-toaster/po-toaster-orientation.enum';
-import { PoToasterType } from './po-toaster/po-toaster-type.enum';
-import { PoToaster } from './po-toaster/po-toaster.interface';
-import { PoToasterBaseComponent } from './po-toaster/po-toaster-base.component';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 class PoNotificationService extends PoNotificationBaseService {
   createToaster(toaster: PoToaster, viewContainerRef?: ViewContainerRef): void {
     const elementRef: ElementRef = {
@@ -28,7 +26,8 @@ class PoNotificationService extends PoNotificationBaseService {
       changeDetectorRef: undefined,
       componentType: undefined,
       destroy: function () {},
-      onDestroy: function () {}
+      onDestroy: function () {},
+      setInput: function () {}
     };
     if (toaster.orientation === PoToasterOrientation.Bottom) {
       this.stackBottom.push(componentReference);
@@ -38,19 +37,18 @@ class PoNotificationService extends PoNotificationBaseService {
   }
 
   destroyToaster(toaster: number | ComponentRef<PoToasterBaseComponent>): void {}
+  verifyLimitToaster(): void {}
 }
 
 describe('PoNotificationService ', () => {
   let service: PoNotificationBaseService;
 
-  configureTestSuite(() => {
+  beforeEach(() => {
     TestBed.configureTestingModule({
       declarations: [],
       providers: [PoNotificationBaseService]
     });
-  });
 
-  beforeEach(() => {
     service = new PoNotificationService();
   });
 
@@ -158,11 +156,11 @@ describe('PoNotificationService ', () => {
   });
 
   describe('Methods: ', () => {
-    it('should be duration 10000 when not informed', () => {
+    it('should be duration 9000 when not informed', () => {
       spyOn(service, 'createToaster');
       service.success({ message: 'teste' });
 
-      expect(service.createToaster).toHaveBeenCalledWith(mockToaster({ type: PoToasterType.Success, duration: 10000 }));
+      expect(service.createToaster).toHaveBeenCalledWith(mockToaster({ type: PoToasterType.Success, duration: 9000 }));
     });
 
     it('should be duration equals 5 seconds', () => {
@@ -170,6 +168,52 @@ describe('PoNotificationService ', () => {
       service.success({ message: 'teste', duration: 5000 });
 
       expect(service.createToaster).toHaveBeenCalledWith(mockToaster({ type: PoToasterType.Success, duration: 5000 }));
+    });
+
+    it('should use empty message when `message` is undefined', () => {
+      spyOn(service, 'createToaster');
+      service.success({ message: undefined });
+
+      expect(service.createToaster).toHaveBeenCalledWith(mockToaster({ type: PoToasterType.Success, message: '' }));
+    });
+
+    it('should use empty message when `message` is empty', () => {
+      spyOn(service, 'createToaster');
+      service.error({ message: '' });
+
+      expect(service.createToaster).toHaveBeenCalledWith(mockToaster({ type: PoToasterType.Error, message: '' }));
+    });
+
+    it('should use empty message when `message` is not informed', () => {
+      spyOn(service, 'createToaster');
+      service.warning(<any>{ orientation: PoToasterOrientation.Top });
+
+      expect(service.createToaster).toHaveBeenCalledWith(
+        mockToaster({ type: PoToasterType.Warning, orientation: PoToasterOrientation.Top, message: '' })
+      );
+    });
+
+    it('should use empty message and not throw error when notification is undefined', () => {
+      spyOn(service, 'createToaster');
+
+      expect(() => service.success(undefined)).not.toThrow();
+      expect(service.createToaster).toHaveBeenCalledWith(mockToaster({ type: PoToasterType.Success, message: '' }));
+    });
+
+    it('should use empty message and not throw error when notification is null', () => {
+      spyOn(service, 'createToaster');
+
+      expect(() => service.error(null)).not.toThrow();
+      expect(service.createToaster).toHaveBeenCalledWith(mockToaster({ type: PoToasterType.Error, message: '' }));
+    });
+
+    it('should use the string as message when notification is a string', () => {
+      spyOn(service, 'createToaster');
+      service.information('teste string');
+
+      expect(service.createToaster).toHaveBeenCalledWith(
+        mockToaster({ type: PoToasterType.Information, message: 'teste string' })
+      );
     });
 
     it('should change default duration to 3 seconds', () => {
@@ -191,7 +235,11 @@ function mockToaster(obj: any) {
     action: undefined,
     actionLabel: undefined,
     position: 0,
-    duration: 10000
+    mode: 'alert',
+    showClose: true,
+    sizeActions: 'medium',
+    supportMessage: undefined,
+    duration: 9000
   };
 
   for (const prop in obj) {

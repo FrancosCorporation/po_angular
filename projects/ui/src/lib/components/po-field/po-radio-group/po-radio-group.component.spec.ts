@@ -1,36 +1,35 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
+import { PoUtils as UtilsFunctions } from '../../../utils/util';
 
-import * as UtilsFunctions from '../../../utils/util';
-import { removeDuplicatedOptions } from '../../../utils/util';
-
+import { PoThemeA11yEnum } from '../../../services';
 import { PoFieldContainerBottomComponent } from '../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
 import { PoFieldContainerComponent } from '../po-field-container/po-field-container.component';
+import { PoRadioComponent } from '../po-radio/po-radio.component';
 import { PoRadioGroupBaseComponent } from './po-radio-group-base.component';
 import { PoRadioGroupComponent } from './po-radio-group.component';
+import { EventEmitter } from '@angular/core';
 
 describe('PoRadioGroupComponent:', () => {
   let component: PoRadioGroupComponent;
   let fixture: ComponentFixture<PoRadioGroupComponent>;
-
   let debugElement;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      declarations: [PoRadioGroupComponent, PoFieldContainerComponent, PoFieldContainerBottomComponent],
-      providers: []
-    });
-  });
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [
+        PoRadioGroupComponent,
+        PoFieldContainerComponent,
+        PoFieldContainerBottomComponent,
+        PoRadioComponent
+      ]
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoRadioGroupComponent);
     component = fixture.componentInstance;
     component.label = 'Label de teste';
     component.help = 'Help de teste';
     component.options = [{ value: '1', label: '1' }];
-
-    fixture.detectChanges();
 
     debugElement = fixture.debugElement.nativeElement;
   });
@@ -40,28 +39,47 @@ describe('PoRadioGroupComponent:', () => {
     expect(component instanceof PoRadioGroupBaseComponent).toBeTruthy();
   });
 
-  it('should have label', () => {
-    expect(debugElement.innerHTML).toContain('Label de teste');
-  });
-
   it('should have help', () => {
+    fixture.detectChanges();
     expect(debugElement.innerHTML).toContain('Help de teste');
   });
 
   it('should call changeValue when clicked and enabled', () => {
+    component['onTouched'] = value => {};
+    spyOn(component, <any>'onTouched');
     spyOn(component, 'changeValue');
+
     component.eventClick('valor', false);
+
     expect(component.changeValue).toHaveBeenCalledWith('valor');
+    expect(component['onTouched']).toHaveBeenCalledWith();
   });
 
   it('shouldn`t call changeValue when clicked and disabled', () => {
+    component['onTouched'] = value => {};
+    spyOn(component, <any>'onTouched');
     spyOn(component, 'changeValue');
+
     component.eventClick('valor', true);
+
     expect(component.changeValue).not.toHaveBeenCalledWith('valor');
+    expect(component['onTouched']).not.toHaveBeenCalledWith();
   });
 
-  it('should return input when exists a input with this value', () => {
-    expect(component.getElementByValue('1')).not.toBeNull();
+  it('eventClick: shouldn´t throw error if onTouched is falsy when clicked and enabled', () => {
+    component['onTouched'] = null;
+
+    const fnError = () => component.eventClick('valor', false);
+
+    expect(fnError).not.toThrow();
+  });
+
+  it('eventClick: shouldn´t throw error if onTouched is falsy when clicked and disabled', () => {
+    component['onTouched'] = null;
+
+    const fnError = () => component.eventClick('valor', true);
+
+    expect(fnError).not.toThrow();
   });
 
   it('should return null when not exists a input with this value', () => {
@@ -72,13 +90,14 @@ describe('PoRadioGroupComponent:', () => {
     const fakeThis = {
       differ: {
         diff: (opt: any) => false
+      },
+      cd: {
+        markForCheck: () => {}
       }
     };
-
     spyOn(UtilsFunctions, 'removeDuplicatedOptions');
-
     component.ngDoCheck.call(fakeThis);
-    expect(removeDuplicatedOptions).not.toHaveBeenCalled();
+    expect(UtilsFunctions.removeDuplicatedOptions).not.toHaveBeenCalled();
   });
 
   describe('Methods:', () => {
@@ -105,6 +124,55 @@ describe('PoRadioGroupComponent:', () => {
       expect(spyFocus).not.toHaveBeenCalled();
     });
 
+    describe('getErrorPattern:', () => {
+      it('should return true in hasInvalidClass if fieldErrorMessage', () => {
+        component['el'].nativeElement.classList.add('ng-invalid');
+        component['el'].nativeElement.classList.add('ng-dirty');
+        component.inputEl.nativeElement.value = '';
+        component.fieldErrorMessage = 'Field Invalid';
+        component.required = true;
+        expect(component.hasInvalidClass()).toBeTruthy();
+        expect(component.getErrorPattern()).toBe('Field Invalid');
+      });
+
+      it('should return empty if fieldErrorMessage is undefined', () => {
+        component['el'].nativeElement.classList.add('ng-invalid');
+        component['el'].nativeElement.classList.add('ng-dirty');
+        component.inputEl.nativeElement.value = '';
+        component.fieldErrorMessage = undefined;
+        expect(component.getErrorPattern()).toBe('');
+      });
+    });
+
+    describe('emitAdditionalHelp:', () => {
+      it('should emit additionalHelp when isAdditionalHelpEventTriggered returns true', () => {
+        spyOn(component.additionalHelp, 'emit');
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+
+        component.emitAdditionalHelp();
+
+        expect(component.additionalHelp.emit).toHaveBeenCalled();
+      });
+
+      it('should not emit additionalHelp when isAdditionalHelpEventTriggered returns false', () => {
+        spyOn(component.additionalHelp, 'emit');
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        component.emitAdditionalHelp();
+
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+      });
+
+      it('should include additionalHelp when event is triggered', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        component.additionalHelp = new EventEmitter<any>();
+
+        const result = component.setHelper('label', 'tooltip');
+
+        expect(result).toBeDefined();
+      });
+    });
+
     describe('focus:', () => {
       it('should call `focus` of radio', () => {
         component.options = [
@@ -114,11 +182,11 @@ describe('PoRadioGroupComponent:', () => {
 
         fixture.detectChanges();
 
-        spyOn(component.radioLabels.toArray()[0].nativeElement, 'focus');
+        spyOn(component.radioLabels.toArray()[0], 'focus');
 
         component.focus();
 
-        expect(component.radioLabels.toArray()[0].nativeElement.focus).toHaveBeenCalled();
+        expect(component.radioLabels.toArray()[0].focus).toHaveBeenCalled();
       });
 
       it('should call second radio option if the first option is disabled', () => {
@@ -130,13 +198,13 @@ describe('PoRadioGroupComponent:', () => {
 
         fixture.detectChanges();
 
-        spyOn(component.radioLabels.toArray()[0].nativeElement, 'focus');
-        spyOn(component.radioLabels.toArray()[1].nativeElement, 'focus');
+        spyOn(component.radioLabels.toArray()[0], 'focus');
+        spyOn(component.radioLabels.toArray()[1], 'focus');
 
         component.focus();
 
-        expect(component.radioLabels.toArray()[0].nativeElement.focus).not.toHaveBeenCalled();
-        expect(component.radioLabels.toArray()[1].nativeElement.focus).toHaveBeenCalled();
+        expect(component.radioLabels.toArray()[0].focus).not.toHaveBeenCalled();
+        expect(component.radioLabels.toArray()[1].focus).toHaveBeenCalled();
       });
 
       it('shouldn`t call `focus` of radio if `disabled` property of component is true', () => {
@@ -148,13 +216,13 @@ describe('PoRadioGroupComponent:', () => {
 
         fixture.detectChanges();
 
-        spyOn(component.radioLabels.toArray()[0].nativeElement, 'focus');
-        spyOn(component.radioLabels.toArray()[1].nativeElement, 'focus');
+        spyOn(component.radioLabels.toArray()[0], 'focus');
+        spyOn(component.radioLabels.toArray()[1], 'focus');
 
         component.focus();
 
-        expect(component.radioLabels.toArray()[0].nativeElement.focus).not.toHaveBeenCalled();
-        expect(component.radioLabels.toArray()[1].nativeElement.focus).not.toHaveBeenCalled();
+        expect(component.radioLabels.toArray()[0].focus).not.toHaveBeenCalled();
+        expect(component.radioLabels.toArray()[1].focus).not.toHaveBeenCalled();
       });
 
       it('shouldn`t call `focus` of radio if `undefined` property of component is true', () => {
@@ -163,12 +231,86 @@ describe('PoRadioGroupComponent:', () => {
 
         fixture.detectChanges();
 
-        const spy = spyOn(component.radioLabels.toArray()[0].nativeElement, 'focus');
+        const spy = spyOn(component.radioLabels.toArray()[0], 'focus');
 
         component.focus();
 
         expect(spy).not.toHaveBeenCalled();
       });
+    });
+
+    describe('getAdditionalHelpTooltip:', () => {
+      it('should return null when isAdditionalHelpEventTriggered returns true', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBeNull();
+      });
+
+      it('should return additionalHelpTooltip when isAdditionalHelpEventTriggered returns false', () => {
+        const tooltip = 'Test Tooltip';
+        component.additionalHelpTooltip = tooltip;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBe(tooltip);
+      });
+
+      it('should return undefined when additionalHelpTooltip is undefined and isAdditionalHelpEventTriggered returns false', () => {
+        component.additionalHelpTooltip = undefined;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBeUndefined();
+      });
+    });
+
+    describe('onBlur', () => {
+      let setupTest;
+      let radioMock;
+
+      beforeEach(() => {
+        setupTest = (tooltip: string, displayHelp: boolean, additionalHelpEvent: any) => {
+          component.additionalHelpTooltip = tooltip;
+          component.displayAdditionalHelp = displayHelp;
+          component.additionalHelp = additionalHelpEvent;
+          spyOn(component, 'showAdditionalHelp');
+        };
+
+        radioMock = { radioInput: { nativeElement: document.createElement('input') } } as PoRadioComponent;
+      });
+      it('should call showAdditionalHelp when the tooltip is displayed', () => {
+        setupTest('Mensagem de apoio adicional.', true, { observed: false });
+        component.onBlur(radioMock);
+        expect(component.showAdditionalHelp).toHaveBeenCalled();
+      });
+
+      it('should not call showAdditionalHelp when tooltip is not displayed', () => {
+        setupTest('Mensagem de apoio adicional.', false, { observed: false });
+        component.onBlur(radioMock);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+
+      it('should not call showAdditionalHelp when additionalHelp event is true', () => {
+        setupTest('Mensagem de apoio adicional.', true, { observed: true });
+        component.onBlur(radioMock);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+    });
+
+    it('onKeyDown: should emit event when field is focused', () => {
+      const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      spyOn(component.keydown, 'emit');
+
+      const radioMock = { radioInput: { nativeElement: document.createElement('input') } } as PoRadioComponent;
+      spyOnProperty(document, 'activeElement', 'get').and.returnValue(radioMock.radioInput.nativeElement);
+
+      component.onKeyDown(fakeEvent, radioMock);
+
+      expect(component.keydown.emit).toHaveBeenCalledWith(fakeEvent);
     });
 
     describe('onKeyUp:', () => {
@@ -219,30 +361,212 @@ describe('PoRadioGroupComponent:', () => {
       expect(component['isArrowKey'](36)).toBeFalsy();
       expect(component['isArrowKey'](41)).toBeFalsy();
     });
+
+    describe('showAdditionalHelp:', () => {
+      let helperEl: any;
+      beforeEach(() => {
+        helperEl = {
+          openHelperPopover: jasmine.createSpy('openHelperPopover'),
+          closeHelperPopover: jasmine.createSpy('closeHelperPopover'),
+          helperIsVisible: jasmine.createSpy('helperIsVisible').and.returnValue(false)
+        };
+      });
+
+      it('should call closeHelperPopover and return early when helperIsVisible is true', () => {
+        (component as any).label = '';
+        component.additionalHelpTooltip = undefined;
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(true);
+        component.helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue({});
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+        spyOn(component.additionalHelp, 'emit');
+
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(component.helperEl.helperIsVisible).toHaveBeenCalled();
+        expect(component.helperEl.closeHelperPopover).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.openHelperPopover).not.toHaveBeenCalled();
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
+      });
+
+      it('should emit additionalHelp and return early when isAdditionalHelpEventTriggered is true', () => {
+        (component as any).label = '';
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(false);
+        component.helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue({});
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        spyOn(component.additionalHelp, 'emit');
+
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(component.additionalHelp.emit).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.openHelperPopover).toHaveBeenCalled();
+        expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
+      });
+
+      it('should call helper.eventOnClick and return early when helper has eventOnClick function', () => {
+        (component as any).label = '';
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(true);
+        component.helperEl = helperEl;
+        const helperMock = { eventOnClick: jasmine.createSpy('eventOnClick') };
+        spyOn(component as any, 'poHelperComponent').and.returnValue(helperMock);
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+        spyOn(component.additionalHelp, 'emit');
+
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(helperMock.eventOnClick).toHaveBeenCalledTimes(1);
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+        expect(component.helperEl.helperIsVisible).not.toHaveBeenCalled();
+        expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect(component.helperEl.openHelperPopover).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
+      });
+
+      it('should enter the block via additionalHelpTooltip when helper is falsy and isHelpEvt is false, then open popover', () => {
+        (component as any).label = '';
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(false);
+        component.helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue(undefined);
+        component.additionalHelpTooltip = 'any text';
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+        spyOn(component.additionalHelp, 'emit');
+
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(component.helperEl.helperIsVisible).toHaveBeenCalled();
+        expect(component.helperEl.openHelperPopover).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
+      });
+
+      it('should enter the block via isHelpEvt when helper and tooltip are falsy, emit and then open popover', () => {
+        (component as any).label = '';
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(false);
+        component.helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue(undefined);
+        component.additionalHelpTooltip = undefined;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        spyOn(component.additionalHelp, 'emit');
+
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(component.additionalHelp.emit).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.openHelperPopover).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
+      });
+
+      it('should toggle `displayAdditionalHelp` from false to true', () => {
+        component.displayAdditionalHelp = false;
+
+        const result = component.showAdditionalHelp();
+
+        expect(result).toBeTrue();
+        expect(component.displayAdditionalHelp).toBeTrue();
+      });
+
+      it('should toggle `displayAdditionalHelp` from true to false', () => {
+        component.displayAdditionalHelp = true;
+
+        const result = component.showAdditionalHelp();
+
+        expect(result).toBeFalse();
+        expect(component.displayAdditionalHelp).toBeFalse();
+      });
+    });
+
+    describe('size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set the default value to small when an invalid value, accessibility level is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component.size = 'xxg';
+        expect(component['_size']).toBe('small');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+
+        component.size = 'large';
+        expect(component.size).toBe('large');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+
+        component.size = 'large';
+        expect(component.size).toBe('large');
+      });
+    });
   });
 
   describe('Templates:', () => {
     const eventKeyBoard = document.createEvent('KeyboardEvent');
     eventKeyBoard.initEvent('keyup', true, true);
     Object.defineProperty(eventKeyBoard, 'keyCode', { value: 37 });
-
-    it('keyup: should call `onKeyUp` when a arrowKey is pressed.', () => {
-      spyOn(component, 'onKeyUp');
-
-      const input = debugElement.querySelector('input.po-radio-group-input');
-      input.dispatchEvent(eventKeyBoard);
-
-      expect(component.onKeyUp).toHaveBeenCalled();
-    });
-
-    it('should contain `po-clickable` class if input isn`t disabled', () => {
-      component.options = [{ label: 'Po', value: 'po' }];
-      component.disabled = false;
-
-      fixture.detectChanges();
-
-      expect(debugElement.querySelector('.po-radio-group-label.po-clickable')).toBeTruthy();
-    });
 
     it('shouldn`t contain `po-clickable` class if input is disabled', () => {
       component.options = [{ label: 'Po', value: 'po', disabled: true }];
@@ -251,36 +575,6 @@ describe('PoRadioGroupComponent:', () => {
       fixture.detectChanges();
 
       expect(debugElement.querySelector('.po-radio-group-label.po-clickable')).toBeNull();
-    });
-
-    it(`should show optional if the field isn't 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = false;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeTruthy();
-    });
-
-    it(`shouldn't show optional if the field is 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = true;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-    });
-
-    it(`shouldn't show optional if the field isn't 'required', has 'label' but 'p-optional' is false.`, () => {
-      component.required = true;
-      component.optional = false;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
     });
   });
 });

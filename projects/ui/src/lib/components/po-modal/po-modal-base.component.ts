@@ -1,8 +1,9 @@
-import { Input, EventEmitter, Directive } from '@angular/core';
+import { Directive, EventEmitter, HostBinding, HostListener, Input, Output, TemplateRef } from '@angular/core';
 
-import { convertToBoolean } from './../../utils/util';
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn } from './../../utils/util';
 import { PoModalAction } from './po-modal-action.interface';
 
+import { PoFieldSize } from '../../enums/po-field-size.enum';
 import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { poModalLiterals } from './po-modal.literals';
 
@@ -17,20 +18,39 @@ import { poModalLiterals } from './po-modal.literals';
  * `po-table` e os demais componentes do PO.
  *
  * No rodapé encontram-se os botões de ação primária e secundária, no qual permitem definir uma ação e um rótulo, bem como
- * definir um estado de carregando e / ou desabilitado. Também é possível definir o botão com o tipo *danger*.
+ * definir um estado de carregando e / ou desabilitado e / ou definir o botão com o tipo *danger*. Também é possível utilizar
+ * o componente [`PoModalFooter`](/documentation/po-modal-footer).
  *
  * > É possível fechar a modal através da tecla *ESC*, quando a propriedade `p-hide-close` não estiver habilitada.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                                  | Descrição                                             | Valor Padrão                                                                        |
+ * |----------------------------------------------|-------------------------------------------------------|-------------------------------------------------------------------------------------|
+ * | **Default Values**                           |                                                       |                                                                                     |
+ * | `--border-radius` &nbsp;                     | Contém o valor do raio dos cantos do elemento&nbsp;   | `var(--border-radius-md)`                                                           |
+ * | `--border-width` &nbsp;                      | Contém o valor da largura dos cantos do elemento&nbsp;| `var(--border-width-sm)`                                                            |
+ * | `--border-color` &nbsp;                      | Cor da borda                                          | `var(--color-neutral-light-20)`                                                     |
+ * | `--background` &nbsp;                        | Cor de background                                     | `var(--color-neutral-light-00)`                                                     |
+ * | `--shadow` &nbsp;                            | Contém o valor da sombra do elemento                  | `var(--shadow-md)`                                                                  |
+ * | `--color-overlay` &nbsp;                     | Cor da camada visual temporária                       | `var(--color-neutral-dark-80)`                                                      |
+ * | `--opacity-overlay` &nbsp;                   | Opacidade da camada visual temporária &nbsp;          | `0.7`                                                                               |
+ * | `--color-divider` &nbsp;                     | Cor das divisões do modal                             | `var(--color-neutral-light-20)`                                                     |
+ * | `--padding-header` &nbsp;                    | Padding do header do modal                            | `var(--spacing-sm) var(--spacing-md)`                                               |
+ * | `--padding-body` &nbsp;                      | Padding do corpo do modal                             | `var(--spacing-md) var(--spacing-2xl) var(--spacing-2xl) var(--spacing-md) `        |
+ *
  */
 @Directive()
 export class PoModalBaseComponent {
-  language;
-  literals;
-
-  private _hideClose?: boolean = false;
-  private _size?: string = 'md';
-
   /** Título da modal. */
   @Input('p-title') title: string;
+
+  /** Evento disparado ao fechar o modal. */
+  @Output('p-close') closeModal: EventEmitter<any> = new EventEmitter();
 
   /**
    * Deve ser definido um objeto que implementa a interface `PoModalAction` contendo a label e a função da primeira ação.
@@ -41,6 +61,19 @@ export class PoModalBaseComponent {
 
   /** Deve ser definido um objeto que implementa a interface `PoModalAction` contendo a label e a função da segunda ação. */
   @Input('p-secondary-action') secondaryAction?: PoModalAction;
+
+  language;
+  literals;
+
+  // Controla se a modal fica oculto ou visível, por padrão é oculto
+  isHidden = true;
+
+  // Event emmiter para quando a modal é fechada pelo 'X'.
+  public onXClosed = new EventEmitter<boolean>();
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _hideClose?: boolean = false;
+  private _size?: string = 'md';
 
   /**
    * Define o tamanho da modal.
@@ -55,7 +88,6 @@ export class PoModalBaseComponent {
    * > Quando informado `auto` a modal calculará automaticamente seu tamanho baseado em seu conteúdo.
    * Caso não seja informado um valor, a modal terá o tamanho definido como `md`.
    *
-   * > Todas as opções de tamanho possuem uma largura máxima de **768px**.
    */
   @Input('p-size') set size(value: string) {
     const sizes = ['sm', 'md', 'lg', 'xl', 'auto'];
@@ -70,9 +102,35 @@ export class PoModalBaseComponent {
    * Define o fechamento da modal ao clicar fora da mesma.
    * Informe o valor `true` para ativar o fechamento ao clicar fora da modal.
    */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   clickOut?: boolean = false;
   @Input('p-click-out') set setClickOut(value: boolean | string) {
     this.clickOut = value === '' ? false : convertToBoolean(value);
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no modal:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
   }
 
   /**
@@ -94,11 +152,30 @@ export class PoModalBaseComponent {
     return this._hideClose;
   }
 
-  // Controla se a modal fica oculto ou visível, por padrão é oculto
-  isHidden = true;
-
-  // Event emmiter para quando a modal é fechada pelo 'X'.
-  public onXClosed = new EventEmitter<boolean>();
+  /**
+   * @optional
+   *
+   * @description
+   * Ícone exibido ao lado esquerdo do label do titúlo da modal.
+   *
+   * É possível usar qualquer um dos ícones da [Biblioteca de ícones](https://po-ui.io/icons). conforme exemplo abaixo:
+   * ```
+   * <po-modal p-icon="an an-user" p-title="PO Modal"></po-modal>
+   * ```
+   * Também é possível utilizar outras fontes de ícones, por exemplo a biblioteca *Font Awesome*, da seguinte forma:
+   * ```
+   * <po-modal p-icon="fa fa-podcast" p-title="PO Modal"></po-modal>
+   * ```
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * ```
+   * <po-modal [p-icon]="template" p-title="PO Modal"></po-modal>
+   *
+   * <ng-template #template>
+   *  <ion-icon style="font-size: inherit" name="heart"></ion-icon>
+   * </ng-template>
+   * ```
+   */
+  @Input('p-icon') icon?: string | TemplateRef<void>;
 
   constructor(poLanguageService: PoLanguageService) {
     this.language = poLanguageService.getShortLanguage();
@@ -110,6 +187,8 @@ export class PoModalBaseComponent {
 
   /** Função para fechar a modal. */
   close(xClosed = false): void {
+    this.closeModal.emit();
+
     this.isHidden = true;
     if (xClosed) {
       this.onXClosed.emit(xClosed);
@@ -137,5 +216,15 @@ export class PoModalBaseComponent {
     if (!this.primaryAction['label']) {
       this.primaryAction['label'] = this.literals.close;
     }
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialComponentsSize, PoFieldSize);
+    this._componentsSize = size;
   }
 }

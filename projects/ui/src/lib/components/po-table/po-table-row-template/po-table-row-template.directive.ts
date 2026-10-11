@@ -90,11 +90,10 @@ import { PoTableRowTemplateArrowDirection } from '../enums/po-table-row-template
  * não correspondam à *delivered*.
  */
 @Directive({
-  selector: '[p-table-row-template]'
+  selector: '[p-table-row-template]',
+  standalone: false
 })
 export class PoTableRowTemplateDirective {
-  private _tableRowTemplateArrowDirection: PoTableRowTemplateArrowDirection = PoTableRowTemplateArrowDirection.Left;
-
   /**
    * @optional
    *
@@ -109,6 +108,8 @@ export class PoTableRowTemplateDirective {
    * @default `true`
    */
   @Input('p-table-row-template-show') poTableRowTemplateShow: (row: any, index: number) => boolean;
+
+  private _tableRowTemplateArrowDirection: PoTableRowTemplateArrowDirection = PoTableRowTemplateArrowDirection.Left;
 
   /**
    * @optional

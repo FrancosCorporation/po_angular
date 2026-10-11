@@ -1,60 +1,126 @@
-import { EventEmitter, Input, OnChanges, Output, Directive, SimpleChanges } from '@angular/core';
+import {
+  Directive,
+  EventEmitter,
+  HostBinding,
+  HostListener,
+  Input,
+  OnChanges,
+  OnDestroy,
+  Output,
+  SimpleChanges,
+  input,
+  output
+} from '@angular/core';
+import { Observable, Subscription } from 'rxjs';
 
-import { capitalizeFirstLetter, convertToBoolean, isTypeof, sortValues } from '../../utils/util';
 import { PoDateService } from '../../services/po-date/po-date.service';
-import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
+import {
+  capitalizeFirstLetter,
+  convertToBoolean,
+  getDefaultSizeFn,
+  isTypeof,
+  validateSizeFn,
+  PoUtils
+} from '../../utils/util';
 
-import { PoTableAction } from './interfaces/po-table-action.interface';
-import { PoTableColumn } from './interfaces/po-table-column.interface';
-import { PoTableColumnSort } from './interfaces/po-table-column-sort.interface';
+import { PoFieldSize } from '../../enums/po-field-size.enum';
+import { PoSearchFilterMode } from '../po-search/enums/po-search-filter-mode.enum';
 import { PoTableColumnSortType } from './enums/po-table-column-sort-type.enum';
+import { PoTableColumnSpacing } from './enums/po-table-spacing.enum';
+import { PoTableAction } from './interfaces/po-table-action.interface';
+import { PoTableColumnSort } from './interfaces/po-table-column-sort.interface';
+import { PoTableColumn } from './interfaces/po-table-column.interface';
+import { PoSearchAiError, PoSearchAiResult } from '../po-field/po-search-ai/interfaces/po-search-ai.interface';
+import { PoTableFilteredItemsParams } from './interfaces/po-table-filtered-items-params.interface';
 import { PoTableLiterals } from './interfaces/po-table-literals.interface';
-import { InputBoolean } from '../../decorators';
+import { PoTableResponseApi } from './interfaces/po-table-response-api.interface';
+import { PoTableSearchAiField } from './interfaces/po-table-search-ai-field.interface';
+import { PoTableService } from './services/po-table.service';
+
+export type QueryParamsType = string | number | boolean;
 
 export const poTableContainer = ['border', 'shadow'];
 export const poTableContainerDefault = 'border';
+export const poTableParamDeleteApi = 'id';
 
 export const poTableLiteralsDefault = {
   en: <PoTableLiterals>{
     noColumns: 'Columns are not defined',
     noData: 'No data found',
+    noItem: 'No selected item',
+    oneItem: '1 selected item',
+    multipleItems: 'selected items',
     noVisibleColumn: 'No visible column',
     loadingData: 'Loading',
     loadMoreData: 'Load more data',
     seeCompleteSubtitle: 'See complete subtitle',
     completeSubtitle: 'Complete subtitle',
-    columnsManager: 'Columns manager'
+    columnsManager: 'Columns manager',
+    bodyDelete: 'Do you really want to delete this item?',
+    cancel: 'Cancel',
+    delete: 'Delete',
+    deleteSuccessful: 'Items removed successfully',
+    deleteApiError: 'An unexpected error occurred, please try again later',
+    searchAiPlaceholder: 'Describe what you are looking for and press Enter'
   },
   es: <PoTableLiterals>{
     noColumns: 'Columnas no definidas',
     noData: 'Datos no encontrados',
+    noItem: 'Ningún elemento seleccionado',
+    oneItem: '1 elemento seleccionado',
+    multipleItems: 'elementos seleccionados',
     noVisibleColumn: 'Sin columnas visibles',
     loadingData: 'Cargando datos',
     loadMoreData: 'Cargar más resultados',
     seeCompleteSubtitle: 'Ver subtitulo completo',
     completeSubtitle: 'Subtitulo completo',
-    columnsManager: 'Gerente de columna'
+    columnsManager: 'Gerente de columna',
+    bodyDelete: '¿Realmente desea eliminar este elemento?',
+    cancel: 'Cancelar',
+    delete: 'Borrar',
+    deleteSuccessful: 'Elementos eliminados con éxito',
+    deleteApiError: 'Ocurrió un error inesperado, inténtalo de nuevo más tarde',
+    searchAiPlaceholder: 'Describe lo que buscas y presiona Enter'
   },
   pt: <PoTableLiterals>{
     noColumns: 'Nenhuma definição de colunas',
     noData: 'Nenhum dado encontrado',
     noVisibleColumn: 'Nenhuma coluna visível',
+    noItem: 'Nenhum item selecionado',
+    oneItem: '1 item selecionado',
+    multipleItems: 'itens selecionados',
     loadingData: 'Carregando',
     loadMoreData: 'Carregar mais resultados',
     seeCompleteSubtitle: 'Ver legenda completa',
     completeSubtitle: 'Legenda completa',
-    columnsManager: 'Gerenciador de colunas'
+    columnsManager: 'Gerenciador de colunas',
+    bodyDelete: 'Deseja realmente excluir esse item?',
+    cancel: 'Cancelar',
+    delete: 'Excluir',
+    deleteSuccessful: 'Itens removidos com sucesso',
+    deleteApiError: 'Ocorreu um erro inesperado, tente novamente mais tarde!',
+    searchAiPlaceholder: 'Descreva o que procura e pressione Enter'
   },
   ru: <PoTableLiterals>{
     noColumns: 'Нет определения столбца',
     noData: 'Данные не найдены',
+    noItem: 'Нет выбранного элемента',
+    oneItem: '1 элемент выбран',
+    multipleItems: 'выбранные элементы',
     noVisibleColumn: 'нет видимых столбцов',
-    loadingData: 'погрузка',
-    loadMoreData: 'загрузка',
+    loadingData: 'Загрузка',
+    loadMoreData: 'Загрузка',
     seeCompleteSubtitle: 'Посмотреть полный субтитр',
     completeSubtitle: 'Полный заголовок',
-    columnsManager: 'менеджер колонок'
+    columnsManager: 'менеджер колонок',
+    bodyDelete: 'Вы действительно хотите удалить этот элемент?',
+    cancel: 'Отмена',
+    delete: 'Удалить',
+    deleteSuccessful: 'Элементы успешно удалены',
+    deleteApiError: 'Произошла непредвиденная ошибка, повторите попытку позже',
+    searchAiPlaceholder: 'Опишите, что вы ищете, и нажмите Enter'
   }
 };
 
@@ -77,267 +143,40 @@ export const poTableLiteralsDefault = {
  *
  * Caso a largura de todas as colunas forem definidas e o total ultrapassar o tamanho tabela, será exibido um *scroll* na horizontal para a
  * completa visualização dos dados.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                      |
+ * |----------------------------------------|-------------------------------------------------------|---------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                   |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                        |
+ * | `--background-color`                   | Cor de background                                     | `var(--color-neutral-light-00)`                   |
+ * | `--color`                              | Cor principal da table                                | `var(--color-neutral-dark-95)`                    |
+ * | `--background-striped-color`           | Cor do background quando striped                      | `var(--color-neutral-light-05)`                   |
+ * | `--color-line`                         | Cor das linhas                                        | `var(--color-neutral-mid-40)`                     |
+ * | **Hover**                              |                                                       |                                                   |
+ * | `--color-hover`                        | Cor principal no estado hover                         | `var(--color-action-hover)`                       |
+ * | `--background-color-hover`             | Cor de background no estado hover                     | `var(--color-brand-01-lighter)`                   |
+ * | **Focused**                            |                                                       |                                                   |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                       |
+ * | **Disabled**                           |                                                       |                                                   |
+ * | `--color-disabled`                     | Cor principal no estado disabled                      | `var(--color-neutral-mid-40)`                     |
+ * | **Headline**                           |                                                       |                                                   |
+ * | `--background-color-headline` &nbsp;   | Cor do cabeçalho                                      | `var(--color-neutral-light-10)`                   |
+ * | `--font-weight-headline`               | Peso da fonte do cabeçalho                            | `var(--font-weight-bold)`                         |
+ * | **Selected**                           |                                                       |                                                   |
+ * | `--background-color-selected`&nbsp;    | Cor de background no estado de selecionado            | `var(--color-brand-01-lightest)`                  |
+ * | **Actived**                            |                                                       |                                                   |
+ * | `--color-actived`                      | Cor do texto no estado de selecionado                 | `var(--color-neutral-dark-90)`                    |
+ * | `--background-color-actived`           | Cor de background no estado de selecionado            | `var(--color-brand-01-light)`                     |
+ *
  */
 @Directive()
-export abstract class PoTableBaseComponent implements OnChanges {
-  private _actions?: Array<PoTableAction> = [];
-  private _columns: Array<PoTableColumn> = [];
-  private _container?: string;
-  private _height?: number;
-  private _hideDetail?: boolean = false;
-  private _hideTextOverflow?: boolean = false;
-  private _items: Array<PoTableColumn>;
-  private _literals: PoTableLiterals;
-  private _loading?: boolean = false;
-  private _selectable?: boolean;
-  private _columnManager?: boolean = true;
-  private language: string = poLocaleDefault;
-
-  allColumnsWidthPixels: boolean;
-  columnMasterDetail: PoTableColumn;
-  hasMainColumns: boolean = false;
-  mainColumns: Array<PoTableColumn> = [];
-  selectAll = false;
-  sortedColumn = { property: <PoTableColumn>null, ascending: true };
-  subtitleColumns: Array<PoTableColumn> = [];
-
-  /**
-   * @description
-   *
-   * Lista de itens da tabela.
-   * > Se falso, será inicializado como um *array* vazio.
-   */
-  @Input('p-items') set items(items: Array<any>) {
-    this._items = Array.isArray(items) ? items : [];
-
-    // when haven't items, selectAll should be unchecked.
-    if (!this.hasItems) {
-      this.selectAll = false;
-    } else if (!this.hasColumns) {
-      this.columns = this.getDefaultColumns(items[0]);
-    }
-  }
-
-  get items() {
-    return this._items;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Lista das colunas da tabela, deve receber um *array* de objetos que implementam a interface `PoTableColumn`.
-   * Por padrão receberá como valor a primeira coluna da lista de itens da tabela.
-   * > Caso não encontre valor, a mensagem 'Nenhuma definição de colunas' será exibida.
-   *
-   */
-  @Input('p-columns') set columns(columns: Array<PoTableColumn>) {
-    this._columns = columns || [];
-
-    if (this._columns.length) {
-      this.setColumnLink();
-      this.calculateWidthHeaders();
-    } else if (this.hasItems) {
-      this._columns = this.getDefaultColumns(this.items[0]);
-    }
-
-    this.onChangeColumns();
-  }
-
-  get columns() {
-    return this._columns;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Adiciona um contorno arredondado ao `po-table`, as opções são:
-   * - `border`: com bordas/linhas.
-   * - `shadow`: com sombras.
-   *
-   * @default `border`
-   */
-  @Input('p-container') set container(value: string) {
-    this._container = poTableContainer.includes(value) ? value : poTableContainerDefault;
-  }
-
-  get container(): string {
-    return this._container;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Se verdadeiro, habilita a quebra de texto ao transborda-lo dentro de qualquer coluna.
-   * > Quando ocorrer a quebra de texto, ao passar o mouse no conteúdo da célula,
-   * o mesmo será exibido através do [`po-tooltip`](/documentation/po-tooltip).
-   */
-  @Input('p-hide-text-overflow') set hideTextOverflow(hideTextOverflow: boolean) {
-    this._hideTextOverflow = convertToBoolean(hideTextOverflow);
-  }
-
-  get hideTextOverflow() {
-    return this._hideTextOverflow;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Define a altura da tabela em *pixels* e fixa o cabeçalho.
-   */
-  @Input('p-height') set height(height: number) {
-    this._height = height;
-    this.calculateWidthHeaders();
-  }
-
-  get height() {
-    return this._height;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Habilita a visualização da lista de detalhes de cada linha da coluna.
-   *
-   * @default `false`
-   */
-  @Input('p-hide-detail') set hideDetail(hideDetail: boolean) {
-    this._hideDetail = hideDetail != null && hideDetail.toString() === '' ? true : convertToBoolean(hideDetail);
-    this.calculateWidthHeaders();
-  }
-
-  get hideDetail() {
-    return this._hideDetail;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Objeto com as literais usadas no `po-table`.
-   *
-   * Existem duas maneiras de customizar o componente, passando um objeto com todas as literais disponíveis:
-   *
-   * ```
-   *  const customLiterals: PoTableLiterals = {
-   *    loadMoreData: 'Buscar mais dados',
-   *    loadingData: 'Processando',
-   *    noColumns: 'Sem colunas',
-   *    noData: 'Sem dados',
-   *    seeCompleteSubtitle: 'Mostrar legenda completa',
-   *    completeSubtitle: 'Todas legendas'
-   *  };
-   * ```
-   *
-   * Ou passando apenas as literais que deseja customizar:
-   *
-   * ```
-   *  const customLiterals: PoTableLiterals = {
-   *    noData: 'Sem dados'
-   *  };
-   * ```
-   *
-   * E para carregar as literais customizadas, basta apenas passar o objeto para o componente.
-   *
-   * ```
-   * <po-table
-   *   [p-literals]="customLiterals">
-   * </po-table>
-   * ```
-   *
-   * > O objeto padrão de literais será traduzido de acordo com o idioma do
-   * [`PoI18nService`](/documentation/po-i18n) ou do browser.
-   */
-  @Input('p-literals') set literals(value: PoTableLiterals) {
-    if (value instanceof Object && !(value instanceof Array)) {
-      this._literals = {
-        ...poTableLiteralsDefault[poLocaleDefault],
-        ...poTableLiteralsDefault[this.language],
-        ...value
-      };
-    } else {
-      this._literals = poTableLiteralsDefault[this.language];
-    }
-  }
-  get literals() {
-    return this._literals || poTableLiteralsDefault[this.language];
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Bloqueia a interação do usuário com os dados da _table_.
-   *
-   * @default `false`
-   */
-  @Input('p-loading') set loading(loading: boolean) {
-    this._loading = convertToBoolean(loading);
-    this.calculateWidthHeaders();
-  }
-
-  get loading() {
-    return this._loading;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Define uma lista de ações.
-   *
-   * Quando houver apenas uma ação definida ela será exibida diretamente na coluna, caso contrário, o componente
-   * se encarrega de agrupá-las exibindo o ícone [**po-icon-more**](/guides/icons) que listará as ações ao ser clicado.
-   *
-   * **A coluna de ações não será exibida quando:**
-   *  - a lista conter valores inválidos ou indefinidos.
-   *  - tenha uma única ação e a mesma não for visível.
-   */
-  @Input('p-actions') set actions(actions: Array<PoTableAction>) {
-    this._actions = actions;
-    this.calculateWidthHeaders();
-  }
-
-  get actions() {
-    return this._actions;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Permite a seleção de linhas na tabela e, caso a propriedade `p-single-select` esteja definida será possível
-   * selecionar apenas uma única linha.
-   *
-   * **Importante:**
-   *  - As linhas de detalhe definidas em `PoTableDetail` possuem comportamento independente da linha mestre;
-   *  - Cada linha possui por padrão a propriedade dinâmica `$selected`, na qual é possível validar se a linha
-   * está selecionada, por exemplo: `item.$selected` ou `item['$selected']`.
-   *
-   * @default `false`
-   */
-  @Input('p-selectable') set selectable(value: boolean) {
-    this._selectable = <any>value === '' ? true : convertToBoolean(value);
-    this.calculateWidthHeaders();
-  }
-
-  get selectable() {
-    return this._selectable;
-  }
-
+export abstract class PoTableBaseComponent implements OnChanges, OnDestroy {
   /**
    * @optional
    *
@@ -347,7 +186,63 @@ export abstract class PoTableBaseComponent implements OnChanges {
    *
    * @default `false`
    */
-  @Input('p-hide-columns-manager') @InputBoolean() hideColumnsManager?: boolean = false;
+  @Input({ alias: 'p-hide-columns-manager', transform: convertToBoolean }) hideColumnsManager: boolean = false;
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite que as ações em lote, responsável por excluir e exibir a quantidade de itens, sejam escondidas.
+   *
+   * @default `true`
+   */
+  @Input({ alias: 'p-hide-batch-actions', transform: convertToBoolean }) hideBatchActions: boolean = true;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita ou desabilita a quebra automática de texto. Quando ativada, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
+   *
+   * > Incompatível com `virtual-scroll`, que requer altura fixa nas linhas.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-text-wrap', transform: convertToBoolean }) textWrap?: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite que as ações para fixar uma coluna da tabela sejam escondidas.
+   *
+   * @default `false`
+   */
+  @Input('p-hide-action-fixed-columns') set hideActionFixedColumns(hide: boolean) {
+    if (hide) {
+      this.columns = this.removePropertyFixed(this.columns);
+    }
+    this._hideActionFixedColumns = hide;
+  }
+
+  get hideActionFixedColumns() {
+    return this._hideActionFixedColumns;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite que o campo de pesquisa seja escondido.
+   *
+   * @default `true`
+   */
+  @Input({ alias: 'p-hide-table-search', transform: convertToBoolean }) hideTableSearch: boolean = true;
 
   /**
    * @optional
@@ -358,7 +253,7 @@ export abstract class PoTableBaseComponent implements OnChanges {
    *
    * @default `false`
    */
-  @Input('p-auto-collapse') @InputBoolean() autoCollapse?: boolean = false;
+  @Input({ alias: 'p-auto-collapse', transform: convertToBoolean }) autoCollapse: boolean = false;
 
   /**
    * @optional
@@ -369,8 +264,7 @@ export abstract class PoTableBaseComponent implements OnChanges {
    *
    * @default `false`
    */
-  @Input('p-loading-show-more') @InputBoolean() loadingShowMore?: boolean = false;
-
+  @Input({ alias: 'p-loading-show-more', transform: convertToBoolean }) loadingShowMore: boolean = false;
   /**
    * @optional
    *
@@ -381,10 +275,7 @@ export abstract class PoTableBaseComponent implements OnChanges {
    *
    * @default `false`
    */
-  sort?: boolean;
-  @Input('p-sort') set setSort(sort: string) {
-    this.sort = sort === '' ? false : convertToBoolean(sort);
-  }
+  @Input({ alias: 'p-sort', transform: convertToBoolean }) sort: boolean = false;
 
   /**
    * @description
@@ -393,10 +284,7 @@ export abstract class PoTableBaseComponent implements OnChanges {
    *
    * @default `false`
    */
-  showMoreDisabled?: boolean;
-  @Input('p-show-more-disabled') set setShowMoreDisabled(showMoreDisabled: string) {
-    this.showMoreDisabled = showMoreDisabled === '' ? false : convertToBoolean(showMoreDisabled);
-  }
+  @Input({ alias: 'p-show-more-disabled', transform: convertToBoolean }) showMoreDisabled: boolean = false;
 
   /**
    * @description
@@ -406,10 +294,7 @@ export abstract class PoTableBaseComponent implements OnChanges {
    *
    * @default `false`
    */
-  striped?: boolean;
-  @Input('p-striped') set setStriped(striped: string) {
-    this.striped = striped === '' ? false : convertToBoolean(striped);
-  }
+  @Input({ alias: 'p-striped', transform: convertToBoolean }) striped: boolean = false;
 
   /**
    * @description
@@ -420,10 +305,7 @@ export abstract class PoTableBaseComponent implements OnChanges {
    *
    * @default `false`
    */
-  hideSelectAll?: boolean;
-  @Input('p-hide-select-all') set setHideSelectAll(hideSelectAll: string) {
-    this.hideSelectAll = hideSelectAll === '' ? false : convertToBoolean(hideSelectAll);
-  }
+  @Input({ alias: 'p-hide-select-all', transform: convertToBoolean }) hideSelectAll: boolean = false;
 
   /**
    * @description
@@ -432,10 +314,29 @@ export abstract class PoTableBaseComponent implements OnChanges {
    *
    * > Esta definição não se aplica aos itens filhos, os mesmos possuem comportamento independente do item pai.
    */
-  singleSelect?: boolean;
-  @Input('p-single-select') set setSingleSelect(value: string) {
-    this.singleSelect = value === '' ? true : convertToBoolean(value);
-  }
+  @Input({ alias: 'p-single-select', transform: convertToBoolean }) singleSelect: boolean = false;
+
+  /**
+   * @description
+   *
+   * Permite selecionar um item da tabela clicando na linha.
+   *
+   * > Caso haja necessidade de selecionar o item apenas via radio ou checkbox, deve-se definir esta propriedade como `false`.
+   *
+   * @default `true`
+   */
+  @Input({ alias: 'p-selectable-entire-line', transform: convertToBoolean }) selectableEntireLine: boolean = true;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define que a coluna de ações ficará no lado direito da tabela.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-actions-right', transform: convertToBoolean }) actionRight: boolean = false;
 
   /**
    * @optional
@@ -449,6 +350,45 @@ export abstract class PoTableBaseComponent implements OnChanges {
    * serão ignoradas por ordem de posição.
    */
   @Input('p-max-columns') maxColumns?: number;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o modo de pesquisa utilizado no campo de busca, quando habilitado.
+   * Valores definidos no enum: PoSearchFilterMode
+   * > Obs: A pesquisa é realizada exclusivamente nos dados locais, ou seja, aqueles que foram
+   * > renderizados na tabela.
+   *
+   * @default `startsWith`
+   */
+  @Input('p-filter-type') filterType: PoSearchFilterMode = PoSearchFilterMode.startsWith;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Configura a busca por linguagem natural integrada à tabela, substituindo o campo de busca padrão
+   * (`po-search`) pelo componente `po-search-ai` na barra de ações.
+   *
+   * Recebe um objeto do tipo `PoTableSearchAiField` com as configurações necessárias:
+   * - `url` _(obrigatório)_: endpoint (proxy) de IA que traduz a consulta em linguagem natural para um filtro
+   *   estruturado (OData v4). O backend deve seguir o contrato do
+   *   [`po-sample-api`](https://github.com/po-ui/po-sample-api).
+   * - `columns`: lista de colunas enviadas à IA; quando omitida, são derivadas de `p-columns`.
+   * - `minConfidence`: confiança mínima para aplicação automática do filtro (padrão `0.5`).
+   * - `timeout`: tempo máximo de espera pela resposta da IA em ms (padrão `10000`).
+   * - `placeholder`: texto exibido como placeholder no campo.
+   * - `literals`: literais customizadas do `po-search-ai`.
+   * - `apply`: estratégia de aplicação do filtro — `'auto'` (padrão), `'parser'`, `'server'`, `'none'`
+   *   ou uma função `(result: PoSearchAiResult) => void`.
+   *
+   * Quando esta propriedade está definida, os eventos `p-search-ai-result`, `p-search-ai-low-confidence`
+   * e `p-search-ai-error` ficam disponíveis para tratamento customizado.
+   */
+  searchAiField = input<PoTableSearchAiField>(undefined, { alias: 'p-search-ai-field' });
 
   /**
    * @optional
@@ -487,6 +427,25 @@ export abstract class PoTableBaseComponent implements OnChanges {
    * > Como parâmetro o componente envia o item expandido.
    */
   @Output('p-expanded') expanded: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento executado após o método de exclusão ser finalizado.
+   *
+   * ```
+   *<po-table
+   *  (p-delete-items)="items = $event"
+   * >
+   *</po-table>
+   * ```
+   *
+   *
+   * > Como parâmetro o componente envia a lista atualizada, sem os itens excluídos.
+   */
+  @Output('p-delete-items') eventDelete: EventEmitter<any> = new EventEmitter<any>();
 
   /**
    * @optional
@@ -538,12 +497,576 @@ export abstract class PoTableBaseComponent implements OnChanges {
    * @optional
    *
    * @description
-   * Evento disparado ao fechar o popover do gerenciador de colunas após alterar as colunas visíveis.
+   * Evento disparado ao fechar o page slide do gerenciador de colunas após alterar as colunas visíveis.
    *
    * O componente envia como parâmetro um array de string com as colunas visíveis atualizadas.
    * Por exemplo: ["idCard", "name", "hireStatus", "age"].
    */
   @Output('p-change-visible-columns') changeVisibleColumns = new EventEmitter<Array<string>>();
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado ao alterar o estado de fixação de uma coluna no gerenciador de colunas.
+   *
+   * O componente envia como parâmetro um array de string com as propriedades das colunas fixas.
+   * Por exemplo: ["name", "age"].
+   *
+   * > Incompatível com `p-hide-action-fixed-columns`. Quando esta propriedade estiver ativa, o evento não será disparado.
+   *
+   * @example
+   *
+   * ```html
+   * <po-table
+   *   [p-columns]="columns"
+   *   [p-items]="items"
+   *   (p-change-fixed-columns)="onFixedColumnsChange($event)">
+   * </po-table>
+   * ```
+   */
+  changeFixedColumns = output<Array<string>>({ alias: 'p-change-fixed-columns' });
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado ao clicar no botão de restaurar padrão no gerenciador de colunas.
+   *
+   * O componente envia como parâmetro um array de string com as colunas configuradas inicialmente.
+   * Por exemplo: ["idCard", "name", "hireStatus", "age"].
+   */
+  @Output('p-restore-column-manager') columnRestoreManager = new EventEmitter<Array<string>>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento emitido quando o `po-search-ai` retorna um resultado com confiança igual ou superior
+   * ao `minConfidence` configurado em `p-search-ai-field`.
+   *
+   * O parâmetro enviado é um objeto `PoSearchAiResult` contendo:
+   * - `filter`: string de filtro OData v4 gerada pela IA (ex: `"city eq 'SP' and salary gt 5000"`).
+   * - `description`: descrição em linguagem natural do filtro aplicado.
+   * - `confidence`: nível de confiança da resposta (0.0 a 1.0).
+   *
+   * > Quando `apply` for diferente de `'none'`, o filtro já é aplicado automaticamente pela tabela
+   * > antes deste evento ser emitido.
+   */
+  @Output('p-search-ai-result') searchAiResult = new EventEmitter<PoSearchAiResult>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento emitido quando o `po-search-ai` retorna um resultado cuja confiança é inferior ao
+   * `minConfidence` configurado em `p-search-ai-field`. Nesse caso, o filtro **não** é aplicado
+   * automaticamente.
+   *
+   * O parâmetro enviado é um objeto `PoSearchAiResult` com os mesmos campos de `p-search-ai-result`,
+   * permitindo que o desenvolvedor decida como tratar o resultado de baixa confiança.
+   */
+  @Output('p-search-ai-low-confidence') searchAiLowConfidence = new EventEmitter<PoSearchAiResult>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento emitido quando ocorre um erro na requisição ao endpoint de IA configurado em
+   * `p-search-ai-field`.
+   *
+   * O parâmetro enviado é um objeto `PoSearchAiError` contendo:
+   * - `statusCode`: código HTTP do erro (ex: `408` para timeout, `500` para erro interno).
+   * - `message`: mensagem descritiva do erro.
+   */
+  @Output('p-search-ai-error') searchAiError = new EventEmitter<PoSearchAiError>();
+
+  allColumnsWidthPixels: boolean;
+  columnMasterDetail: PoTableColumn;
+  hasMainColumns: boolean = false;
+  mainColumns: Array<PoTableColumn> = [];
+  selectAll = false;
+  sortedColumn = { property: <PoTableColumn>null, ascending: true };
+  subtitleColumns: Array<PoTableColumn> = [];
+  page = 1;
+  pageSize = 10;
+  hasService?: boolean = false;
+  initialColumns: Array<PoTableColumn>;
+  showBatchActions: boolean = false;
+  itemsSelected: Array<any> = [];
+  paramsFilter = {};
+  filteredItems: Array<any> = [];
+  initialized = false;
+  fixedLayout: boolean = false;
+  private initialVisibleColumns: boolean = false;
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _spacing: PoTableColumnSpacing;
+  private _initialSpacing?: string = undefined;
+  private _filteredColumns: Array<string>;
+  private _actions?: Array<PoTableAction> = [];
+  private _columns: Array<PoTableColumn> = [];
+  private _container?: string;
+  private _paramDelete: string = poTableParamDeleteApi;
+  private _height?: number;
+  private _hideDetail?: boolean = false;
+  private _items: Array<PoTableColumn>;
+  private _literals: PoTableLiterals;
+  private _loading?: boolean = false;
+  private _selectable?: boolean;
+  private readonly language: string = poLocaleDefault;
+  private _serviceApi: string;
+  private _serviceDeleteApi: string;
+  private poTableServiceSubscription: Subscription;
+  private sortStore: PoTableColumnSort;
+  private _infiniteScrollDistance?: number = 100;
+  private _infiniteScroll?: boolean = false;
+  private _draggable?: boolean = false;
+  private _hideActionFixedColumns?: boolean = false;
+  private _virtualScroll?: boolean = true;
+
+  constructor(
+    private readonly poDate: PoDateService,
+    languageService: PoLanguageService,
+    private readonly poTableService: PoTableService
+  ) {
+    this.language = languageService.getShortLanguage();
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no table:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  /**
+   * @description
+   *
+   * Lista de itens da tabela.
+   * > Se falso, será inicializado como um *array* vazio.
+   */
+  @Input('p-items') set items(items: Array<any>) {
+    if (this.height) {
+      this._items = Array.isArray(items) ? [...items] : [];
+    } else {
+      this._items = Array.isArray(items) ? items : [];
+    }
+
+    // when haven't items, selectAll should be unchecked.
+    if (!this.hasItems) {
+      this.selectAll = false;
+    } else if (!this.hasColumns) {
+      this.columns = this.getDefaultColumns(items[0]);
+    }
+    this.filteredItems = this.height ? [...this.items] : this.items;
+
+    this.reapplySort();
+
+    // timeout necessário para os itens serem refletidos na tabela
+    setTimeout(() => this.checkInfiniteScroll());
+  }
+
+  get items() {
+    return this._items;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Lista das colunas da tabela, deve receber um *array* de objetos que implementam a interface `PoTableColumn`.
+   * Por padrão receberá como valor a primeira coluna da lista de itens da tabela.
+   * > Caso não encontre valor, a mensagem 'Nenhuma definição de colunas' será exibida.
+   *
+   */
+  @Input('p-columns') set columns(columns: Array<PoTableColumn>) {
+    const hasColumnsWithVisible = columns?.find(column => column.visible === true);
+    if (this.initialColumns === undefined) {
+      this.initialColumns = columns;
+    }
+
+    this._columns = columns || [];
+
+    if (hasColumnsWithVisible && !this.initialVisibleColumns) {
+      this.initialVisibleColumns = true;
+    }
+
+    if (this._columns.length) {
+      this.setColumnLink();
+    } else if (this.hasItems) {
+      this._columns = this.getDefaultColumns(this.items[0]);
+    }
+
+    this.onChangeColumns();
+  }
+
+  get columns() {
+    return this._columns;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Adiciona um contorno arredondado ao `po-table`, as opções são:
+   * - `border`: com bordas/linhas.
+   * - `shadow`: com sombras.
+   *
+   * @default `border`
+   */
+  @Input('p-container') set container(value: string) {
+    this._container = poTableContainer.includes(value) ? value : poTableContainerDefault;
+  }
+
+  get container(): string {
+    return this._container;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Adiciona o parâmetro a ser enviado para a requisição de DELETE.
+   *
+   * É necessário a utilização da propriedade `p-service-delete` em conjunto.
+   *
+   * @default `id`
+   */
+  @Input('p-param-delete-api') set paramDeleteApi(value: string) {
+    this._paramDelete = value && typeof value === 'string' ? value : poTableParamDeleteApi;
+  }
+
+  get paramDeleteApi(): string {
+    return this._paramDelete;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a altura da tabela em *pixels* e fixa o cabeçalho.
+   *
+   * Ao utilizar essa propriedade será inserido o `virtual-scroll` na tabela melhorando a performance.
+   */
+  @Input('p-height') set height(height: number) {
+    this._height = height;
+  }
+
+  get height() {
+    return this._height;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita a visualização da lista de detalhes de cada linha da coluna.
+   *
+   * @default `false`
+   */
+  @Input('p-hide-detail') set hideDetail(hideDetail: boolean) {
+    this._hideDetail = hideDetail != null && hideDetail.toString() === '' ? true : convertToBoolean(hideDetail);
+  }
+
+  get hideDetail() {
+    return this._hideDetail;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Objeto com as literais usadas no `po-table`.
+   *
+   * Existem duas maneiras de customizar o componente, passando um objeto com todas as literais disponíveis:
+   *
+   * ```
+   *  const customLiterals: PoTableLiterals = {
+   *    noColumns: 'Nenhuma definição de colunas',
+   *    noData: 'Nenhum dado encontrado',
+   *    noVisibleColumn: 'Nenhuma coluna visível',
+   *    noItem: 'Nenhum item selecionado',
+   *    oneItem: '1 item selecionado',
+   *    multipleItems: 'itens selecionados',
+   *    loadingData: 'Carregando',
+   *    loadMoreData: 'Carregar mais resultados',
+   *    seeCompleteSubtitle: 'Ver legenda completa',
+   *    completeSubtitle: 'Legenda completa',
+   *    columnsManager: 'Gerenciador de colunas',
+   *    bodyDelete: 'Deseja realmente excluir esse item?',
+   *    cancel: 'Cancelar',
+   *    delete: 'Excluir',
+   *    deleteSuccessful: 'Itens removidos com sucesso',
+   *    deleteApiError: 'Ocorreu um erro inesperado, tente novamente mais tarde!',
+   *  };
+   * ```
+   *
+   * Ou passando apenas as literais que deseja customizar:
+   *
+   * ```
+   *  const customLiterals: PoTableLiterals = {
+   *    noData: 'Sem dados'
+   *  };
+   * ```
+   *
+   * E para carregar as literais customizadas, basta apenas passar o objeto para o componente.
+   *
+   * ```
+   * <po-table
+   *   [p-literals]="customLiterals">
+   * </po-table>
+   * ```
+   *
+   * > O objeto padrão de literais será traduzido de acordo com o idioma do
+   * [`PoI18nService`](/documentation/po-i18n) ou do browser.
+   */
+  @Input('p-literals') set literals(value: PoTableLiterals) {
+    if (value instanceof Object && !(value instanceof Array)) {
+      this._literals = {
+        ...poTableLiteralsDefault[poLocaleDefault],
+        ...poTableLiteralsDefault[this.language],
+        ...value
+      };
+    } else {
+      this._literals = poTableLiteralsDefault[this.language];
+    }
+  }
+  get literals() {
+    return this._literals || poTableLiteralsDefault[this.language];
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Bloqueia a interação do usuário com os dados da _table_.
+   *
+   * @default `false`
+   */
+  @Input('p-loading') set loading(loading: boolean) {
+    this._loading = convertToBoolean(loading);
+  }
+
+  get loading() {
+    return this._loading;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define uma lista de ações.
+   *
+   * Quando houver apenas uma ação definida ela será exibida diretamente na coluna, caso contrário, o componente
+   * se encarrega de agrupá-las exibindo o ícone [**an an-dots-three**](https://po-ui.io/icons) que listará as ações ao ser clicado.
+   *
+   * **A coluna de ações não será exibida quando:**
+   *  - a lista conter valores inválidos ou indefinidos.
+   *  - tenha uma única ação e a mesma não for visível.
+   */
+  @Input('p-actions') set actions(actions: Array<PoTableAction>) {
+    this._actions = actions;
+  }
+
+  get actions() {
+    return this._actions;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite a seleção de linhas na tabela e, caso a propriedade `p-single-select` esteja definida será possível
+   * selecionar apenas uma única linha.
+   *
+   * **Importante:**
+   *  - As linhas de detalhe definidas em `PoTableDetail` possuem comportamento independente da linha mestre;
+   *  - Cada linha possui por padrão a propriedade dinâmica `$selected`, na qual é possível validar se a linha
+   * está selecionada, por exemplo: `item.$selected` ou `item['$selected']`.
+   *
+   * @default `false`
+   */
+  @Input('p-selectable') set selectable(value: boolean) {
+    this._selectable = <any>value === '' ? true : convertToBoolean(value);
+  }
+
+  get selectable() {
+    return this._selectable;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Se verdadeiro, ativa a funcionalidade de scroll infinito para a tabela e o botão "Carregar Mais" deixará de ser exibido. Ao chegar no fim da tabela
+   * executará a função `p-show-more`.
+   *
+   * **Regras de utilização:**
+   *  - O scroll infinito só funciona para tabelas que utilizam a propriedade `p-height` e que possuem o scroll já na carga inicial dos dados.
+   *
+   * @default `false`
+   */
+  @Input('p-infinite-scroll') set infiniteScroll(value: boolean) {
+    this._infiniteScroll = convertToBoolean(value && this.height > 0);
+  }
+
+  get infiniteScroll() {
+    return this._infiniteScroll;
+  }
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o percentual necessário para disparar o evento `p-show-more`, que é responsável por carregar mais dados na tabela. Caso o valor informado seja maior que 100 ou menor
+   * que 0, o valor padrão será 100%
+   *
+   * **Exemplos:**
+   *  - p-infinite-scroll-distance = 80: Quando atingir 80%  do scroll da tabela, o `p-show-more` será disparado.
+   */
+  @Input('p-infinite-scroll-distance') set infiniteScrollDistance(value: number) {
+    this._infiniteScrollDistance = value > 100 || value < 0 ? 100 : value;
+  }
+
+  get infiniteScrollDistance() {
+    return this._infiniteScrollDistance;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * URL da API responsável por retornar os registros.
+   *
+   * Ao realizar a busca de mais registros via paginação (Carregar mais resultados), será enviado os parâmetros `page` e `pageSize`, conforme abaixo:
+   *
+   * ```
+   * url + ?page=1&pageSize=10
+   * ```
+   *
+   * Caso utilizar ordenação, a coluna ordenada será enviada através do parâmetro `order`, por exemplo:
+   * - Coluna decrescente:
+   *   ```
+   *    url + ?page=1&pageSize=10&order=-name
+   *   ```
+   *
+   * - Coluna ascendente:
+   *   ```
+   *    url + ?page=1&pageSize=10&order=name
+   *   ```
+   *
+   * > Esta URL deve retornar e receber os dados no padrão de [API do PO UI](https://po-ui.io/guides/api).
+   */
+  @Input('p-service-api') set serviceApi(service: string) {
+    this._serviceApi = service;
+    this.setService(this.serviceApi, 'GET');
+    this.hasService = !!service;
+    this.showMoreDisabled = !this.hasService;
+    this.page = 1;
+    this.initializeData();
+  }
+
+  get serviceApi() {
+    return this._serviceApi;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * URL da API responsável por excluir os registros.
+   *
+   * Ao selecionar o botão de excluir itens, essa url será executada utilizando o parâmetro enviado na propriedade `p-param-delete-api`.
+   * Caso ela não seja utilizada, o parâmetro padrão a ser enviado será `id`.
+   *
+   * > Esta URL deve retornar e receber os dados no padrão de [API do PO UI](https://po-ui.io/guides/api).
+   */
+  @Input('p-service-delete') set serviceDeleteApi(service: string) {
+    this._serviceDeleteApi = service;
+    this.setService(this.serviceDeleteApi, 'DELETE');
+  }
+
+  get serviceDeleteApi() {
+    return this._serviceDeleteApi;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o espaçamento interno das células, impactando diretamente na altura das linhas do table. Os valores
+   * permitidos são definidos pelo enum **PoTableColumnSpacing**.
+   *
+   * > Em nível de acessibilidade **AA**, caso o valor de `p-spacing` não seja definido, o valor padrão será `extraSmall`
+   * > nos seguintes cenários:
+   * > - Quando o valor de `p-components-size` for `small`;
+   * > - Quando o valor padrão dos componentes for configurado como `small` no
+   * > [serviço de tema](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set spacing(value: string) {
+    this._initialSpacing = value;
+    this.applySpacingBasedOnA11y();
+  }
+
+  @Input('p-spacing')
+  @HostBinding('attr.p-spacing')
+  get spacing() {
+    return this._spacing ?? this.getDefaultSpacing();
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as colunas que serão filtradas no campo de pesquisa.
+   * Aceita um array de strings, representando as colunas específicas que serão consideradas na filtragem.
+   *
+   */
+  @Input('p-filtered-columns') set filteredColumns(values: Array<string>) {
+    this._filteredColumns = values;
+  }
+
+  get filteredColumns(): Array<string> {
+    return this._filteredColumns;
+  }
 
   get hasColumns(): boolean {
     return this.columns && this.columns.length > 0;
@@ -576,12 +1099,61 @@ export abstract class PoTableBaseComponent implements OnChanges {
     return this.columns.filter(col => !col.type || typesValid.includes(col.type));
   }
 
+  get visibleActions() {
+    return (
+      this.actions !== undefined && this.actions && this.actions.filter(action => action && action.visible !== false)
+    );
+  }
+
+  private getFilteredColumns(): void {
+    this.filteredColumns = this.columns
+      .filter(column => column.visible !== false)
+      .map(column => column.property || column.label);
+  }
+
   private get sortType(): PoTableColumnSortType {
     return this.sortedColumn.ascending ? PoTableColumnSortType.Ascending : PoTableColumnSortType.Descending;
   }
 
-  constructor(private poDate: PoDateService, languageService: PoLanguageService) {
-    this.language = languageService.getShortLanguage();
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita o modo drag and drop para as colunas da tabela.
+   *
+   * @default `false`
+   */
+  @Input('p-draggable') set draggable(draggable: boolean) {
+    this._draggable = draggable || false;
+  }
+
+  get draggable() {
+    return this._draggable;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita o `virtual-scroll` na tabela para melhorar a performance com grandes volumes de dados.
+   * Requer altura (`p-height`) para funcionar corretamente.
+   *
+   * > Incompatível com `p-text-wrap` e `master-detail`, pois o `virtual-scroll` exige altura fixa nas linhas.
+   *
+   * @default `true`
+   */
+  @Input('p-virtual-scroll') set virtualScroll(value: boolean) {
+    this._virtualScroll = convertToBoolean(value && this.height > 0);
+  }
+
+  get virtualScroll() {
+    return this._virtualScroll;
+  }
+
+  ngOnDestroy() {
+    this.poTableServiceSubscription?.unsubscribe();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -593,40 +1165,17 @@ export abstract class PoTableBaseComponent implements OnChanges {
     if (changes.height) {
       this.calculateHeightTableContainer(this.height);
     }
+
+    if ((changes.height || changes.items) && this.initialized) {
+      this.changeHeaderWidth();
+    }
+    this.changeSizeLoading();
   }
 
-  /**
-   * Método que colapsa uma linha com detalhe quando executada.
-   *
-   * @param { number } rowIndex Índice da linha que será colapsada.
-   * > Ao reordenar os dados da tabela, o valor contido neste índice será alterado conforme a ordenação.
-   */
-  collapse(rowIndex: number) {
-    this.setShowDetail(rowIndex, false);
-  }
-
-  /**
-   * Método que expande uma linha com detalhe quando executada.
-   *
-   * @param { number } rowIndex Índice da linha que será expandida.
-   * > Ao reordenar os dados da tabela, o valor contido neste índice será alterado conforme a ordenação.
-   */
-  expand(rowIndex: number) {
-    this.setShowDetail(rowIndex, true);
-  }
-
-  /**
-   * Retorna as linhas do `po-table` que estão selecionadas.
-   */
-  getSelectedRows() {
-    return this.items.filter(item => item.$selected);
-  }
-
-  /**
-   * Retorna as linhas do `po-table` que não estão selecionadas.
-   */
-  getUnselectedRows() {
-    return this.items.filter(item => !item.$selected);
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+    this.applySpacingBasedOnA11y();
   }
 
   selectAllRows() {
@@ -635,9 +1184,15 @@ export abstract class PoTableBaseComponent implements OnChanges {
 
       this.items.forEach(item => {
         item.$selected = this.selectAll;
+
+        if (item[this.nameColumnDetail]) {
+          const childItems = item[this.nameColumnDetail];
+          childItems.forEach(childItem => (childItem.$selected = this.selectAll));
+        }
       });
 
-      this.emitSelectAllEvents(this.selectAll, this.items);
+      this.emitSelectAllEvents(this.selectAll, [...this.items]);
+      this.setSelectedList();
     }
   }
 
@@ -645,12 +1200,52 @@ export abstract class PoTableBaseComponent implements OnChanges {
     row.$selected = !row.$selected;
 
     this.emitSelectEvents(row);
-
     this.configAfterSelectRow(this.items, row);
+
+    if (row[this.nameColumnDetail] && (row.$selected === true || row.$selected === false)) {
+      const childItems = row[this.nameColumnDetail];
+      childItems.forEach(item => (item.$selected = row.$selected));
+    }
+
+    this.setSelectedList();
   }
 
-  selectDetailRow(row: any) {
-    this.emitSelectEvents(row);
+  hasSelectableRow(): boolean {
+    return this.selectable && this.selectableEntireLine;
+  }
+
+  selectDetailRow(event: any) {
+    const { item, parentRow } = event;
+    this.emitSelectEvents(item);
+    this.updateParentRowSelection(parentRow);
+  }
+
+  updateParentRowSelection(parentRow: any) {
+    const old = parentRow.$selected || null;
+    const childItems = parentRow[this.nameColumnDetail];
+
+    if (childItems.every(item => item.$selected)) {
+      parentRow.$selected = true;
+    } else if (childItems.every(item => !item.$selected)) {
+      parentRow.$selected = false;
+    } else {
+      parentRow.$selected = null;
+    }
+    if (old != parentRow.$selected && !(old == null && parentRow.$selected === false)) {
+      this.emitSelectEvents(parentRow);
+    }
+
+    this.configAfterSelectRow(this.items, parentRow);
+    this.setSelectedList();
+  }
+
+  setSelectedList() {
+    this.itemsSelected = [];
+    this.items.forEach(item => {
+      if (item.$selected) {
+        this.itemsSelected.push(item);
+      }
+    });
   }
 
   getClassColor(row, column) {
@@ -667,15 +1262,6 @@ export abstract class PoTableBaseComponent implements OnChanges {
     this.emitExpandEvents(row);
   }
 
-  private collapseAllItems(items: Array<{ [key: string]: any }>) {
-    for (const item of items) {
-      if (item.$showDetail) {
-        this.setShowDetail(item, false);
-        this.emitExpandEvents(item);
-      }
-    }
-  }
-
   toggleRowAction(row: any) {
     const toggleShowAction = row.$showAction;
 
@@ -688,7 +1274,7 @@ export abstract class PoTableBaseComponent implements OnChanges {
   }
 
   sortColumn(column: PoTableColumn) {
-    if (!this.sort || column.type === 'detail') {
+    if (!this.sort || column.type === 'detail' || column.sortable === false) {
       return;
     }
 
@@ -696,6 +1282,9 @@ export abstract class PoTableBaseComponent implements OnChanges {
 
     this.sortArray(column, this.sortedColumn.ascending);
     this.sortBy.emit({ column, type: this.sortType });
+    if (this.hasService && this.sort) {
+      this.sortStore = { column, type: this.sortType };
+    }
 
     this.sortedColumn.property = column;
   }
@@ -703,21 +1292,80 @@ export abstract class PoTableBaseComponent implements OnChanges {
   onShowMore(): void {
     const sort = this.sortedColumn.property ? { column: this.sortedColumn.property, type: this.sortType } : undefined;
 
+    if (this.hasService) {
+      this.page++;
+      this.loading = true;
+      this.loadingShowMore = true;
+
+      this.poTableServiceSubscription = this.getFilteredItems().subscribe(data => {
+        this.items = [...this.items, ...data.items];
+        this.showMoreDisabled = !data.hasNext;
+        this.loading = false;
+        this.loadingShowMore = false;
+      });
+    }
+
     this.showMore.emit(sort);
   }
 
-  protected abstract calculateHeightTableContainer(height);
+  getFilteredItems(queryParams?: { [key: string]: QueryParamsType }): Observable<PoTableResponseApi> {
+    const filteredParams: PoTableFilteredItemsParams = this.getFilteredParams(queryParams);
 
-  protected abstract calculateWidthHeaders();
+    return this.poTableService.getFilteredItems(filteredParams);
+  }
+
+  setTableResponseProperties(data: PoTableResponseApi) {
+    this.items = data.items || [];
+    this.showMoreDisabled = !data.hasNext;
+    this.loading = false;
+  }
+
+  initializeData(params?: { [key: string]: QueryParamsType }): void {
+    if (this.hasService) {
+      this.loading = true;
+      this.paramsFilter = params;
+      this.getFilteredItems(params).subscribe(data => {
+        this.setTableResponseProperties(data);
+      });
+    }
+  }
+
+  sortArray(column: PoTableColumn, ascending: boolean, item?: Array<any>) {
+    let itemsList;
+    if (item) {
+      itemsList = this.height ? [...item] : item;
+    } else {
+      itemsList = this.height ? [...this.filteredItems] : this.filteredItems;
+    }
+    itemsList.sort((leftSide, rightSide): number =>
+      PoUtils.sortValues(leftSide[column.property], rightSide[column.property], ascending)
+    );
+    this.filteredItems = itemsList;
+  }
 
   protected getDefaultColumns(item: any) {
     const keys = Object.keys(item);
 
     return keys
       .filter(key => typeof item[key] !== 'object')
-      .map(key => {
-        return { label: capitalizeFirstLetter(key), property: key };
-      });
+      .map(key => ({ label: capitalizeFirstLetter(key), property: key }));
+  }
+
+  protected setShowDetail(rowIdentifier: any | number, isShowDetail: boolean) {
+    const isRowIndex = typeof rowIdentifier === 'number' && this.items[rowIdentifier];
+
+    const row = isRowIndex ? this.items[rowIdentifier] : rowIdentifier;
+
+    row.$showDetail = isShowDetail;
+  }
+
+  private collapseAllItems(items: Array<{ [key: string]: any }>) {
+    for (const item of items) {
+      if (item.$showDetail) {
+        this.setShowDetail(item, false);
+        this.emitExpandEvents(item);
+      }
+    }
   }
 
   private configAfterSelectRow(rows: Array<any>, row) {
@@ -780,6 +1428,7 @@ export abstract class PoTableBaseComponent implements OnChanges {
     this.setMainColumns();
     this.setColumnMasterDetail();
     this.setSubtitleColumns();
+    this.getFilteredColumns();
   }
 
   private setColumnLink() {
@@ -802,22 +1451,8 @@ export abstract class PoTableBaseComponent implements OnChanges {
     this.allColumnsWidthPixels = this.verifyWidthColumnsPixels();
   }
 
-  private setShowDetail(rowIdentifier: any | number, isShowDetail: boolean) {
-    const isRowIndex = typeof rowIdentifier === 'number' && this.items[rowIdentifier];
-
-    const row = isRowIndex ? this.items[rowIdentifier] : rowIdentifier;
-
-    row.$showDetail = isShowDetail;
-  }
-
   private setSubtitleColumns() {
     this.subtitleColumns = this.getSubtitleColumns();
-  }
-
-  private sortArray(column: PoTableColumn, ascending: boolean) {
-    this.items.sort((leftSide, rightSide): number => {
-      return sortValues(leftSide[column.property], rightSide[column.property], ascending);
-    });
   }
 
   private unselectOtherRows(rows: Array<any>, row) {
@@ -831,4 +1466,74 @@ export abstract class PoTableBaseComponent implements OnChanges {
   private verifyWidthColumnsPixels() {
     return this.hasMainColumns ? this.mainColumns.every(column => column.width && column.width.includes('px')) : false;
   }
+
+  private setService(service: string, method: 'GET' | 'DELETE') {
+    if (service && isTypeof(service, 'string')) {
+      this.poTableService.setUrl(service, method);
+    }
+  }
+
+  private getFilteredParams(queryParams?: { [key: string]: QueryParamsType }) {
+    const { page, pageSize, sortStore } = this;
+
+    const filteredParams = {};
+    const order = this.getOrderParam(sortStore);
+    const params = { page, pageSize, order, ...queryParams };
+
+    for (const key in params) {
+      if (params.hasOwnProperty(key) && params[key] !== undefined) {
+        filteredParams[key] = params[key];
+      }
+    }
+    return filteredParams;
+  }
+
+  private getOrderParam(sort: PoTableColumnSort = { type: undefined }) {
+    const { column, type } = sort;
+
+    if (!column) {
+      return;
+    }
+
+    if (type === PoTableColumnSortType.Descending) {
+      return `-${column.property}`;
+    }
+
+    return `${column.property}`;
+  }
+
+  private removePropertyFixed(arr: Array<any>) {
+    return arr.map(obj => {
+      if (obj.hasOwnProperty('fixed')) {
+        obj.fixed = false;
+      }
+      return obj;
+    });
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialComponentsSize, PoFieldSize);
+    this._componentsSize = size;
+    this.calculateHeightTableContainer(this.height);
+  }
+
+  private applySpacingBasedOnA11y(): void {
+    if (Object.values(PoTableColumnSpacing).includes(this._initialSpacing as PoTableColumnSpacing)) {
+      this._spacing = this._initialSpacing as PoTableColumnSpacing;
+    } else {
+      this._spacing = this.getDefaultSpacing();
+    }
+  }
+
+  protected abstract calculateHeightTableContainer(height);
+
+  protected abstract checkInfiniteScroll();
+
+  protected abstract changeSizeLoading();
+
+  protected abstract changeHeaderWidth();
+
+  protected abstract getDefaultSpacing();
+
+  protected abstract reapplySort();
 }

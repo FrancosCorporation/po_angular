@@ -3,6 +3,7 @@ import { NgModule } from '@angular/core';
 import { RouterModule } from '@angular/router';
 
 import { PoContainerModule } from '../po-container/po-container.module';
+import { PoIconModule } from '../po-icon';
 
 import { PoSlideCirclesComponent } from './po-slide-circles/po-slide-circles.component';
 import { PoSlideComponent } from './po-slide.component';
@@ -40,9 +41,21 @@ import { PoSlideItemComponent } from './po-slide-item/po-slide-item.component';
  * })
  * export class AppModule { }
  * ```
+ *
+ * Em aplicações Standalone, utilize a seguinte configuração para o bootstrap:
+ *
+ * ```
+ * import { bootstrapApplication } from '@angular/platform-browser';
+ * import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+ * import { AppComponent } from './app.component';
+ *
+ * bootstrapApplication(AppComponent, {
+ *   providers: [importProvidersFrom(BrowserAnimationsModule)]
+ * }).catch(err => console.error(err));
+ * ```
  */
 @NgModule({
-  imports: [CommonModule, RouterModule, PoContainerModule],
+  imports: [CommonModule, RouterModule, PoContainerModule, PoIconModule],
   declarations: [
     PoSlideCirclesComponent,
     PoSlideComponent,

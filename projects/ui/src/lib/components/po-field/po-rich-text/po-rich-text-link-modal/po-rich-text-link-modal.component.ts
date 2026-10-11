@@ -1,7 +1,17 @@
-import { Component, ElementRef, EventEmitter, OnInit, Output, ViewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  EventEmitter,
+  HostBinding,
+  Input,
+  OnInit,
+  Output,
+  ViewChild,
+  inject
+} from '@angular/core';
 import { AbstractControl, NgForm } from '@angular/forms';
 
-import { isExternalLink, isIE } from '../../../../utils/util';
+import { isExternalLink, PoUtils } from '../../../../utils/util';
 import { PoLanguageService } from './../../../../services/po-language/po-language.service';
 
 import { PoModalAction, PoModalComponent } from '../../../po-modal';
@@ -9,48 +19,49 @@ import { poRichTextLiteralsDefault } from '../po-rich-text-literals';
 
 @Component({
   selector: 'po-rich-text-link-modal',
-  templateUrl: './po-rich-text-link-modal.component.html'
+  templateUrl: './po-rich-text-link-modal.component.html',
+  standalone: false
 })
-export class PoRichTextLinkModalComponent {
+export class PoRichTextLinkModalComponent implements OnInit {
+  private readonly languageService = inject(PoLanguageService);
+
+  @ViewChild('modal', { static: true }) modal: PoModalComponent;
+
+  @ViewChild('modalLinkForm') modalLinkForm: NgForm;
+
+  @HostBinding('attr.p-size')
+  @Input('p-size')
+  size: string;
+
+  @Output('p-command') command = new EventEmitter<string | { command: string; value: string | any }>();
+
+  @Output('p-link-editing') linkEditing = new EventEmitter<any>();
+
   savedCursorPosition;
   selection = document.getSelection();
   urlLink: string;
   urlLinkText: string;
+
+  readonly literals: any;
+
+  modalCancelAction: PoModalAction;
+  modalConfirmAction: PoModalAction;
 
   private isLinkEditing: boolean;
   private isSelectedLink: boolean;
   private linkElement: any;
   private savedSelection: Range | null;
 
-  readonly literals = {
-    ...poRichTextLiteralsDefault[this.languageService.getShortLanguage()]
-  };
+  constructor() {
+    this.literals = {
+      ...poRichTextLiteralsDefault[this.languageService?.getShortLanguage()]
+    };
+  }
 
-  modalCancelAction: PoModalAction = {
-    label: this.literals.cancel,
-    action: () => {
-      this.modal.close();
-      this.command.emit();
-      this.retrieveCursorPosition();
-      this.cleanUpFields();
-    }
-  };
-
-  modalConfirmAction = {
-    label: this.linkConfirmAction(),
-    disabled: true,
-    action: () => (this.isLinkEditing ? this.toEditLink() : this.toInsertLink(this.urlLink, this.urlLinkText))
-  };
-
-  @ViewChild('modal', { static: true }) modal: PoModalComponent;
-
-  @ViewChild('modalLinkForm') modalLinkForm: NgForm;
-
-  @Output('p-command') command = new EventEmitter<string | { command: string; value: string | any }>();
-
-  @Output('p-link-editing') linkEditing = new EventEmitter<any>();
-
-  constructor(private languageService: PoLanguageService) {}
+  ngOnInit(): void {
+    this.setModalCancelAction();
+    this.setModalConfirmAction();
+  }
 
   linkConfirmAction(): string {
     return this.isLinkEditing ? this.literals.editLink : this.literals.insertLink;
@@ -145,8 +156,28 @@ export class PoRichTextLinkModalComponent {
     this.urlLink = this.linkElement.getAttribute('href');
   }
 
+  private setModalCancelAction() {
+    this.modalCancelAction = {
+      label: this.literals.cancel,
+      action: () => {
+        this.modal.close();
+        this.command.emit();
+        this.retrieveCursorPosition();
+        this.cleanUpFields();
+      }
+    };
+  }
+
+  private setModalConfirmAction() {
+    this.modalConfirmAction = {
+      label: this.linkConfirmAction(),
+      disabled: true,
+      action: () => (this.isLinkEditing ? this.toEditLink() : this.toInsertLink(this.urlLink, this.urlLinkText))
+    };
+  }
+
   private toEditLink() {
-    if (isIE()) {
+    if (PoUtils.isIE()) {
       this.linkElement.parentNode.removeChild(this.linkElement);
     } else {
       this.linkElement.remove();

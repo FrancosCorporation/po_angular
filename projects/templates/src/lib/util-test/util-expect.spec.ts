@@ -60,6 +60,7 @@ export const expectPropertiesValues = (comp: any, property: string, testedValues
 
 /**
  * Muda a linguagem da pagina (navigator.language) e realiza o expect de um método do component
+ *
  * @param language linguagem para alterar
  * @param comp componente a ser testado
  * @param method método que retorna o valor alterado
@@ -89,22 +90,25 @@ export const expectBrowserLanguageMethod = (
 
 /**
  * Muda a propriedade de inner width da página
+ *
  * @param expectedWidth valor esperado para inner width
  */
 export const changeBrowserInnerWidth = (expectedWidth: number) => {
-  (window as any).innerWidth = expectedWidth;
+  Object.defineProperty(window, 'innerWidth', { value: expectedWidth, writable: true, configurable: true });
 };
 
 /**
  * Muda a propriedade de innerHeight da página
+ *
  * @param expectedHeight valor esperado para innerHeight
  */
 export const changeBrowserInnerHeight = (expectedHeight: number) => {
-  (window as any).innerHeight = expectedHeight;
+  Object.defineProperty(window, 'innerHeight', { value: expectedHeight, writable: true, configurable: true });
 };
 
 /**
  * Muda as propriedades da página no navegador Phantom JS
+ *
  * @param pageObject objeto da página ex: page ou navigator
  * @param property nome da propriedade a ser alterada
  * @param returnValue valor da propriedade alterada
@@ -115,6 +119,7 @@ export function changePhantomProperties(pageObject, property, returnValue) {
 
 /**
  * Muda propriedades da página no navegador Chrome
+ *
  * @param pageObject objeto da página ex: page ou navigator
  * @param property nome da propriedade a ser alterada
  * @param returnValue valor da propriedade alterada
@@ -141,6 +146,7 @@ function browserInfo() {
 
 /**
  * Retorna um `Observable` com o parâmetro de retorno
+ *
  * @param response valor que será retornado no `Observable`
  */
 export function getObservable(response): Observable<any> {

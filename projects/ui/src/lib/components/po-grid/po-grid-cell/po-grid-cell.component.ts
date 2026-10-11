@@ -1,15 +1,21 @@
-import { Component, Input, ViewChild, ElementRef, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
+import {
+  Component,
+  Input,
+  ViewChild,
+  ElementRef,
+  ChangeDetectorRef,
+  Output,
+  EventEmitter,
+  inject
+} from '@angular/core';
 
 @Component({
   selector: 'po-grid-cell',
-  templateUrl: './po-grid-cell.component.html'
+  templateUrl: './po-grid-cell.component.html',
+  standalone: false
 })
 export class PoGridCellComponent {
-  private _width: string | number;
-
-  _value: any = '';
-  edit: boolean = false;
-  editValue: string = '';
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
   @Input('p-align') align?: string = 'left';
 
@@ -18,6 +24,21 @@ export class PoGridCellComponent {
   @Input('p-tab-index') tabIndex?: number = -1;
 
   @Input('p-position') position?: string = '';
+
+  @Input('p-readonly') readonly?: boolean = false;
+
+  @Input('p-required') required?: boolean = false;
+
+  @Output('p-valueChange') valueChange = new EventEmitter<any>();
+
+  @ViewChild('inputElement') inputElement: ElementRef;
+  @ViewChild('contentElement') contentElement: ElementRef;
+
+  _value: any = '';
+  edit: boolean = false;
+  editValue: string = '';
+
+  private _width: string | number;
 
   @Input('p-width') set width(value: string | number) {
     this._width = value;
@@ -30,12 +51,6 @@ export class PoGridCellComponent {
     return this._width ? `${this._width}px` : '100%';
   }
 
-  @Input('p-readonly') readonly?: boolean = false;
-
-  @Input('p-required') required?: boolean = false;
-
-  @Output('p-valueChange') valueChange = new EventEmitter<any>();
-
   @Input('p-value') set value(value: any) {
     this._value = value;
     this.valueChange.emit(this._value);
@@ -43,11 +58,6 @@ export class PoGridCellComponent {
   get value(): any {
     return this._value;
   }
-
-  @ViewChild('inputElement') inputElement: ElementRef;
-  @ViewChild('contentElement') contentElement: ElementRef;
-
-  constructor(private changeDetectorRef: ChangeDetectorRef) {}
 
   onKeyDownContent(event: any) {
     // BACKSPACE / DELETE
@@ -72,7 +82,6 @@ export class PoGridCellComponent {
     if ((event.keyCode >= 65 && event.keyCode <= 90) || (event.keyCode >= 48 && event.keyCode <= 57)) {
       event.preventDefault();
       this.onEditCell(event.key);
-      return;
     }
   }
 

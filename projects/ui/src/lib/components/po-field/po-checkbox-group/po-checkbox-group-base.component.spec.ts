@@ -1,27 +1,44 @@
-import { FormControl } from '@angular/forms';
+import { UntypedFormControl } from '@angular/forms';
 
-import * as UtilsFunction from '../../../utils/util';
-import * as ValidatorsFunctions from '../validators';
+import { PoUtils as UtilsFunction } from '../../../utils/util';
+import { PoValidators as ValidatorsFunctions } from '../validators';
 import { expectPropertiesValues } from './../../../util-test/util-expect.spec';
 
-import { PoCheckboxGroupBaseComponent } from './po-checkbox-group-base.component';
+import { PoThemeA11yEnum } from '../../../services';
 import { PoCheckboxGroupOption } from './interfaces/po-checkbox-group-option.interface';
+import { PoCheckboxGroupBaseComponent } from './po-checkbox-group-base.component';
+import { Component } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+
+@Component({
+  selector: 'po-checkbox-group-base-host',
+  template: '',
+  standalone: false
+})
+class PoCheckboxGroupBaseHostComponent extends PoCheckboxGroupBaseComponent {}
 
 describe('PoCheckboxGroupBaseComponent: ', () => {
-  let component: PoCheckboxGroupBaseComponent;
+  let component: PoCheckboxGroupBaseHostComponent;
+  let fixture: ComponentFixture<PoCheckboxGroupBaseHostComponent>;
 
   let valuesList: Array<any>;
-  let valuesObject;
+  let valuesObject: any;
   let options: Array<PoCheckboxGroupOption>;
+  let fakeInstance: any;
 
-  let fakeInstance;
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [PoCheckboxGroupBaseHostComponent]
+    }).compileComponents();
 
-  beforeEach(() => {
-    component = new PoCheckboxGroupBaseComponent();
-    component.propagateChange = (value: any) => {};
+    fixture = TestBed.createComponent(PoCheckboxGroupBaseHostComponent);
+    component = fixture.componentInstance;
+
+    component.propagateChange = (_: any) => {};
 
     valuesList = ['1'];
-    valuesObject = { 1: true, 3: <any>null };
+    valuesObject = { 1: true, 3: null as any };
+
     options = [
       { value: '1', label: '1' },
       { value: '2', label: '2' },
@@ -30,17 +47,17 @@ describe('PoCheckboxGroupBaseComponent: ', () => {
 
     fakeInstance = {
       required: false,
-      changeValue: (value: any) => {},
-      checkOptionModel: (value: any) => {},
-      changeDetector: {
-        detectChanges: () => {}
-      },
-      ngControl: {
-        control: {
-          setValidators: ([]) => {}
-        }
-      }
+      changeValue: (_value: any) => {},
+      checkOptionModel: (_value: any) => {},
+      changeDetector: { detectChanges: () => {} },
+      ngControl: { control: { setValidators: (_: Array<any>) => {} } }
     };
+
+    (component as any).items = [fakeInstance];
+
+    (component as any).options = options;
+
+    fixture.detectChanges();
   });
 
   it('should be created', () => {
@@ -263,7 +280,7 @@ describe('PoCheckboxGroupBaseComponent: ', () => {
 
       spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(true);
 
-      expect(component.validate(new FormControl([]))).toEqual(validObj);
+      expect(component.validate(new UntypedFormControl([]))).toEqual(validObj);
       expect(ValidatorsFunctions.requiredFailed).toHaveBeenCalled();
     });
 
@@ -278,7 +295,7 @@ describe('PoCheckboxGroupBaseComponent: ', () => {
       spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(false);
       spyOn(component, isInvalidIndeterminate).and.returnValue(true);
 
-      expect(component.validate(new FormControl([]))).toEqual(validObj);
+      expect(component.validate(new UntypedFormControl([]))).toEqual(validObj);
       expect(component[isInvalidIndeterminate]).toHaveBeenCalled();
       expect(ValidatorsFunctions.requiredFailed).toHaveBeenCalled();
     });
@@ -287,7 +304,7 @@ describe('PoCheckboxGroupBaseComponent: ', () => {
       spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(false);
       spyOn(component, <any>'isInvalidIndeterminate').and.returnValue(false);
 
-      expect(component.validate(new FormControl(null))).toBeUndefined();
+      expect(component.validate(new UntypedFormControl(null))).toBeUndefined();
       expect(ValidatorsFunctions.requiredFailed).toHaveBeenCalled();
     });
 
@@ -364,22 +381,40 @@ describe('PoCheckboxGroupBaseComponent: ', () => {
   });
 
   describe('Properties: ', () => {
-    const trueValues = [true, 'true', 1, '', [], {}];
-    const falseValues = [false, 'false', 0, null, undefined, NaN];
-
-    it('p-disabled: should be update with valid and invalid values.', () => {
-      expectPropertiesValues(component, 'disabled', trueValues, true);
-      expectPropertiesValues(component, 'disabled', falseValues, false);
+    it('p-disabled: should update with true value.', () => {
+      component.disabled = true;
+      expect(component.disabled).toBeTrue();
     });
 
-    it('p-indeterminate: should be update with valid and invalid values.', () => {
-      expectPropertiesValues(component, 'indeterminate', trueValues, true);
-      expectPropertiesValues(component, 'indeterminate', falseValues, false);
+    it('p-disabled: should update with false value.', () => {
+      component.disabled = false;
+      expect(component.disabled).toBeFalse();
     });
 
-    it('p-required: should be update with valid and invalid values.', () => {
-      expectPropertiesValues(component, 'required', trueValues, true);
-      expectPropertiesValues(component, 'required', falseValues, false);
+    it('p-disabled: should coerce empty string to true via Angular transform', () => {
+      fixture.componentRef.setInput('p-disabled', '');
+      fixture.detectChanges();
+      expect(component.disabled).toBeTrue();
+    });
+
+    it('p-indeterminate: should update with true value.', () => {
+      component.indeterminate = true;
+      expect(component.indeterminate).toBeTrue();
+    });
+
+    it('p-indeterminate: should update with false value.', () => {
+      component.indeterminate = false;
+      expect(component.indeterminate).toBeFalse();
+    });
+
+    it('p-required: should update with true value.', () => {
+      component.required = true;
+      expect(component.required).toBeTrue();
+    });
+
+    it('p-required: should update with false value.', () => {
+      component.required = false;
+      expect(component.required).toBeFalse();
     });
 
     it('p-options: should be update with invalid values.', () => {
@@ -407,6 +442,7 @@ describe('PoCheckboxGroupBaseComponent: ', () => {
     });
 
     it('p-columns: should update property with `6` if invalid value', () => {
+      const falseValues = [false, 'false', 0, null, undefined, NaN];
       expectPropertiesValues(component, 'columns', falseValues, 6);
     });
 
@@ -421,6 +457,133 @@ describe('PoCheckboxGroupBaseComponent: ', () => {
 
       expect(UtilsFunction.convertToInt).toHaveBeenCalled();
       expect(component['getGridSystemColumns']).toHaveBeenCalled();
+    });
+
+    it('p-compact-label: should update property with `true` when input is true', () => {
+      fixture.componentRef.setInput('p-compact-label', true);
+      fixture.detectChanges();
+
+      expect(component.compactLabel()).toBe(true);
+    });
+
+    it('p-compact-label: should have default value as false', () => {
+      expect(component.compactLabel()).toBe(false);
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('p-change-model:', () => {
+    // Feature: p-change-model-fields, Property 1: Emission on new value
+    it('should emit changeModel when writeValue receives a new array value (Property 1)', () => {
+      component.options = [].concat(options);
+      component.modelLastUpdate = undefined;
+
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(['1']);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith(['1']);
+      expect(component.modelLastUpdate).toEqual(['1']);
+    });
+
+    // Feature: p-change-model-fields, Property 4: Deep equality for complex values
+    it('should NOT emit changeModel when writeValue receives same array content with different reference (Property 4)', () => {
+      component.options = [].concat(options);
+      component.modelLastUpdate = ['1'];
+      component.checkedOptionsList = ['1'];
+
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(['1']);
+
+      expect(component.changeModel.emit).not.toHaveBeenCalled();
+    });
+
+    // Feature: p-change-model-fields, Property 5: User interaction triggers emission
+    it('should emit changeModel on user checkbox toggle via checkOption (Property 5)', () => {
+      component.options = [].concat(options);
+      component.checkedOptionsList = [];
+      component.indeterminate = false;
+      component.modelLastUpdate = [];
+      component.propagateChange = () => {};
+
+      spyOn(component.changeModel, 'emit');
+
+      component.checkOption(options[0]);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith(['1']);
+      expect(component.modelLastUpdate).toEqual(['1']);
+    });
+
+    // Feature: p-change-model-fields, Property 6: WriteValue does not emit p-change
+    it('should NOT emit change event on writeValue (Property 6)', () => {
+      component.options = [].concat(options);
+      component.modelLastUpdate = undefined;
+
+      spyOn(component.change, 'emit');
+
+      component.writeValue(['1']);
+
+      expect(component.change.emit).not.toHaveBeenCalled();
     });
   });
 });

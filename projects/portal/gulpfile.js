@@ -6,11 +6,8 @@ const del = require('del');
 const fs = require('fs');
 const path = require('path');
 const configuration = require('./docs/configuration');
-const sonarqubeScanner = require('sonarqube-scanner');
-const argv = require('yargs').argv;
 const util = require('./docs/util');
-const git = require('gulp-git');
-const marked = require('marked');
+const { marked } = require('marked');
 const _ = require('lodash');
 
 const APP_DIR = './src/app';
@@ -26,14 +23,15 @@ const replaceBrackets = str =>
     .replace(/\{\{/g, '<span ngNonBindable>{{</span>')
     .replace(/\}\}/g, '<span ngNonBindable>}}</span>')
     .replace(/\{/g, '&#123;')
-    .replace(/\}/g, '&#125;');
+    .replace(/\}/g, '&#125;')
+    .replace(/@/g, '&#64;');
 
 const markdownToHtml = markdown =>
   replaceBrackets(
-    marked(markdown, {
+    marked.parse(markdown, {
       highlight: (code, language) => {
         if (language) {
-          return hljs.highlight(language.toLowerCase() === 'ts' ? 'typescript' : language, code).value;
+          return hljs.highlight(code, { language: language.toLowerCase() === 'ts' ? 'typescript' : language }).value;
         }
         return code;
       }
@@ -67,6 +65,12 @@ const mkdirDocComponent = (path, componentName, moduleName) => mkdir(`${path}/${
 const writeFile = (file, data) => fs.writeFileSync(file, data, 'utf-8');
 const saveDocComponent = (path, componentName, moduleName, data) =>
   writeFile(`${path}/${moduleName}-${componentName}/${moduleName}-${componentName}.component.ts`, data);
+const saveDocComponentCss = (pathDir, componentName, moduleName, cssTemplatePath) => {
+  if (fs.existsSync(cssTemplatePath)) {
+    const cssContent = fs.readFileSync(cssTemplatePath, 'utf-8');
+    writeFile(`${pathDir}/${moduleName}-${componentName}/${moduleName}-${componentName}.component.css`, cssContent);
+  }
+};
 const saveDocView = (path, componentName, moduleName, data) =>
   writeFile(`${path}/${moduleName}-${componentName}/${moduleName}-${componentName}.component.html`, data);
 const saveDocModule = (moduleName, data) => writeFile(`${APP_DIR}/${moduleName}/${moduleName}.module.ts`, data);
@@ -108,6 +112,9 @@ const createDocs = (file, pathDir, moduleName) => {
     templateUrl: doc.fileName
   });
   saveDocComponent(pathDir, fileName, moduleName, doc.component);
+
+  const DOC_CSS_TEMPLATE = `./docs/templates/${moduleName}/${moduleName}.component.template.css`;
+  saveDocComponentCss(pathDir, doc.fileName, moduleName, DOC_CSS_TEMPLATE);
 
   return doc;
 };
@@ -177,6 +184,42 @@ gulp.task('build:api', () => {
 });
 
 /**
+ * Executa a geração de llms.txt e documentação de componentes em markdown.
+ *
+ * Este task é automaticamente executado como parte do `build:api` (via Dgeni),
+ * mas também pode ser chamado independentemente para regenerar apenas os arquivos
+ * de documentação para IA sem recompilar todo o portal.
+ *
+ * Pré-requisito: `build:api` precisa ter rodado antes para que o Dgeni
+ * tenha processado os JSDoc. Este task apenas verifica se os arquivos foram gerados.
+ *
+ * @task {build:llms}
+ */
+gulp.task('build:llms', done => {
+  const portalSrc = path.resolve(__dirname, 'src');
+  const llmsTxt = path.join(portalSrc, 'llms.txt');
+  const llmsFullTxt = path.join(portalSrc, 'llms-full.txt');
+  const docsDir = path.join(portalSrc, 'llms-generated');
+
+  if (!fs.existsSync(llmsTxt)) {
+    console.warn(
+      '[build:llms] ⚠️  llms.txt não encontrado. Execute `build:api` primeiro ' +
+        '(o processador Dgeni llms-generator gera esses arquivos automaticamente).'
+    );
+    done();
+    return;
+  }
+
+  const docsCount = fs.existsSync(docsDir) ? fs.readdirSync(docsDir).filter(f => f.endsWith('.md')).length : 0;
+
+  console.log(`[build:llms] ✅ llms.txt: ${llmsTxt}`);
+  console.log(`[build:llms] ✅ llms-full.txt: ${llmsFullTxt}`);
+  console.log(`[build:llms] ✅ llms-generated/: ${docsCount} arquivos .md em ${docsDir}`);
+
+  done();
+});
+
+/**
  * Gera guias em HTML para o portal a partir de arquivos markdown.
  *
  * @task {build:guides}
@@ -190,7 +233,11 @@ gulp.task('build:guides', () => {
   mkdir(GUIDE_DIR);
 
   poProjectsNames.forEach(project => {
-    sources.push(`${configuration.sourceFolder}/${project}/docs/guides/*.md`);
+    const projectPath = `${configuration.sourceFolder}/${project}`;
+
+    if (fs.existsSync(projectPath)) {
+      sources.push(`${projectPath}/docs/guides/*.md`);
+    }
   });
 
   return gulp
@@ -232,28 +279,6 @@ gulp.task('clean-docs', () => {
     'src/assets/json/api-list.json',
     'src/app/documentation/documentation-routing.module.ts'
   ]);
-});
-
-gulp.task('projects:update', function (callback) {
-  util.projects.forEach(project => {
-    const path = configurations.sourceFolder + project.name;
-    const url_type = argv.url_type || 'ssh';
-
-    const pullAndCheckout = (name, branch, path) => {
-      pull(name, path, () => {
-        checkout(name, branch, path);
-      });
-    };
-
-    if (!fs.existsSync(`${path}/.git`)) {
-      clone(project.name, project.url[url_type], path, () => {
-        const tag = argv.version || project.version;
-        pullAndCheckout(project.name, tag, path);
-      });
-    } else {
-      pullAndCheckout(project.name, tag, path);
-    }
-  });
 });
 
 /**
@@ -298,4 +323,7 @@ gulp.task('build:analytics', done => {
   done();
 });
 
-gulp.task('build', gulp.series('clean-docs', 'build:api', 'build:guides', 'build:menus', 'build:analytics'));
+gulp.task(
+  'build',
+  gulp.series('clean-docs', 'build:api', 'build:llms', 'build:guides', 'build:menus', 'build:analytics')
+);

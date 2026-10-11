@@ -1,22 +1,51 @@
-import { Input, EventEmitter, Output, Directive } from '@angular/core';
 import { TitleCasePipe } from '@angular/common';
+import { Directive, EventEmitter, HostBinding, HostListener, Input, Output } from '@angular/core';
 
-import { isTypeof, sortFields } from '../../../../utils/util';
+import { getDefaultSizeFn, isTypeof, sortFields, validateSizeFn } from '../../../../utils/util';
 
-import { getGridColumnsClasses, isVisibleField } from '../../po-dynamic.util';
-import { PoDynamicFieldType } from '../../po-dynamic-field-type.enum';
-import { PoDynamicFormField } from '../po-dynamic-form-field.interface';
+import { PoFieldSize } from '../../../../enums/po-field-size.enum';
+import { PoComboFilter } from '../../../po-field/po-combo/interfaces/po-combo-filter.interface';
+import { PoLookupFilter } from '../../../po-field/po-lookup/interfaces/po-lookup-filter.interface';
+import { PoDynamicFieldType } from '../../enums/po-dynamic-field-type.enum';
+import { PoDynamicUtil } from '../../po-dynamic.util';
+import { PoDynamicSharedBase } from '../../shared/po-dynamic-shared-base';
+import { PoDynamicFormField } from '../interfaces/po-dynamic-form-field.interface';
 import { PoDynamicFormFieldInternal } from './po-dynamic-form-field-internal.interface';
 
 @Directive()
-export class PoDynamicFormFieldsBaseComponent {
+export class PoDynamicFormFieldsBaseComponent extends PoDynamicSharedBase {
+  @Input('p-auto-focus') autoFocus?: string;
+
+  @Input('p-disabled-form') disabledForm: boolean;
+
+  @Input('p-validate') validate?: string | Function;
+
+  @Output('p-form-validate') formValidate = new EventEmitter<any>();
+
+  @Output('p-fieldsChange') fieldsChange = new EventEmitter<any>();
+
+  // Evento disparado se existir optionsService em visibleField. Necessário resgatar referência do objeto selecionado para quando se tratar de recebimento de opções via serviço.
+  @Output('p-object-value') objectValue = new EventEmitter<any>();
+
+  @Input('p-validate-on-input') validateOnInput: boolean;
+
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
   private _fields: Array<PoDynamicFormField>;
   private _validateFields: Array<string>;
   private _value?: any = {};
 
-  visibleFields: Array<PoDynamicFormFieldInternal> = [];
+  // Define o tamanho dos componentes de formulário.
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
 
-  @Input('p-auto-focus') autoFocus?: string;
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
 
   // array de objetos que implementam a interface PoDynamicFormField, que serão exibidos no componente.
   @Input('p-fields') set fields(value: Array<PoDynamicFormField>) {
@@ -27,11 +56,6 @@ export class PoDynamicFormFieldsBaseComponent {
     return this._fields;
   }
 
-  @Output('p-fieldsChange') fieldsChange = new EventEmitter<any>();
-
-  // Evento disparado se existir optionsService em visibleField. Necessário resgatar referência do objeto selecionado para quando se tratar de recebimento de opções via serviço.
-  @Output('p-object-value') objectValue = new EventEmitter<any>();
-
   // valor que será utilizado para iniciar valor no componente.
   @Input('p-value') set value(value: any) {
     this._value = value && isTypeof(value, 'object') ? value : {};
@@ -41,10 +65,6 @@ export class PoDynamicFormFieldsBaseComponent {
     return this._value;
   }
 
-  @Input('p-disabled-form') disabledForm: boolean;
-
-  @Input('p-validate') validate?: string | Function;
-
   @Input('p-validate-fields') set validateFields(value: Array<string>) {
     this._validateFields = Array.isArray(value) ? [...value] : [];
   }
@@ -53,15 +73,20 @@ export class PoDynamicFormFieldsBaseComponent {
     return this._validateFields;
   }
 
-  @Output('p-form-validate') formValidate = new EventEmitter<any>();
-
-  constructor(private titleCasePipe: TitleCasePipe) {}
+  constructor(private readonly titleCasePipe: TitleCasePipe) {
+    super();
+  }
 
   compareTo(value, compareTo) {
     return value === compareTo;
   }
 
-  // retorna um array com os objetos configurados e visiveis.
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  // retorna um array com os objetos configurados e visíveis.
   protected getVisibleFields() {
     const visibleFields = [];
 
@@ -78,12 +103,15 @@ export class PoDynamicFormFieldsBaseComponent {
         return;
       }
 
-      if (isVisibleField(field)) {
+      if (PoDynamicUtil.isVisibleField(field)) {
         visibleFields.push(this.createField(field));
       }
     });
 
-    return sortFields(visibleFields);
+    const _visibleFields = sortFields(visibleFields);
+    this.ensureFieldHasContainer(_visibleFields);
+
+    return _visibleFields;
   }
 
   // converte um array em string para um array de objetos que contem label e value.
@@ -102,17 +130,34 @@ export class PoDynamicFormFieldsBaseComponent {
     const control = this.getComponentControl(field);
     const options = !!field.options ? this.convertOptions(field.options) : undefined;
     const focus = this.hasFocus(field);
+    const type = field?.type ? field.type.toLocaleLowerCase() : 'string';
 
-    const componentClass = getGridColumnsClasses(
-      field.gridSmColumns,
-      field.gridMdColumns,
-      field.gridLgColumns,
-      field.gridXlColumns,
-      field.gridColumns
+    const componentClass = PoDynamicUtil.getGridColumnsClasses(
+      field.gridColumns,
+      field.offsetColumns,
+      {
+        smGrid: field.gridSmColumns,
+        mdGrid: field.gridMdColumns,
+        lgGrid: field.gridLgColumns,
+        xlGrid: field.gridXlColumns
+      },
+      {
+        smOffset: field.offsetSmColumns,
+        mdOffset: field.offsetMdColumns,
+        lgOffset: field.offsetLgColumns,
+        xlOffset: field.offsetXlColumns
+      },
+      {
+        smPull: field.gridSmPull,
+        mdPull: field.gridMdPull,
+        lgPull: field.gridLgPull,
+        xlPull: field.gridXlPull
+      }
     );
 
     return {
       label: this.titleCasePipe.transform(field.property),
+      maskFormatModel: this.compareTo(type, PoDynamicFieldType.Time),
       ...field,
       componentClass,
       control,
@@ -122,46 +167,124 @@ export class PoDynamicFormFieldsBaseComponent {
   }
 
   private existsProperty(fields: Array<PoDynamicFormField>, property: string) {
-    return fields.some(field => {
-      return field.property === property;
-    });
+    return fields.some(field => field.property === property);
   }
 
   // recupera o componente de acordo com algumas regras do field.
   private getComponentControl(field: PoDynamicFormField = <any>{}) {
-    const type = field && field.type ? field.type.toLocaleLowerCase() : 'string';
+    const type = this.getFieldType(field);
 
+    const forcedComponent = this.getForcedComponent(field);
+
+    if (forcedComponent) {
+      return forcedComponent;
+    }
+
+    return this.getComponentByType(field, type);
+  }
+
+  private getFieldType(field: PoDynamicFormField): string {
+    return field?.type ? field.type.toLocaleLowerCase() : 'string';
+  }
+
+  private getForcedComponent(field: PoDynamicFormField): string | undefined {
+    const { forceBooleanComponentType } = field;
+
+    if (forceBooleanComponentType) {
+      return forceBooleanComponentType;
+    }
+
+    if (this.verifyForceOptionComponent(field)) {
+      return field.forceOptionsComponentType;
+    }
+
+    return undefined;
+  }
+
+  private getComponentByType(field: PoDynamicFormField, type: string): string {
+    return (
+      this.getNumericComponent(field, type) ||
+      this.getSelectionComponent(field) ||
+      this.getDateComponent(field, type) ||
+      this.getTextComponent(field) ||
+      'input'
+    );
+  }
+
+  private getNumericComponent(field: PoDynamicFormField, type: string): string | undefined {
     if (this.isNumberType(field, type)) {
       return 'number';
-    } else if (this.isCurrencyType(field, type)) {
-      return 'decimal';
-    } else if (this.isSelect(field)) {
-      return 'select';
-    } else if (this.isRadioGroup(field)) {
-      return 'radioGroup';
-    } else if (this.isCheckboxGroup(field)) {
-      return 'checkboxGroup';
-    } else if (this.isMultiselect(field)) {
-      return 'multiselect';
-    } else if (this.compareTo(type, PoDynamicFieldType.Boolean)) {
-      return 'switch';
-    } else if (this.compareTo(type, PoDynamicFieldType.Date) || this.compareTo(type, PoDynamicFieldType.DateTime)) {
-      return 'datepicker';
-    } else if (this.compareTo(type, PoDynamicFieldType.Time)) {
-      field.mask = field.mask || '99:99';
+    }
 
-      return 'input';
-    } else if (this.isCombo(field)) {
+    if (this.isCurrencyType(field, type) || type === PoDynamicFieldType.Decimal) {
+      return 'decimal';
+    }
+
+    return undefined;
+  }
+
+  private getSelectionComponent(field: PoDynamicFormField): string | undefined {
+    if (this.isSelect(field)) {
+      return 'select';
+    }
+
+    if (this.isRadioGroup(field)) {
+      return 'radioGroup';
+    }
+
+    if (this.isCheckboxGroup(field)) {
+      return 'checkboxGroup';
+    }
+
+    if (this.isMultiselect(field)) {
+      return 'multiselect';
+    }
+
+    if (this.isCombo(field)) {
       return 'combo';
-    } else if (this.isLookup(field)) {
+    }
+
+    if (this.isLookup(field)) {
       return 'lookup';
-    } else if (this.isTextarea(field)) {
+    }
+
+    return undefined;
+  }
+
+  private getDateComponent(field: PoDynamicFormField, type: string): string | undefined {
+    if (this.compareTo(type, PoDynamicFieldType.Boolean)) {
+      return 'switch';
+    }
+
+    if (this.compareTo(type, PoDynamicFieldType.DateTime)) {
+      return 'datetimepicker';
+    }
+
+    if (this.compareTo(type, PoDynamicFieldType.Date)) {
+      return field.range ? 'datepickerrange' : 'datepicker';
+    }
+
+    if (this.compareTo(type, PoDynamicFieldType.Time)) {
+      return 'timepicker';
+    }
+
+    return undefined;
+  }
+
+  private getTextComponent(field: PoDynamicFormField): string | undefined {
+    if (this.isTextarea(field)) {
       return 'textarea';
-    } else if (this.isPassword(field)) {
+    }
+
+    if (this.isPassword(field)) {
       return 'password';
     }
 
-    return 'input';
+    if (this.isUpload(field)) {
+      return 'upload';
+    }
+
+    return undefined;
   }
 
   private hasFocus(field: PoDynamicFormField) {
@@ -177,7 +300,7 @@ export class PoDynamicFormFieldsBaseComponent {
   private isCombo(field: PoDynamicFormField) {
     const { optionsService } = field;
 
-    return !!optionsService && isTypeof(optionsService, 'string');
+    return !!optionsService && (isTypeof(optionsService, 'string') || this.isComboFilter(optionsService));
   }
 
   private isCurrencyType(field: PoDynamicFormField, type: string) {
@@ -186,16 +309,24 @@ export class PoDynamicFormFieldsBaseComponent {
     return this.compareTo(type, PoDynamicFieldType.Currency) && !mask && !pattern;
   }
 
+  private isLookupFilter(object: any): object is PoLookupFilter {
+    return object && (<PoLookupFilter>object).getObjectByValue !== undefined;
+  }
+
+  private isComboFilter(object: any): object is PoComboFilter {
+    return object && (<PoComboFilter>object).getFilteredData !== undefined;
+  }
+
   private isLookup(field: PoDynamicFormField) {
     const { searchService } = field;
 
-    return !!searchService && isTypeof(searchService, 'string');
+    return !!searchService && (isTypeof(searchService, 'string') || this.isLookupFilter(searchService));
   }
 
   private isMultiselect(field: PoDynamicFormField) {
     const { optionsService, optionsMulti, options } = field;
 
-    return !optionsService && optionsMulti && !!options && options.length > 3;
+    return optionsMulti && (!!optionsService || (!!options && options.length > 3));
   }
 
   private isNumberType(field: PoDynamicFormField, type: string) {
@@ -216,6 +347,21 @@ export class PoDynamicFormFieldsBaseComponent {
     return !optionsMulti && !!options && options.length <= 3;
   }
 
+  private isUpload(field: PoDynamicFormField) {
+    const { url, type } = field;
+
+    return url && type === 'upload';
+  }
+
+  private verifyForceOptionComponent(field: PoDynamicFormField) {
+    const { optionsMulti, optionsService, forceOptionsComponentType } = field;
+
+    if (forceOptionsComponentType && !optionsMulti && !optionsService) {
+      return true;
+    }
+    return false;
+  }
+
   private isSelect(field: PoDynamicFormField) {
     const { optionsMulti, options } = field;
 
@@ -230,5 +376,10 @@ export class PoDynamicFormFieldsBaseComponent {
 
   private printError(error: string) {
     console.error(error);
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialComponentsSize, PoFieldSize);
+    this._componentsSize = size;
   }
 }

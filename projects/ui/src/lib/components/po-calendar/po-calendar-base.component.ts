@@ -1,85 +1,146 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { EventEmitter, Input, Output, Directive, TemplateRef, HostBinding, HostListener } from '@angular/core';
 
-import { PoCalendarLangService } from './services/po-calendar.lang.service';
 import { PoDateService } from '../../services/po-date';
-import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { PoCalendarMode } from './po-calendar-mode.enum';
+import { PoFieldSize } from '../../enums/po-field-size.enum';
+import { getDefaultSizeFn, validateSizeFn } from '../../utils/util';
+import { PoTimerFormat } from '../po-timer/enums/po-timer-format.enum';
 import { poLocales } from '../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { PoCalendarRangePreset } from './interfaces/po-calendar-range-preset.interface';
 
 /**
  * @description
  *
- * O `po-calendar` é um componente para seleção de datas. Ele permite uma fácil navegação clicando nas setas
- * de direcionamento e nos *labels* do ano ou mês.
+ * O `po-calendar` é um componente para seleção de datas que permite a navegação entre meses por meio das setas direcionais
+ * e dos seletores de mês e ano exibidos no cabeçalho.
+ *
+ * O componente é recomendado para casos de seleção de datas próximas ao tempo presente. Por padrão, apresenta os dados do
+ * mês atual e apenas um mês por vez, podendo exibir uma data pré-estabelecida conforme o contexto.
  *
  * Este componente pode receber os seguintes formatos de data:
  *
- * - **Data e hora combinados (E8601DZw): yyyy-mm-ddThh:mm:ss+|-hh:mm**
- * ```
- * this.date = '2017-11-28T00:00:00-02:00';
- * ```
+ * | Formato                  | Exemplo                     |
+ * |--------------------------|-----------------------------|
+ * | `ISO 8601 (Data/Hora)`   | `2017-11-28T00:00:00-02:00` |
+ * | `ISO 8601 (Data)`        | `2017-11-28`                |
+ * | `JavaScript Date Object` | `new Date(2017, 10, 28)`    |
+ * > O valor é tratado internamente como **yyyy-mm-dd**.
  *
- * - **Data (E8601DAw.): yyyy-mm-dd**
- * ```
- * this.date = '2017-11-28';
- * ```
+ * **Importante:**
+ * - Datas fora do intervalo (`p-min-date` / `p-max-date`) aparecem desabilitadas sem alterar o *model*.
  *
- * - **JavaScript Date Object:**
- * ```
- * this.date = new Date(2017, 10, 28);
- * ```
+ * #### Boas práticas
  *
- * > Independentemente do formato utilizado, o componente trata o valor do *model* internamente com o
- * formato **Data (E8601DAw.): yyyy-mm-dd**.
+ * - Evite datas distantes: O uso do calendário não é recomendado para datas muito distantes (como data de nascimento), pois
+ * exige excesso de cliques. Nesses casos, prefira um campo de texto para digitação.
+ * - Impeça seleções ilógicas: Utilize as propriedades de limite para impedir que o usuário selecione períodos inválidos (ex:
+ * data de retorno anterior à de partida).
+ * - Sinalize a disponibilidade: Para datas que não podem ser selecionadas devido a um contexto específico, mantenha-as
+ * inativas por meio de opacidade e desabilite a opção de clique.
+ * - Contexto claro: Certifique-se de que o mês e o ano estejam sempre visíveis no cabeçalho para orientar a pessoa usuária
+ * durante a navegação.
  *
- * Importante:
+ * #### Acessibilidade tratada no componente
  *
- * - Caso seja definida uma data fora do range da data mínima e data máxima via *ngModel* o componente mostrará
- * a data desabilitada porém o *model* não será alterado.
- * - Caso seja definida uma data inválida a mesma não será atribuída ao calendário porém o *model* manterá a data inválida.
+ * Algumas diretrizes de acessibilidade já são tratadas no componente, internamente, e não podem ser alteradas pelo
+ * proprietário do conteúdo. São elas:
+ *
+ * - Navegação por teclado: O componente permite interação via tecla Tab entre os controles do cabeçalho e navegação no grid
+ * de dias por meio das setas direcionais.
+ * - Foco visual: A área de foco possui espessura de pelo menos 2 pixels CSS e não é sobreposta por outros elementos da tela,
+ * garantindo visibilidade para usuários que utilizam teclado. [WCAG 2.4.12: Focus Appearance](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance-enhanced)
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                      | Descrição                                            | Valor Padrão                      |
+ * |----------------------------------|------------------------------------------------------|-----------------------------------|
+ * | **Default Values**               |                                                      |                                   |
+ * | `--background`                   | Cor de fundo                                         | `var(--color-neutral-light-00)`   |
+ * | `--border-color`                 | Cor da borda                                         | `var(--color-neutral-light-20)`   |
+ * | `--border-radius`                | Raio da borda                                        | `var(--border-radius-md)`         |
+ * | `--border-width`                 | Largura da borda                                     | `var(--border-width-sm)`          |
+ * | `--shadow`                       | Contém o valor da sombra do elemento                 | `var(--shadow-md)`                |
+ * | **Weekly cells**                 |                                                      |                                   |
+ * | `--text-color-weekly`            | Cor da fonte utilizada nas células semanais          | `var(--color-neutral-dark-90)`    |
+ * | `--font-family`                  | Fonte utilizada nas células semanais                 | `var(--font-family-text)`         |
+ * | `--font-size`                    | Tamanho da fonte utilizada nas células semanais      | `var(--font-size-sm)`             |
+ * | `--font-weight-weekly`           | Peso da fonte utilizada nas células semanais         | `var(--font-weight-bold)`         |
+ * | **Days cells**                   |                                                      |                                   |
+ * | `--font-weight-days`             | Peso da fonte utilizada nas células de dias          | `var(--font-weight-normal)`       |
+ * | `--text-color`                   | Cor da fonte utilizada nas células de dias           | `var(--color-neutral-dark-90)`    |
+ * | `--border-radius-days`           | Raio da borda                                        | `var(--border-radius-md)`         |
+ * | `--border-width-days`            | Largura da borda                                     | `var(--border-width-sm)`          |
+ * | `--day-cell-transition-duration` | Duração da transição                                 | `var(--duration-extra-fast)`      |
+ * | `--day-cell-transition-property` | Atributo da transição                                | `all`                             |
+ * | `--day-cell-transition-timing`   | Duração da transição com o tipo de transição         | `var(--timing-standart)`          |
+ * | **Today**                        |                                                      |                                   |
+ * | `--font-weight-today`            | Peso da fonte utilizada na célula de hoje            | `var(--font-weight-bold)`         |
+ * | `--text-color-today`             | Cor da fonte utilizada na célula de hoje             | `var(--color-action-default)`     |
+ * | **Focused**                      |                                                      |                                   |
+ * | `--outline-color-focused`        | Cor do outline do estado de focus                    | `var(--color-action-focus)`       |
+ * | **Hover**                        |                                                      |                                   |
+ * | `--color-hover`                  | Cor de fundo das células ao passar o mouse           | `var(--color-neutral-light-00)`   |
+ * | `--text-color-hover`             | Cor da fonte utilizada nas células ao passar o mouse | `var(--color-action-hover)`       |
+ * | **Interval**                     |                                                      |                                   |
+ * | `--color-interval`               | Cor de fundo das células de intervalo                | `var(--color-brand-01-lighter)`   |
+ * | `--text-color-interval`          | Cor da fonte utilizada nas células de intervalo      | `var(--color-action-default)`     |
+ * | **Next Month**                   |                                                      |                                   |
+ * | `--text-color-next`              | Cor da fonte utilizada nas células do próximo mês    | `var(--color-action-default)`     |
+ * | **Disabled**                     |                                                      |                                   |
+ * | `--border-disabled`              | Cor da borda das células desabilitadas               | `var(--color-action-disabled)`    |
+ * | `--text-color-disabled`          | Cor da fonte utilizada nas células desabilitadas     | `var(--color-action-disabled)`    |
+ * | **Selected**                     |                                                      |                                   |
+ * | `--color-selected`               | Cor de fundo das células selecionadas                | `var(--color-neutral-light-00)`   |
+ * | `--text-color-selected`          | Cor da fonte utilizada nas células selecionadas      | `var(--color-action-default)`     |
  */
+
 @Directive()
 export class PoCalendarBaseComponent {
-  private shortLanguage: string;
-  private _locale: string = this.languageService.getShortLanguage();
-  private _maxDate: Date;
-  private _minDate: Date;
+  // --- Propriedades ---
 
-  currentYear: number;
-  dayVisible: boolean = false;
-  displayDays: Array<number>;
-  displayDecade: Array<number>;
-  displayFinalDecade: number;
-  displayMonth: any;
-  displayMonthNumber: number;
-  displayMonths: Array<any> = Array();
-  displayStartDecade: number;
-  displayWeekDays: Array<any> = Array();
-  displayYear: number;
-  monthVisible: boolean = false;
-  yearVisible: boolean = false;
+  activateDate;
+  selectedPresetLabel: string | null = null;
+  value;
 
-  protected currentMonthNumber: number;
-  protected date: Date;
-  protected dateIso: string;
-  protected lastDisplay: string;
   protected onTouched: any = null;
   protected propagateChange: any = null;
   protected today: Date = new Date();
-  protected validatorChange: any;
+
+  private readonly shortLanguage: string;
+  private _locale: string;
+  private _maxDate: Date;
+  private _minDate: Date;
+  private _mode: PoCalendarMode;
+  private _rangePresets: boolean | Array<string> = false;
+  private _size?: string;
+  private _initialSize?: string;
+
+  // --- Inputs ---
+
+  // Define o formato de exibição do timer quando o calendário está no modo `date-time`.
+  @Input('p-format') format: PoTimerFormat = PoTimerFormat.Format24;
+
+  // Propriedade que permite integrar o po-combo no componente de calendar. Implementa o template de header com `PoCombo`.
+  @Input('p-header-template') headerTemplate?: TemplateRef<any>;
 
   /**
    * @optional
    *
    * @description
    *
-   * Idioma do calendário.
+   * Idioma do componente.
    *
-   * > O locale padrão sera recuperado com base no [`PoI18nService`](/documentation/po-i18n) ou *browser*.
+   * > O locale padrão será recuperado com base no [`PoI18nService`](/documentation/po-i18n) ou *browser*.
    */
   @Input('p-locale') set locale(locale: string) {
     this._locale = poLocales.includes(locale) ? locale : this.shortLanguage;
-    this.initializeLanguage();
   }
+
   get locale() {
     return this._locale;
   }
@@ -89,30 +150,91 @@ export class PoCalendarBaseComponent {
    *
    * @description
    *
-   * Define a data máxima possível de ser selecionada.
+   * Define a data máxima permitida para seleção. As datas posteriores ao limite definido permanecem visíveis, mas ficam
+   * desabilitadas para clique.
    *
-   * Pode receber os seguintes formatos de data:
+   * Aceita os seguintes formatos:
    *
    * - **Data e hora combinados (E8601DZw): yyyy-mm-ddThh:mm:ss+|-hh:mm**
-   * ```
-   * this.date = '2017-11-28T00:00:00-02:00';
-   * ```
+   *   ```
+   *   this.date = '2017-11-28T00:00:00-02:00';
+   *   ```
    *
    * - **Data (E8601DAw.): yyyy-mm-dd**
-   * ```
-   * this.date = '2017-11-28';
-   * ```
+   *   ```
+   *   this.date = '2017-11-28';
+   *   ```
    *
    * - **JavaScript Date Object:**
-   * ```
-   * this.date = new Date(2017, 10, 28);
-   * ```
+   *   ```
+   *   this.date = new Date(2017, 10, 28);
+   *   ```
    */
   @Input('p-max-date') set maxDate(maxDate: any) {
     this._maxDate = this.poDate.getDateForDateRange(maxDate, false);
   }
+
   get maxDate() {
     return this._maxDate;
+  }
+
+  // Define o horário máximo permitido para seleção no timer quando o calendário está no modo `date-time`.
+  @Input('p-max-time') maxTime: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a data mínima para seleção. As datas anteriores ao limite permanecem visíveis, mas desabilitadas para clique.
+   *
+   * Aceita os seguintes formatos:
+   *
+   * - **Data e hora combinados (E8601DZw): yyyy-mm-ddThh:mm:ss+|-hh:mm**
+   *   ```
+   *   this.date = '2017-11-28T00:00:00-02:00';
+   *   ```
+   *
+   * - **Data (E8601DAw.): yyyy-mm-dd**
+   *   ```
+   *   this.date = '2017-11-28';
+   *   ```
+   *
+   * - **JavaScript Date Object:**
+   *   ```
+   *   this.date = new Date(2017, 10, 28);
+   *   ```
+   */
+  @Input('p-min-date') set minDate(minDate: any) {
+    this._minDate = this.poDate.getDateForDateRange(minDate, true);
+  }
+
+  get minDate() {
+    return this._minDate;
+  }
+
+  // Define o horário mínimo permitido para seleção no timer quando o calendário está no modo `date-time`.
+  @Input('p-min-time') minTime: string;
+
+  // Define o intervalo entre os minutos exibidos no painel do timer quando o calendário está no modo `date-time`.
+  @Input('p-minute-interval') minuteInterval: number;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o modo de exibição do calendário.
+   * Caso não seja informado, o componente operará no modo padrão de seleção única.
+   * Para permitir a seleção de um intervalo de datas, deve ser utilizado o valor `PoCalendarMode.Range`.
+   */
+  @Input('p-mode') set mode(value: PoCalendarMode) {
+    this._mode = value;
+    this.setActivateDate();
+  }
+
+  get mode() {
+    return this._mode;
   }
 
   /**
@@ -120,47 +242,230 @@ export class PoCalendarBaseComponent {
    *
    * @description
    *
-   * Define a data mínima possível de ser selecionada.
+   * Lista de presets customizados de intervalos de data exibidos no painel lateral do calendário em modo *range*.
    *
-   * Pode receber os seguintes formatos de data:
+   * Quando informado sem `p-range-presets`, exibe apenas os presets customizados.
+   * Quando informado junto com `p-range-presets` habilitado, os presets customizados serão exibidos junto aos presets padrão,
+   * ordenados automaticamente por temporalidade com base na data início (Futuro → Presente → Passado).
    *
-   * - **Data e hora combinados (E8601DZw): yyyy-mm-ddThh:mm:ss+|-hh:mm**
-   * ```
-   * this.date = '2017-11-28T00:00:00-02:00';
-   * ```
-   *
-   * - **Data (E8601DAw.): yyyy-mm-dd**
-   * ```
-   * this.date = '2017-11-28';
-   * ```
-   *
-   * - **JavaScript Date Object:**
-   * ```
-   * this.date = new Date(2017, 10, 28);
-   * ```
+   * Para utilizar presets customizados, informe um array de objetos que implementam a interface `PoCalendarRangePreset`.
    */
-  @Input('p-min-date') set minDate(minDate: any) {
-    this._minDate = this.poDate.getDateForDateRange(minDate, true);
-  }
-  get minDate() {
-    return this._minDate;
+  @Input('p-range-preset-options') rangePresetOptions?: Array<PoCalendarRangePreset>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita a exibição dos presets padrão de intervalos de data no painel lateral do calendário em modo *range*.
+   *
+   * Aceita os seguintes valores:
+   * - `true`: exibe todos os presets padrão (Amanhã, Hoje, Ontem, Últimos 7 dias, Últimos 14 dias, Últimos 30 dias, Últimos 3 meses, Últimos 6 meses).
+   * - `false`: não exibe os presets padrão.
+   * - `Array<string>`: exibe apenas os presets padrão cujos labels estejam no array informado.
+   *   O preset "today" é obrigatório e será incluído automaticamente mesmo que não esteja no array.
+   *
+   * Caso `p-range-preset-options` também seja informado, os presets customizados serão exibidos junto aos presets padrão,
+   * ordenados automaticamente por temporalidade com base na data início (Futuro → Presente → Passado).
+   *
+   * @default `false`
+   */
+  @Input('p-range-presets')
+  set rangePresets(value: boolean | Array<string> | string) {
+    if (Array.isArray(value)) {
+      this._rangePresets = value;
+    } else if (value === '' || value === true || value === 'true') {
+      this._rangePresets = true;
+    } else {
+      this._rangePresets = false;
+    }
   }
 
-  /** Evento disparado ao selecionar um dia do calendário. */
-  @Output('p-change') change = new EventEmitter<string>();
+  get rangePresets(): boolean | Array<string> {
+    return this._rangePresets;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a ordenação dos presets na lista.
+   *
+   * Valores aceitos:
+   * - `'asc'` (padrão): presets mais próximos de hoje aparecem primeiro.
+   * - `'desc'`: presets mais distantes de hoje aparecem primeiro.
+   *
+   * A ordenação é aplicada dentro de cada grupo de temporalidade com base na data início (Futuro → Presente → Passado).
+   *
+   * @default `asc`
+   */
+  @Input('p-range-presets-order') rangePresetsOrder: 'asc' | 'desc' = 'asc';
+
+  // Define o intervalo entre os segundos exibidos no painel do timer quando o calendário está no modo `date-time`.
+  // Utilizado apenas quando `p-show-seconds` está ativo.
+  @Input('p-second-interval') secondInterval: number;
+
+  // Exibe a coluna de segundos no painel de seleção do timer quando o calendário está no modo `date-time`.
+  @Input('p-show-seconds') showSeconds: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho do componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  // Propriedade interna responsável por controlar a visibilidade do calendário
+  // no po-datepicker-range, especialmente quando presets estão configurados.
+  @Input('p-width-with-presets') widthWithPresets?: boolean;
+
+  //  Propriedade interna utilizada pelo po-datepicker.
+  //  Define o limite de anos exibidos nas variações `month-year` e `year`,
+  //  considerando a data atual como referência.
+  //
+  //  O valor informado determina o intervalo de anos anterior e posterior
+  //  à data corrente que será disponibilizado para seleção.
+  @Input('p-year-range-limit') set yearRangeLimit(value: number) {
+    this._yearRangeLimit = value ?? 150;
+  }
+
+  get yearRangeLimit(): number {
+    return this._yearRangeLimit;
+  }
+
+  private _yearRangeLimit: number = 150;
+
+  // --- Outputs ---
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao alterar o valor do model.
+   * Em modo padrão, retorna uma `string` no formato ISO 8601 (`yyyy-mm-dd`).
+   * Em modo *range*, retorna um objeto contendo as datas de início (`start`) e fim (`end`).
+   */
+  @Output('p-change') change = new EventEmitter<string | { start; end }>();
+
+  /**
+   * @description
+   *
+   * Evento disparado ao alterar o mês ou o ano no cabeçalho do calendário.
+   * Retorna um objeto contendo os valores numéricos:
+   * - `month`: Mês selecionado (variando de 1 a 12).
+   * - `year`: Ano selecionado.
+   */
+  @Output('p-change-month-year') changeMonthYear = new EventEmitter<any>();
+
+  // Evento disparado ao selecionar um horário no timer quando o calendário está no modo `date-time`.
+  // Retorna uma `string` no formato ISO 8601 (`HH:mm` ou `HH:mm:ss`).
+  @Output('p-change-time') changeTime = new EventEmitter<string>();
+
+  // Evento disparado ao fechar o calendário, seja por seleção de data ou por clique fora do componente.
+  @Output('p-close') close = new EventEmitter<void>();
+
+  // Evento disparado quando Tab/ShiftTab atinge a última coluna do timer no modo date-time.
+  @Output('p-timer-boundary-tab') timerBoundaryTab = new EventEmitter<any>();
+
+  // --- Getters derivados do mode ---
+
+  get isDateTime() {
+    return this.mode === PoCalendarMode.DateTime;
+  }
+
+  get isRange() {
+    return this.mode === PoCalendarMode.Range;
+  }
+
+  get isMonthYear() {
+    return this.mode === PoCalendarMode.MonthYear;
+  }
+
+  get isYear() {
+    return this.mode === PoCalendarMode.Year;
+  }
+
+  // --- Constructor ---
 
   constructor(
     public poDate: PoDateService,
-    public poCalendarLangService: PoCalendarLangService,
-    private languageService: PoLanguageService
+    private readonly languageService: PoLanguageService
   ) {
     this.shortLanguage = languageService.getShortLanguage();
+    this._locale = this.languageService.getShortLanguage();
   }
 
-  initializeLanguage() {
-    this.poCalendarLangService.setLanguage(this.locale);
-    this.displayWeekDays = this.poCalendarLangService.getWeekDaysArray();
-    this.displayMonths = this.poCalendarLangService.getMonthsArray();
-    this.displayMonth = this.displayMonths[this.displayMonthNumber];
+  // --- Métodos ---
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  protected setActivateDate(date?: Date | string) {
+    let newData;
+    if (typeof date !== 'string') {
+      const temporaryDate = new Date(date);
+      const year = temporaryDate.getFullYear();
+      const month = ('0' + (temporaryDate.getMonth() + 1)).slice(-2);
+      const day = ('0' + temporaryDate.getDate()).slice(-2);
+      const formattedDate = `${year}-${month}-${day}`;
+      newData = formattedDate + 'T00:00:00';
+    } else {
+      newData = date + 'T00:00:00';
+    }
+    const activateDate = date ? date : this.verifyActivateDate();
+
+    let checkedStart;
+    let checkedEnd;
+
+    if (this.isRange) {
+      if (new Date(newData).getDate() > 28) {
+        checkedStart = new Date(activateDate);
+        checkedEnd = new Date(checkedStart.getFullYear(), checkedStart.getMonth() + 1, 0, 23, 59, 59, 999);
+        checkedEnd.setMilliseconds(checkedEnd.getMilliseconds() + 1);
+      } else {
+        checkedStart =
+          typeof activateDate === 'string' ? this.poDate.convertIsoToDate(activateDate) : new Date(activateDate);
+        checkedEnd = new Date(new Date(checkedStart).setMonth(checkedStart.getMonth() + 1));
+      }
+
+      this.activateDate = { start: checkedStart, end: checkedEnd };
+    } else {
+      this.activateDate = new Date(activateDate);
+    }
+  }
+
+  private verifyActivateDate(): Date {
+    let today = this.today;
+    if (this.minDate && this.minDate > this.today) {
+      today = this.minDate;
+    } else if (this.maxDate && this.maxDate < this.today) {
+      today = this.maxDate;
+    }
+    return today;
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
   }
 }

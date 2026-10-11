@@ -1,8 +1,9 @@
-import { ElementRef, Input, Directive } from '@angular/core';
+import { Directive, ElementRef, EventEmitter, Input, Output } from '@angular/core';
 
-import { convertToBoolean } from '../../utils/util';
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn } from '../../utils/util';
 import { PO_CONTROL_POSITIONS } from './../../services/po-control-position/po-control-position.constants';
 
+import { PoFieldSize } from '../../enums/po-field-size.enum';
 import { PoPopupAction } from './po-popup-action.interface';
 
 const poPopupDefaultPosition = 'bottom-left';
@@ -12,6 +13,9 @@ const poPopupDefaultPosition = 'bottom-left';
  *
  * O componente `po-popup` é um container pequeno recomendado para ações de navegação:
  * Ele abre sobreposto aos outros componentes.
+ *
+ * Suporta subníveis (submenus) quando as ações possuem a propriedade `subItems`,
+ * habilitando navegação hierárquica automaticamente.
  *
  * É possível escolher as posições do `po-popup` em relação ao componente alvo, para isto veja a propriedade `p-position`.
  *
@@ -30,21 +34,73 @@ const poPopupDefaultPosition = 'bottom-left';
  *   </div>
  * </po-popup >
  * ```
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                    |
+ * |----------------------------------------|-------------------------------------------------------|-------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                 |
+ * | `--border-radius`                      | Contém o valor do raio dos cantos do elemento&nbsp;   | `var(--border-radius-md)`                       |
+ * | `--border-width`                       | Contém o valor da largura dos cantos do elemento&nbsp;| `var(--border-width-sm)`                        |
+ * | `--border-color`                       | Cor da borda                                          | `var(--color-neutral-light-20)`                 |
+ * | `--background`                         | Cor do background                                     | `var(--color-neutral-light-00)`                 |
+ * | `--shadow`                             | Contém o valor da sombra do elemento                  | `var(--shadow-md)`                              |
+ * | **po-popup po-item-list**              |                                                       |                                                 |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                      |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                      |
+ * | `--line-height`                        | Tamanho da label                                      | `var(--line-height-md)`                         |
+ * | **Action**                             |                                                       |                                                 |
+ * | `--font-weight`                        | Peso da fonte                                         | `var(--font-weight-bold)`                       |
+ * | `--color`                              | Cor principal do popup                                | `var(--color-action-default)`                   |
+ * | **Hover**                              |                                                       |                                                 |
+ * | `--color-hover`                        | Cor principal no estado hover                         | `var(--color-brand-01-darkest)`                 |
+ * | `--background-hover`                   | Cor de background no estado hover                     | `var(--color-brand-01-lighter)`                 |
+ * | **Focused**                            |                                                       |                                                 |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                     |
+ * | **Pressed**                            |                                                       |                                                 |
+ * | `--background-pressed`                 | Cor de background no estado de pressionado&nbsp;      | `var(--color-brand-01-light)`                   |
+ * | **Disabled**                           |                                                       |                                                 |
+ * | `--color-disabled`                     | Cor principal no estado disabled                      | `var(--color-action-disabled)`                  |
+ * | **Selected**                           |                                                       |                                                 |
+ * | `--font-weight-selected`               | Peso da fonte no estado selecionado                   | `var(--font-weight-bold)`                       |
+ * | `--background-selected`                | Cor de background no estado selecionado               | `var(--color-brand-01-lightest)`                |
+ * | **Option e check**                     |                                                       |                                                 |
+ * | `--color-option`                       | Cor principa no estado Option/check                   | `var(--color-neutral-dark-90)`                  |
+ *
  */
 @Directive()
 export class PoPopupBaseComponent {
-  private _actions: Array<PoPopupAction>;
-  private _customPositions?: Array<string>;
-  private _hideArrow: boolean = false;
-  private _isCornerAlign: boolean = false;
-  private _position?: string = poPopupDefaultPosition;
-  private _target: any;
-
   arrowDirection: string = 'top-right';
   showPopup: boolean = false;
 
   protected oldTarget;
   protected param;
+  protected clickoutListener: () => void;
+  protected resizeListener: () => void;
+
+  private _actions: Array<PoPopupAction>;
+  private _customPositions?: Array<string>;
+  private _hideArrow: boolean = false;
+  private _isCornerAlign: boolean = false;
+  private _position?: string = poPopupDefaultPosition;
+  private _size?: string = undefined;
+  private _target: any;
+
+  // Determina se o modo de subníveis deve ser ativado.
+  // Retorna true se alguma ação possuir subItems não vazio ou $subItemTemplate.
+  get computedListboxSubitems(): boolean {
+    if (!this._actions || this._actions.length === 0) {
+      return false;
+    }
+    return this._actions.some(action => (action.subItems && action.subItems.length > 0) || !!action.$subItemTemplate);
+  }
+
+  // template-icon
+  @Input('p-template-icon') templateIcon = false;
 
   /** Lista de ações que serão exibidas no componente. */
   @Input('p-actions') set actions(value: Array<PoPopupAction>) {
@@ -151,13 +207,35 @@ export class PoPopupBaseComponent {
   }
 
   /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  @Input('p-size') set size(value: string) {
+    this._size = validateSizeFn(value, PoFieldSize);
+  }
+
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  /**
    * @description
    *
    * Para utilizar o `po-popup` deve-se colocar uma variável local no componente que disparará o evento
    * de abertura no mesmo e com isso, invocará a função `toggle`, por exemplo:
    *
    * ```
-   * <span #icon class="po-icon po-icon-credit-payment" (click)="popup.toggle()">
+   * <span #icon class="an an-credit-card" (click)="popup.toggle()">
    *   Credit Actions
    * </span>
    *
@@ -195,6 +273,9 @@ export class PoPopupBaseComponent {
     return this._target;
   }
 
-  protected clickoutListener: () => void;
-  protected resizeListener: () => void;
+  @Output('p-close') closeEvent: EventEmitter<any> = new EventEmitter();
+
+  @Output('p-click-item') clickItem: EventEmitter<any> = new EventEmitter();
+
+  @Output('p-open') openEvent: EventEmitter<any> = new EventEmitter();
 }

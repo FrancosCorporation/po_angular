@@ -1,15 +1,21 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Component, OnInit, ViewChild, inject } from '@angular/core';
+import { UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 
 import { PoDatepickerRange, PoModalAction, PoModalComponent, PoNotificationService } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-datepicker-range-vacations-reactive-form',
-  templateUrl: './sample-po-datepicker-range-vacations-reactive-form.component.html'
+  templateUrl: './sample-po-datepicker-range-vacations-reactive-form.component.html',
+  standalone: false
 })
 export class SamplePoDatepickerRangeVacationsReactiveFormComponent implements OnInit {
+  private poNotification = inject(PoNotificationService);
+  private formBuilder = inject(UntypedFormBuilder);
+
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+
   datepickerRange: PoDatepickerRange;
-  formVacationSuggestion: FormGroup;
+  formVacationSuggestion: UntypedFormGroup;
   quantityOfDays: number;
   reason: string;
 
@@ -36,10 +42,6 @@ export class SamplePoDatepickerRangeVacationsReactiveFormComponent implements On
       this.formVacationSuggestion.get('datepickerRange').value.end
     );
   }
-
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
-
-  constructor(private poNotification: PoNotificationService, private formBuilder: FormBuilder) {}
 
   ngOnInit() {
     this.formVacationSuggestion = this.formBuilder.group({

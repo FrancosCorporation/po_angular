@@ -100,9 +100,9 @@ export class PoMask {
 
   setSelectionRange($event: any) {
     if (this.initialPosition > this.finalPosition) {
-      $event.target.setSelectionRange(this.finalPosition, this.initialPosition);
+      $event.target.setSelectionRange?.(this.finalPosition, this.initialPosition);
     } else {
-      $event.target.setSelectionRange(this.initialPosition, this.finalPosition);
+      $event.target.setSelectionRange?.(this.initialPosition, this.finalPosition);
     }
   }
 
@@ -177,6 +177,7 @@ export class PoMask {
 
           default:
             // qualquer outra tecla válida
+            this.getPosition($event);
             value = value.slice(0, this.initialPosition) + $event.key + value.slice(this.finalPosition);
             value = this.controlFormatting(value);
             $event.target.value = value;
@@ -222,8 +223,7 @@ export class PoMask {
   revertPositions(initialPosition: number, finalPosition: number) {
     if (initialPosition > finalPosition) {
       // inverte o controle de posição caso o inicial esteja maior que o final
-      let tempPosition;
-      tempPosition = initialPosition;
+      const tempPosition = initialPosition;
       this.initialPosition = finalPosition;
       this.finalPosition = tempPosition;
     }
@@ -237,7 +237,7 @@ export class PoMask {
 
   // posiciona o cursor de acordo com o controle de posição
   setPositions($event: any) {
-    $event.target.setSelectionRange(this.initialPosition, this.finalPosition);
+    $event.target.setSelectionRange?.(this.initialPosition, this.finalPosition);
   }
 
   // muda a posição do cursor e atualiza o controle de posição
@@ -352,8 +352,10 @@ export class PoMask {
       this.valueToInput = valueProcessed;
       this.valueToModel = this.removeFormattingValue(valueProcessed);
     }
+
     return valueProcessed;
   }
+
   // verifica se tem algum caracter de mascara antes do cursor
   checkMaskBefore($event: any, position: number) {
     if (this.isFixedCharacterGuide($event.target.value.toString().charAt(this.initialPosition - 1))) {

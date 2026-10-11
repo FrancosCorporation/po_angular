@@ -1,24 +1,27 @@
-import { Directive } from '@angular/core';
-import { FormControl } from '@angular/forms';
+import { Component, Directive } from '@angular/core';
+import { FormControl, UntypedFormControl, Validators } from '@angular/forms';
 
 import { Observable, of } from 'rxjs';
 
-import * as Utils from '../../../utils/util';
-import * as ValidatorsFunctions from '../validators';
 import { expectPropertiesValues, expectSettersMethod } from '../../../util-test/util-expect.spec';
+import * as Utils from '../../../utils/util';
+import { PoValidators as ValidatorsFunctions } from '../validators';
 
-import { PoLanguageService } from '../../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
 
-import { PoComboBaseComponent, poComboLiteralsDefault } from './po-combo-base.component';
+import { PoThemeA11yEnum } from '../../../services';
+import { PoComboFilterMode } from './enums/po-combo-filter-mode.enum';
 import { PoComboFilter } from './interfaces/po-combo-filter.interface';
-import { PoComboFilterMode } from './po-combo-filter-mode.enum';
+import { poComboLiteralsDefault } from './interfaces/po-combo-literals-default.interface';
 import { PoComboOption } from './interfaces/po-combo-option.interface';
+import { PoComboBaseComponent } from './po-combo-base.component';
+import { TestBed, ComponentFixture } from '@angular/core/testing';
 
 @Directive()
 class PoComboTest extends PoComboBaseComponent {
   constructor() {
-    super(new PoLanguageService());
+    super(new PoLanguageService(), { detectChanges: () => {}, markForCheck: () => {} } as any);
   }
 
   getInputValue(): string {
@@ -36,9 +39,29 @@ class PoComboTest extends PoComboBaseComponent {
 
 describe('PoComboBaseComponent:', () => {
   let component: PoComboTest;
+  let changeDetectorRef: jasmine.SpyObj<any>;
 
-  beforeEach(() => {
-    component = new PoComboTest();
+  const defaultService: any = {
+    url: '',
+    fieldLabel: 'label',
+    fieldValue: 'value',
+    getFilteredData: (params: any) => new Observable(),
+    getObjectByValue: (value: string | number) => new Observable(),
+    configProperties: (url: string, label: string, value: string) => {}
+  };
+
+  const service: PoComboFilter = {
+    getFilteredData: (params: any) => new Observable(),
+    getObjectByValue: (value: string | number) => new Observable()
+  };
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({}).compileComponents();
+    changeDetectorRef = jasmine.createSpyObj('ChangeDetectorRef', ['markForCheck', 'detectChanges']);
+    component = TestBed.runInInjectionContext(() => new PoComboTest());
+    component['changeDetector'] = changeDetectorRef;
+    component.filterService = service;
+    component.defaultService = defaultService;
   });
 
   it('should be created', () => {
@@ -49,24 +72,39 @@ describe('PoComboBaseComponent:', () => {
   });
 
   describe('Properties:', () => {
-    const trueValues = [true, 'true', 1, '', [], {}];
-    const falseValues = [false, 'false', 0, null, undefined, NaN];
+    it('p-compact-label: should have default value as false', () => {
+      expect(component.compactLabel()).toBe(false);
+    });
 
-    it('p-required: should be update with valid and invalid values and call validateModel with selectedValue.', () => {
+    it('p-required: should update with true value and call validateModel.', () => {
       spyOn(component, <any>'validateModel');
 
-      expectPropertiesValues(component, 'required', trueValues, true);
-      expectPropertiesValues(component, 'required', falseValues, false);
-
+      component.required = true;
+      expect(component.required).toBeTrue();
       expect(component['validateModel']).toHaveBeenCalledWith(component.selectedValue);
     });
 
-    it('p-disabled: should be update with valid and invalid values and call validateModel with selectedValue.', () => {
+    it('p-required: should update with false value and call validateModel.', () => {
       spyOn(component, <any>'validateModel');
 
-      expectPropertiesValues(component, 'disabled', trueValues, true);
-      expectPropertiesValues(component, 'disabled', falseValues, false);
+      component.required = false;
+      expect(component.required).toBeFalse();
+      expect(component['validateModel']).toHaveBeenCalledWith(component.selectedValue);
+    });
 
+    it('p-disabled: should update with true value and call validateModel.', () => {
+      spyOn(component, <any>'validateModel');
+
+      component.disabled = true;
+      expect(component.disabled).toBeTrue();
+      expect(component['validateModel']).toHaveBeenCalledWith(component.selectedValue);
+    });
+
+    it('p-disabled: should update with false value and call validateModel.', () => {
+      spyOn(component, <any>'validateModel');
+
+      component.disabled = false;
+      expect(component.disabled).toBeFalse();
       expect(component['validateModel']).toHaveBeenCalledWith(component.selectedValue);
     });
 
@@ -107,16 +145,38 @@ describe('PoComboBaseComponent:', () => {
       expect(spycomboListDefinitions).toHaveBeenCalled();
     });
 
+    it('p-infinite-scroll: should update property to false.', () => {
+      component.infiniteScroll = false;
+      expect(component.infiniteScroll).toBeFalse();
+    });
+
+    it('p-infinite-scroll: should update property to true.', () => {
+      component.infiniteScroll = true;
+      expect(component.infiniteScroll).toBeTrue();
+    });
+
+    it('p-infinite-scroll-distance: should update property `p-infinite-scroll-distance` with valid values .', () => {
+      expectSettersMethod(component, 'infiniteScrollDistance', 50, 'infiniteScrollDistance', 50);
+    });
+
+    it('p-infinite-scroll-distance: should update property `p-infinite-scroll-distance` with negative values .', () => {
+      expectSettersMethod(component, 'infiniteScrollDistance', -50, 'infiniteScrollDistance', 100);
+    });
+
+    it('p-infinite-scroll-distance: should update property `p-infinite-scroll-distance` with values > 100 .', () => {
+      expectSettersMethod(component, 'infiniteScrollDistance', 150, 'infiniteScrollDistance', 100);
+    });
+
     describe('p-literals:', () => {
       it('should be set `literals` with browser language if `literals` is `undefined`', () => {
-        component['language'] = Utils.browserLanguage();
+        Object.defineProperty(component, 'language', { value: Utils.getShortBrowserLanguage(), configurable: true });
         component.literals = undefined;
 
-        expect(component.literals).toEqual(poComboLiteralsDefault[Utils.browserLanguage()]);
+        expect(component.literals).toEqual(poComboLiteralsDefault[Utils.getShortBrowserLanguage()]);
       });
 
       it('should be in portuguese if browser is set with `pt`.', () => {
-        component['language'] = 'pt';
+        Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
         component.literals = {};
 
@@ -124,7 +184,7 @@ describe('PoComboBaseComponent:', () => {
       });
 
       it('should be in english if browser is set with `en`.', () => {
-        component['language'] = 'en';
+        Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
         component.literals = {};
 
@@ -132,7 +192,7 @@ describe('PoComboBaseComponent:', () => {
       });
 
       it('should be in spanish if browser is set with `es`.', () => {
-        component['language'] = 'es';
+        Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
         component.literals = {};
 
@@ -140,7 +200,7 @@ describe('PoComboBaseComponent:', () => {
       });
 
       it('should be in russian if browser is set with `ru`.', () => {
-        component['language'] = 'ru';
+        Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
 
         component.literals = {};
 
@@ -148,7 +208,7 @@ describe('PoComboBaseComponent:', () => {
       });
 
       it('should accept custom literals.', () => {
-        component['language'] = poLocaleDefault;
+        Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
         const customLiterals = Object.assign({}, poComboLiteralsDefault[poLocaleDefault]);
         customLiterals.noData = 'Sem dados';
@@ -158,15 +218,14 @@ describe('PoComboBaseComponent:', () => {
       });
 
       describe('p-sort: ', () => {
-        const booleanInvalidValues = [undefined, null, 2, 'string'];
-        const booleanValidTrueValues = [true, 'true', 1, ''];
-
-        it('should update property `p-sort` with valid values.', () => {
-          expectPropertiesValues(component, 'sort', booleanValidTrueValues, true);
+        it('should update property `p-sort` to true.', () => {
+          component.sort = true;
+          expect(component.sort).toBeTrue();
         });
 
-        it('should update property `p-sort` with invalid values.', () => {
-          expectPropertiesValues(component, 'sort', booleanInvalidValues, false);
+        it('should update property `p-sort` to false.', () => {
+          component.sort = false;
+          expect(component.sort).toBeFalse();
         });
 
         it('should call `comboListDefinitions`', () => {
@@ -176,6 +235,159 @@ describe('PoComboBaseComponent:', () => {
 
           expect(spycomboListDefinitions).toHaveBeenCalled();
         });
+      });
+    });
+
+    describe('p-loading:', () => {
+      it('should set loading=true and call markForCheck', () => {
+        component.loading = true;
+
+        expect(component.loading).toBeTrue();
+        expect(changeDetectorRef.markForCheck).toHaveBeenCalled();
+      });
+
+      it('should set loading=false and call markForCheck', () => {
+        component.loading = false;
+
+        expect(component.loading).toBeFalse();
+        expect(changeDetectorRef.markForCheck).toHaveBeenCalled();
+      });
+
+      it('loading should not affect disabled state', () => {
+        component.disabled = false;
+
+        component.loading = true;
+        expect(component.disabled).toBeFalse();
+
+        component.disabled = true;
+        component.loading = false;
+        expect(component.disabled).toBeTrue();
+      });
+
+      it('should not throw when cd is undefined', () => {
+        component['cd'] = undefined;
+        expect(() => (component.loading = true)).not.toThrow();
+      });
+
+      it('mapSizeToIcon: should map sizes to icon sizes', () => {
+        expect(component.mapSizeToIcon('small')).toBe('xs');
+        expect(component.mapSizeToIcon('medium')).toBe('sm');
+        expect(component.mapSizeToIcon('large')).toBe('sm');
+        expect(component.mapSizeToIcon(undefined)).toBe('sm');
+        expect(component.mapSizeToIcon('invalid')).toBe('sm');
+      });
+    });
+
+    describe('isDisabled:', () => {
+      it('should return false when disabled and loading are false', () => {
+        component.disabled = false;
+        component.loading = false;
+
+        expect(component.isDisabled).toBeFalse();
+      });
+
+      it('should return true when disabled is true and loading is false', () => {
+        component.disabled = true;
+        component.loading = false;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+
+      it('should return true when disabled is false and loading is true', () => {
+        component.disabled = false;
+        component.loading = true;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+
+      it('should return true when disabled and loading are true', () => {
+        component.disabled = true;
+        component.loading = true;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+
+      it('should keep disabled true after loading toggles from true to false', () => {
+        component.disabled = true;
+        component.loading = true;
+
+        expect(component.isDisabled).toBeTrue();
+
+        component.loading = false;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+    });
+
+    it('p-placeholder: should update property p-placeholder with valid value.', () => {
+      const validValues = ['Type your name', '1 number one'];
+
+      expectPropertiesValues(component, 'placeholder', validValues, validValues);
+    });
+
+    it('p-placeholder: should update property p-placeholder with empty value if set with invalid values.', () => {
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
+      const invalidValues = [null, undefined, '', 0, false];
+      expectPropertiesValues(component, 'placeholder', invalidValues, 'Escolha uma opção');
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
       });
     });
   });
@@ -196,16 +408,14 @@ describe('PoComboBaseComponent:', () => {
     expectSettersMethod(component, 'filterMode', PoComboFilterMode.endsWith, 'filterMode', PoComboFilterMode.endsWith);
   });
 
-  it('should update property `p-disabled-init-filter` with false when invalid values', () => {
-    const invalidValues = [undefined, null, 2, 'string'];
-
-    expectPropertiesValues(component, 'disabledInitFilter', invalidValues, false);
+  it('should update property `p-disabled-init-filter` to false', () => {
+    component.disabledInitFilter = false;
+    expect(component.disabledInitFilter).toBeFalse();
   });
 
-  it('should update property `p-disabled-init-filter` with valid values', () => {
-    const validValues = [true, 'true', 1, ''];
-
-    expectPropertiesValues(component, 'disabledInitFilter', validValues, true);
+  it('should update property `p-disabled-init-filter` to true', () => {
+    component.disabledInitFilter = true;
+    expect(component.disabledInitFilter).toBeTrue();
   });
 
   it('should update property `p-filter-minlength` with 0 when invalid values', () => {
@@ -380,6 +590,18 @@ describe('PoComboBaseComponent:', () => {
     expect(component.visibleOptions.length).toBe(3);
   });
 
+  it('should update with all list if removeInitialFilter is true', () => {
+    const options: Array<PoComboOption> = [
+      { label: 'Valor 1', value: '1' },
+      { label: '2', value: '2' },
+      { label: 'Valor 3', value: '3' }
+    ];
+
+    component.removeInitialFilter = true;
+    component.updateComboList(options);
+    expect(component.visibleOptions).toBe(options);
+  });
+
   it('should select a new item if no one are selected', () => {
     const options: Array<PoComboOption> = [
       { label: 'Valor 1', value: '1' },
@@ -444,18 +666,19 @@ describe('PoComboBaseComponent:', () => {
       spyOn(component, 'getObjectByValue');
       spyOn(component, 'updateSelectedValue');
       spyOn(component, 'updateComboList');
+      spyOn(component, <any>'updateHasNext');
 
       component.writeValue(null);
 
       expect(component.getOptionFromValue).not.toHaveBeenCalled();
       expect(component.getObjectByValue).not.toHaveBeenCalled();
       expect(component.updateSelectedValue).toHaveBeenCalledWith(null);
-      expect(component.updateComboList).toHaveBeenCalled();
+      expect(component['updateHasNext']).toHaveBeenCalled();
     });
 
-    it('should call `updateSelectedValue` when contains `options` and param is a `validValue`', () => {
+    it('should call `updateSelectedValue` when contains `options` and param is a `validValue` and set false in `removeInitialFilter`', () => {
       component.options = [{ label: '1', value: 'valor 1' }];
-
+      component.removeInitialFilter = true;
       spyOn(component, 'updateSelectedValue');
       spyOn(component, 'getOptionFromValue');
       spyOn(component, 'getObjectByValue');
@@ -465,6 +688,7 @@ describe('PoComboBaseComponent:', () => {
       expect(component.updateSelectedValue).toHaveBeenCalled();
       expect(component.getOptionFromValue).toHaveBeenCalled();
       expect(component.getObjectByValue).not.toHaveBeenCalled();
+      expect(component.removeInitialFilter).toBeTruthy();
     });
 
     it('should call `updateSelectedValue` if `changeOnEnter` is `false`', () => {
@@ -495,6 +719,156 @@ describe('PoComboBaseComponent:', () => {
       expect(component.callModelChange).not.toHaveBeenCalled();
       expect(component['fromWriteValue']).toBe(false);
     });
+
+    it('should clear `selected` from previous option when writeValue is called with a new value', () => {
+      component.options = [
+        { label: 'Test 1', value: 1 },
+        { label: 'Test 2', value: 2 },
+        { label: 'Test 3', value: 3 }
+      ];
+
+      component.writeValue(1);
+
+      expect(component['comboOptionsList'].filter(o => o.selected).length).toBe(1);
+      expect(component['comboOptionsList'].find(o => o.value === 1).selected).toBe(true);
+
+      component.writeValue(3);
+
+      expect(component['comboOptionsList'].filter(o => o.selected).length).toBe(1);
+      expect(component['comboOptionsList'].find(o => o.value === 1).selected).toBe(false);
+      expect(component['comboOptionsList'].find(o => o.value === 3).selected).toBe(true);
+    });
+
+    it('should keep `cacheStaticOptions` in sync with `comboOptionsList` after writeValue, avoiding stale `selected` from previous manual clicks', () => {
+      component.options = [
+        { label: 'Florianópolis', value: 'florianopolis' },
+        { label: 'São Paulo', value: 'sao_paulo' },
+        { label: 'Curitiba', value: 'curitiba' }
+      ];
+
+      // simula clique manual em Florianópolis (po-listbox.optionClicked muta selected nos itens da lista)
+      component['comboOptionsList'].forEach(o => (o.selected = o.value === 'florianopolis'));
+
+      // simula clique manual em São Paulo
+      component['comboOptionsList'].forEach(o => (o.selected = o.value === 'sao_paulo'));
+
+      // troca via ngModel para Florianópolis
+      component.writeValue('florianopolis');
+
+      const cache = component['cacheStaticOptions'];
+      expect(cache.filter(o => o.selected).length).toBe(1);
+      expect(cache.find(o => o.value === 'florianopolis').selected).toBe(true);
+      expect(cache.find(o => o.value === 'sao_paulo').selected).toBe(false);
+
+      // garante que comboOptionsList e cacheStaticOptions continuam compartilhando referências
+      expect(component['comboOptionsList']).toBe(cache);
+      component['comboOptionsList'].forEach((option, index) => {
+        expect(option).toBe(cache[index]);
+      });
+    });
+
+    describe('controlValueWithLabel', () => {
+      it('should return the object when controlValueWithLabel is true', () => {
+        const selectedOption = { value: 1, label: 'Xpto' };
+
+        component.controlValueWithLabel = true;
+
+        expect(component['getValueUpdate'](1, selectedOption)).toEqual(selectedOption);
+      });
+
+      it('should only return the value when controlValueWithLabel is false', () => {
+        const selectedOption = { value: 1, label: 'Xpto' };
+
+        component.controlValueWithLabel = false;
+
+        expect(component['getValueUpdate'](1, selectedOption)).toEqual(1);
+      });
+
+      it('should return a {value: any, label: any} object when controlValueWithLabel is true and both fieldValue and fieldLabel are set', () => {
+        const selectedOption = { value: 1, label: 'Xpto' };
+
+        component.controlValueWithLabel = true;
+        component.fieldValue = 'id';
+        component.fieldLabel = 'name';
+
+        expect(component['getValueUpdate'](null, selectedOption)).toEqual({ value: 1, label: 'Xpto' });
+      });
+
+      it('should only return the value when calling getValueWrite when controlValueWithLabel is true', () => {
+        component.controlValueWithLabel = true;
+        const option = { value: 1, label: 'Xpto' };
+
+        expect(component['getValueWrite'](option)).toEqual(1);
+      });
+
+      it('should return when calling getValueWrite when controlValueWithLabel is true and the object structure does not contain the value property', () => {
+        component.controlValueWithLabel = true;
+        const data = 1;
+
+        expect(component['getValueWrite'](data)).toEqual(data);
+      });
+    });
+  });
+
+  describe('normalizeModelIfNeeded', () => {
+    beforeEach(() => {
+      component.controlValueWithLabel = true;
+      component.dynamicValue = 'value';
+      component.dynamicLabel = 'label';
+      spyOn<any>(component, 'callModelChange');
+    });
+
+    it('should return early if originalValue is NOT primitive (object, boolean, etc)', () => {
+      const originalValue = { id: 1 };
+      const option = { value: 1, label: 'Test' };
+
+      component['normalizeModelIfNeeded'](originalValue, option);
+
+      expect(component['callModelChange']).not.toHaveBeenCalled();
+    });
+
+    it('should return early if option is undefined or null', () => {
+      const originalValue = 'texto';
+      const option = undefined;
+
+      component['normalizeModelIfNeeded'](originalValue, option);
+
+      expect(component['callModelChange']).not.toHaveBeenCalled();
+    });
+
+    it('should return early if option value is null or undefined', () => {
+      const originalValue = 123;
+      const option = { value: null, label: 'Label' };
+
+      component['normalizeModelIfNeeded'](originalValue, option);
+
+      expect(component['callModelChange']).not.toHaveBeenCalled();
+    });
+
+    it('should normalize and call model change when inputs are valid', () => {
+      const originalValue = 10;
+      const option = { value: 10, label: 'Dez' };
+
+      component['normalizeModelIfNeeded'](originalValue, option);
+
+      expect(component['callModelChange']).toHaveBeenCalledWith({ value: 10, label: 'Dez' });
+    });
+  });
+
+  it('should unwrap valueToValidate when controlValueWithLabel is true', () => {
+    component.controlValueWithLabel = true;
+    component.required = true;
+    component['hasValidatorRequired'] = true;
+    component.disabled = false;
+
+    const cdRef = component['changeDetector'];
+
+    const control = new FormControl({ value: null, label: 'Other' });
+
+    const result = component.validate(control as any);
+
+    expect(result).toEqual({ required: { valid: false } });
+    expect(cdRef.markForCheck).toHaveBeenCalled();
   });
 
   describe('Methods:', () => {
@@ -556,7 +930,7 @@ describe('PoComboBaseComponent:', () => {
       expect(component.selectedValue).toBe(value);
     });
 
-    it('updateModel: shouldn`t call `callModelChange` and should call `change.emit` if `fromWriteValue` is true', () => {
+    it('updateModel: shouldn`t call `callModelChange` and shouldn`t call `change.emit` if `fromWriteValue` is true', () => {
       const value = 1;
 
       component.selectedValue = undefined;
@@ -568,7 +942,7 @@ describe('PoComboBaseComponent:', () => {
       component['updateModel'](value);
 
       expect(spyCallModelChange).not.toHaveBeenCalled();
-      expect(spyChangeEmit).toHaveBeenCalled();
+      expect(spyChangeEmit).not.toHaveBeenCalled();
 
       expect(component.selectedValue).toBe(value);
     });
@@ -702,6 +1076,27 @@ describe('PoComboBaseComponent:', () => {
       expect(component.updateSelectedValue).not.toHaveBeenCalled();
     });
 
+    it('verifyValidOption: should call `updateComboList` if itens service is undefined', () => {
+      component.service = undefined;
+
+      spyOn(component, 'updateComboList');
+
+      component.verifyValidOption();
+
+      expect(component.updateComboList).toHaveBeenCalled();
+    });
+
+    it('verifyValidOption: shouldn`t call `updateComboList` if itens service is not undefined', () => {
+      const urlService = 'https://po-ui.io/sample/api/new/heros';
+      component.setService(urlService);
+
+      spyOn(component, 'updateComboList');
+
+      component.verifyValidOption();
+
+      expect(component.updateComboList).not.toHaveBeenCalled();
+    });
+
     it('registerOnValidatorChange: should register validatorChange function.', () => {
       const registerOnValidatorChangeFn = () => {};
 
@@ -709,24 +1104,15 @@ describe('PoComboBaseComponent:', () => {
       expect(component['validatorChange']).toBe(registerOnValidatorChangeFn);
     });
 
-    it('validate: should return required obj when `requiredFailed` is true.', () => {
-      const validObj = {
-        required: {
-          valid: false
-        }
-      };
+    it('validate: should set hasValidatorRequired to true if fieldErrorMessage is valid and control has required validator', () => {
+      component['hasValidatorRequired'] = false;
+      component.fieldErrorMessage = 'Field Invalid';
 
-      spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(true);
+      const controlMock = new FormControl('', Validators.required);
 
-      expect(component.validate(new FormControl([]))).toEqual(validObj);
-      expect(ValidatorsFunctions.requiredFailed).toHaveBeenCalled();
-    });
+      component.validate(controlMock);
 
-    it('validate: should return undefined when `requiredFailed` is false', () => {
-      spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(false);
-
-      expect(component.validate(new FormControl(null))).toBeUndefined();
-      expect(ValidatorsFunctions.requiredFailed).toHaveBeenCalled();
+      expect(component['hasValidatorRequired']).toBeTrue();
     });
 
     it('validateModel: should call `validatorChange` when `validateModel` is a function.', () => {
@@ -899,6 +1285,55 @@ describe('PoComboBaseComponent:', () => {
       expect(spyUpdateModel).not.toHaveBeenCalled();
     });
 
+    it('updateSelectedValue: should select only the selected group title by dynamicLabel', () => {
+      component['comboOptionsList'] = [
+        { label: 'Sul', options: true, selected: false },
+        { label: 'Paraná', value: 'PR', selected: false },
+        { label: 'Santa Catarina', value: 'SC', selected: false },
+        { label: 'Sudeste', options: true, selected: true },
+        { label: 'São Paulo', value: 'SP', selected: false },
+        { label: 'Rio de Janeiro', value: 'RJ', selected: false }
+      ];
+
+      component.updateSelectedValue({ label: 'Sul', options: true });
+
+      expect(component['comboOptionsList'].find(option => option.label === 'Sul').selected).toBeTrue();
+      expect(component['comboOptionsList'].find(option => option.label === 'Sudeste').selected).toBeFalse();
+      expect(component['comboOptionsList'].filter(option => option.options === true && option.selected).length).toBe(1);
+    });
+
+    it('updateSelectedValue(null): should clear `selected` from all previously selected options', () => {
+      component['comboOptionsList'] = [
+        { label: 'A', value: 'a', selected: true },
+        { label: 'B', value: 'b', selected: false },
+        { label: 'Grupo', options: true, selected: true }
+      ];
+
+      component.updateSelectedValue(null);
+
+      expect(component['comboOptionsList'].every(o => !o.selected)).toBeTrue();
+    });
+
+    describe('VisibleOptions:', () => {
+      beforeEach(async () => {
+        component = TestBed.runInInjectionContext(() => new PoComboTest());
+        component.filterService = null;
+        component.defaultService = null;
+      });
+
+      it(`should set 'visibleOptions' with 'options' with 'value' and 'label' dynamic`, () => {
+        component.fieldLabel = 'labelDynamic';
+        component.fieldValue = 'valueDynamic';
+        component.options = [
+          { labelDynamic: '1', valueDynamic: '1' },
+          { labelDynamic: '2', valueDynamic: '2' }
+        ];
+
+        component.updateComboList();
+        expect(component.visibleOptions).toEqual(component.options);
+      });
+    });
+
     describe('updateComboList:', () => {
       it(`should set 'visibleOptions' with 'component.comboOptionsList' if 'options param' and 'selectedValue' are falsy`, () => {
         component.options = [{ label: '1', value: '1' }];
@@ -997,11 +1432,17 @@ describe('PoComboBaseComponent:', () => {
     });
 
     it('compareOptions: should compare received param options', () => {
-      expect(component['compareOptions']({ label: 'a' }, { label: 'b' })).toBe(-1);
-      expect(component['compareOptions']({ label: 'c' }, { label: 'b' })).toBe(1);
-      expect(component['compareOptions']({ label: 'c' }, { label: 'c' })).toBe(0);
-      expect(component['compareOptions']({ label: 'A' }, { label: 'b' })).toBe(-1);
-      expect(component['compareOptions']({ label: 'a' }, { label: 'C' })).toBe(-1);
+      const arrayA = [{ label: 'a' }, { label: 'b' }].sort(component['compareOptions']('label'));
+      const arrayB = [{ label: 'c' }, { label: 'b' }].sort(component['compareOptions']('label'));
+      const arrayC = [{ label: 'c' }, { label: 'c' }].sort(component['compareOptions']('label'));
+      const arrayD = [{ label: 'A' }, { label: 'b' }].sort(component['compareOptions']('label'));
+      const arrayE = [{ label: 'a' }, { label: 'C' }].sort(component['compareOptions']('label'));
+
+      expect(arrayA).toEqual([{ label: 'a' }, { label: 'b' }]);
+      expect(arrayB).toEqual([{ label: 'b' }, { label: 'c' }]);
+      expect(arrayC).toEqual([{ label: 'c' }, { label: 'c' }]);
+      expect(arrayD).toEqual([{ label: 'A' }, { label: 'b' }]);
+      expect(arrayE).toEqual([{ label: 'a' }, { label: 'C' }]);
     });
 
     describe('ValidateValue', () => {
@@ -1042,7 +1483,7 @@ describe('PoComboBaseComponent:', () => {
       });
     });
 
-    it('hasDuplicatedOption: should return true if contains a duplicated option label', () => {
+    it('hasDuplicatedOption: should return false if contains a duplicated option label', () => {
       const comboOptions = [
         { label: 'labelA', value: 'valueA' },
         { label: 'labelB', value: 'valueB' }
@@ -1050,7 +1491,7 @@ describe('PoComboBaseComponent:', () => {
 
       const expectedValue = component['hasDuplicatedOption'](comboOptions, 'labelA');
 
-      expect(expectedValue).toBeTruthy();
+      expect(expectedValue).toBeFalsy();
     });
 
     it('hasDuplicatedOption: should return false if contains a duplicated option label', () => {
@@ -1136,6 +1577,29 @@ describe('PoComboBaseComponent:', () => {
       expect(spyVerifyIfHasLabel).toHaveBeenCalled();
       expect(spyhasDuplicatedOption).toHaveBeenCalled();
       expect(spyvalidateValue).toHaveBeenCalled();
+    });
+
+    it('verifyComboOptions: Should allow items with the same label`', () => {
+      component.options = [
+        {
+          label: 'Teste',
+          options: [
+            { label: 'Teste1', value: 'Teste1' },
+            { label: 'Teste1.2', value: 'Teste1.2' }
+          ]
+        },
+        {
+          label: 'Teste2',
+          options: [
+            { label: 'Teste1', value: 'value1' },
+            { label: 'Teste2.2', value: 'value2' }
+          ]
+        }
+      ];
+
+      const expectedValue = component['verifyComboOptions'](component.options);
+
+      expect(expectedValue).toEqual(component.options);
     });
 
     it('verifyComboOptions: should verify each option and return a properly options list`', () => {
@@ -1301,19 +1765,178 @@ describe('PoComboBaseComponent:', () => {
       expect(spyListingComboOptions).not.toHaveBeenCalled();
     });
 
-    it('clear: should call `callModelChange` and `updateSelectedValue` and `updateComboList`', () => {
+    it('clear: should call `callModelChange` and `updateSelectedValue` and `updateComboList` and `initInputObservable`', () => {
       component.clean = true;
-
+      component.keyupSubscribe = of('').subscribe();
       spyOn(component, 'callModelChange');
       spyOn(component, 'updateSelectedValue');
       spyOn(component, 'updateComboList');
+      spyOn(component, 'initInputObservable');
+      spyOn(component.keyupSubscribe, 'unsubscribe');
 
       component.clear('');
 
       expect(component.callModelChange).toHaveBeenCalled();
       expect(component.updateSelectedValue).toHaveBeenCalled();
       expect(component.updateComboList).toHaveBeenCalled();
+      expect(component.initInputObservable).toHaveBeenCalled();
+      expect(component.keyupSubscribe['unsubscribe']).toHaveBeenCalled();
       expect(component.selectedValue).toEqual(undefined);
+    });
+
+    it('clear: should set hasNext to true if `infiniteScrool` is true', () => {
+      component['defaultService'].hasNext = false;
+      component.infiniteScroll = true;
+      component.service = defaultService;
+      component.keyupSubscribe = of('').subscribe();
+
+      component.clear('');
+
+      expect(component['defaultService'].hasNext).toEqual(true);
+    });
+
+    it(`checkIfService: should return 'label' if contain service and param is 'label'`, () => {
+      const urlService = 'https://po-ui.io/sample/api/new/heros';
+      component.setService(urlService);
+      component.fieldLabel = 'labelTest';
+
+      const expectLabel = component['checkIfService']('label');
+
+      expect(expectLabel).toEqual('label');
+    });
+
+    it(`checkIfService: should return 'fieldLabel' if not contain service and param is 'label'`, () => {
+      component.setService(undefined);
+      component.filterService = undefined;
+      component.fieldLabel = 'labelTest';
+
+      const expectLabel = component['checkIfService']('label');
+
+      expect(expectLabel).toEqual('labelTest');
+    });
+
+    it(`checkIfService: should return 'value' if contain service and param is 'value'`, () => {
+      const urlService = 'https://po-ui.io/sample/api/new/heros';
+      component.setService(urlService);
+      component.fieldValue = 'valueTest';
+
+      const expectLabel = component['checkIfService']('value');
+
+      expect(expectLabel).toEqual('value');
+    });
+
+    it(`checkIfService: should return 'fieldValue' if not contain service and param is 'value'`, () => {
+      component.setService(undefined);
+      component.filterService = undefined;
+      component.fieldValue = 'valueTest';
+
+      const expectLabel = component['checkIfService']('value');
+
+      expect(expectLabel).toEqual('valueTest');
+    });
+  });
+
+  describe('p-change-model:', () => {
+    // Feature: p-change-model-fields, Property 1: Emission on new value
+    it('should emit changeModel when writeValue receives a new value (Property 1)', () => {
+      const newValue = 'newValue';
+      const option = { label: 'New', value: newValue };
+
+      component['comboOptionsList'] = [option];
+      component.options = [option];
+      component.modelLastUpdate = undefined;
+
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(newValue);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith(newValue);
+      expect(component.modelLastUpdate).toBe(newValue);
+    });
+
+    // Feature: p-change-model-fields, Property 2: Deduplication
+    it('should NOT emit changeModel when writeValue receives the same value (Property 2)', () => {
+      const sameValue = 'sameValue';
+      const option = { label: 'Same', value: sameValue };
+
+      component['comboOptionsList'] = [option];
+      component.options = [option];
+      component.modelLastUpdate = sameValue;
+      component.selectedValue = sameValue;
+
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(sameValue);
+
+      expect(component.changeModel.emit).not.toHaveBeenCalled();
+    });
+
+    // Feature: p-change-model-fields, Property 5: User interaction triggers emission
+    it('should emit changeModel on user selection with new value (Property 5)', () => {
+      const newValue = 2;
+      component.selectedValue = 1;
+      component.modelLastUpdate = 1;
+
+      spyOn(component.changeModel, 'emit');
+      spyOn(component, 'callModelChange');
+
+      component['fromWriteValue'] = false;
+      component['updateModel'](newValue);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith(newValue);
+      expect(component.modelLastUpdate).toBe(newValue);
+    });
+
+    // Feature: p-change-model-fields, Property 6: WriteValue does not emit p-change
+    it('should NOT emit change event on writeValue (Property 6)', () => {
+      const newValue = 'testValue';
+      const option = { label: 'Test', value: newValue };
+
+      component['comboOptionsList'] = [option];
+      component.options = [option];
+      component.modelLastUpdate = undefined;
+
+      spyOn(component.change, 'emit');
+
+      component.writeValue(newValue);
+
+      expect(component.change.emit).not.toHaveBeenCalled();
+    });
+
+    // Feature: p-change-model-fields, Property 1 edge: writeValue(null) with non-null modelLastUpdate
+    it('should emit changeModel when writeValue(null) and modelLastUpdate is non-null (Property 1 edge)', () => {
+      component.modelLastUpdate = 'previousValue';
+      component.selectedValue = 'previousValue';
+      component['comboOptionsList'] = [];
+      component.options = [];
+
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(null);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith(undefined);
+      expect(component.modelLastUpdate).toBe(undefined);
+    });
+
+    // Feature: p-change-model-fields, Property 1: Async scenario with service
+    it('should emit changeModel after async service resolution (Property 1 async)', () => {
+      const value = 'asyncValue';
+
+      component.modelLastUpdate = undefined;
+      component.selectedValue = undefined;
+      component['fromWriteValue'] = true;
+
+      spyOn(component.changeModel, 'emit');
+      spyOn(component, 'callModelChange');
+
+      // Simulate what happens after getObjectByValue resolves:
+      // updateModel is called with the resolved value
+      component['updateModel'](value);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith(value);
+      expect(component.modelLastUpdate).toBe(value);
+      // change should NOT emit because fromWriteValue was true
+      expect(component['fromWriteValue']).toBe(false);
     });
   });
 });
@@ -1336,8 +1959,7 @@ describe('PoComboBaseComponent using Service', () => {
   };
 
   beforeEach(() => {
-    component = new PoComboTest();
-
+    component = TestBed.runInInjectionContext(() => new PoComboTest());
     component.filterService = service;
     component.defaultService = defaultService;
   });

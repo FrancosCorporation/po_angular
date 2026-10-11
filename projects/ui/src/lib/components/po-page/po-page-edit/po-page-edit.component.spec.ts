@@ -3,8 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { of } from 'rxjs';
 
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
-
 import { PoBreadcrumbModule } from '../../po-breadcrumb/po-breadcrumb.module';
 import { PoButtonModule } from '../../po-button';
 
@@ -18,7 +16,8 @@ import { PoPageHeaderComponent } from '../po-page-header/po-page-header.componen
 @Component({
   template: `
     <po-page-edit p-title="Unit Test" (p-cancel)="cancel()" (p-save)="save()" (p-save-new)="saveNew()"> </po-page-edit>
-  `
+  `,
+  standalone: false
 })
 class ContainerComponent {
   cancel(): boolean {
@@ -42,8 +41,8 @@ describe('PoPageEditComponent', () => {
   const event = document.createEvent('Event');
   event.initEvent('p-click', false, true);
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [PoBreadcrumbModule, PoButtonModule],
       declarations: [
         ContainerComponent,
@@ -52,10 +51,8 @@ describe('PoPageEditComponent', () => {
         PoPageContentComponent,
         PoPageHeaderComponent
       ]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoPageEditComponent);
     component = fixture.componentInstance;
 
@@ -85,16 +82,16 @@ describe('PoPageEditComponent', () => {
   });
 
   describe('Methods:', () => {
-    it('getIcon: should return "po-icon-close" if icon is "cancel" and "cancel" is primary action', () => {
+    it('getIcon: should return "ICON_CLOSE" if icon is "cancel" and "cancel" is primary action', () => {
       spyOn(component, <any>'isPrimaryAction').and.returnValue(true);
 
-      expect(component.getIcon('cancel')).toBe('po-icon-close');
+      expect(component.getIcon('cancel')).toBe('ICON_CLOSE');
     });
 
-    it('getIcon: should return "po-icon-ok" if icon is "saveNew" and "saveNew" is primary action', () => {
+    it('getIcon: should return "ICON_OK" if icon is "saveNew" and "saveNew" is primary action', () => {
       spyOn(component, <any>'isPrimaryAction').and.returnValue(true);
 
-      expect(component.getIcon('saveNew')).toBe('po-icon-ok');
+      expect(component.getIcon('saveNew')).toBe('ICON_OK');
     });
 
     it('getIcon: should return a empty string if icon isn`t "saveNew" or "cancel"', () => {
@@ -113,20 +110,20 @@ describe('PoPageEditComponent', () => {
       expect(component.getType('saveNew')).toBe('primary');
     });
 
-    it('getType: should return "default" if type isn`t "saveNew" or "cancel"', () => {
-      expect(component.getType('test')).toBe('default');
+    it('getType: should return "secondary" if type isn`t "saveNew" or "cancel"', () => {
+      expect(component.getType('test')).toBe('secondary');
     });
 
-    it('getType: should return "default" if type is "saveNew" and isn`t primary action', () => {
+    it('getType: should return "secondary" if type is "saveNew" and isn`t primary action', () => {
       spyOn(component, <any>'isPrimaryAction').and.returnValue(false);
 
-      expect(component.getType('saveNew')).toBe('default');
+      expect(component.getType('saveNew')).toBe('secondary');
     });
 
-    it('getType: should return "default" if type is "cancel" and isn`t primary action', () => {
+    it('getType: should return "secondary" if type is "cancel" and isn`t primary action', () => {
       spyOn(component, <any>'isPrimaryAction').and.returnValue(false);
 
-      expect(component.getType('cancel')).toBe('default');
+      expect(component.getType('cancel')).toBe('secondary');
     });
 
     it('hasPageHeader: should return true if has breadcrumb', () => {
@@ -210,60 +207,6 @@ describe('PoPageEditComponent', () => {
   });
 
   describe('Templates:', () => {
-    it('should apply `p-primary` only in Save button', () => {
-      const saveLabel = poPageEditLiteralsDefault[poLocaleDefault].save;
-
-      component.literals = poPageEditLiteralsDefault[poLocaleDefault];
-
-      component.save.observers.push(<any>of({}));
-      component.saveNew.observers.push(<any>of({}));
-      component.cancel.observers.push(<any>of({}));
-
-      fixture.detectChanges();
-
-      const primaryButtons = debugElement.querySelectorAll('po-button > button.po-button-primary > span');
-      const saveButton = primaryButtons[1];
-
-      expect(saveButton).toBeTruthy();
-      expect(saveButton.innerHTML).toBe(saveLabel);
-      expect(primaryButtons.length).toBe(2);
-    });
-
-    it('should apply `p-primary` only in SaveNew button if save function is undefined', () => {
-      const saveNewLabel = poPageEditLiteralsDefault[poLocaleDefault].saveNew;
-
-      component.literals = poPageEditLiteralsDefault[poLocaleDefault];
-
-      component.cancel.observers.push(<any>of({}));
-      component.saveNew.observers.push(<any>of({}));
-
-      fixture.detectChanges();
-
-      const primaryButtons = debugElement.querySelectorAll('po-button > button.po-button-primary > span');
-      const saveNewButton = primaryButtons[1];
-
-      expect(saveNewButton).toBeTruthy();
-      expect(saveNewButton.innerHTML).toBe(saveNewLabel);
-      expect(primaryButtons.length).toBe(2);
-    });
-
-    it('should apply `p-primary` only in Cancel button if save and saveNew functions are undefined', () => {
-      const cancelLabel = poPageEditLiteralsDefault[poLocaleDefault].cancel;
-
-      component.literals = poPageEditLiteralsDefault[poLocaleDefault];
-
-      component.cancel.observers.push(<any>of({}));
-
-      fixture.detectChanges();
-
-      const primaryButtons = debugElement.querySelectorAll('po-button > button.po-button-primary > span');
-      const cancelButton = primaryButtons[1];
-
-      expect(cancelButton).toBeTruthy();
-      expect(cancelButton.innerHTML).toBe(cancelLabel);
-      expect(primaryButtons.length).toBe(2);
-    });
-
     it('should show page header if `hasPageHeader` return true', () => {
       spyOn(component, 'hasPageHeader').and.returnValue(true);
       fixture.detectChanges();
@@ -283,8 +226,8 @@ describe('PoPageEditComponent', () => {
 
       fixture.detectChanges();
 
-      const saveIcon = debugElement.querySelectorAll('po-button button span[class="po-icon po-icon-ok"]');
-      const cancelIcon = debugElement.querySelectorAll('po-button button span[class="po-icon po-icon-close"]');
+      const saveIcon = debugElement.querySelectorAll('po-button button po-icon i[class="an an-check po-fonts-icon"]');
+      const cancelIcon = debugElement.querySelectorAll('po-button button po-icon i[class="an an-x po-fonts-icon"]');
 
       expect(saveIcon.length).toBe(1);
       expect(cancelIcon.length).toBe(0);
@@ -296,8 +239,8 @@ describe('PoPageEditComponent', () => {
 
       fixture.detectChanges();
 
-      const saveIcon = debugElement.querySelectorAll('po-button button span[class="po-icon po-icon-ok"]');
-      const cancelIcon = debugElement.querySelectorAll('po-button button span[class="po-icon po-icon-close"]');
+      const saveIcon = debugElement.querySelectorAll('po-button button po-icon i[class="an an-check po-fonts-icon"]');
+      const cancelIcon = debugElement.querySelectorAll('po-button button po-icon i[class="an an-x po-fonts-icon"]');
 
       expect(saveIcon.length).toBe(1);
       expect(cancelIcon.length).toBe(0);
@@ -308,8 +251,8 @@ describe('PoPageEditComponent', () => {
 
       fixture.detectChanges();
 
-      const saveIcon = debugElement.querySelectorAll('po-button button span[class="po-icon po-icon-ok"]');
-      const cancelIcon = debugElement.querySelectorAll('po-button button span[class="po-icon po-icon-close"]');
+      const saveIcon = debugElement.querySelectorAll('po-button button po-icon i[class="an an-check po-fonts-icon"]');
+      const cancelIcon = debugElement.querySelectorAll('po-button button po-icon i[class="an an-x po-fonts-icon"]');
 
       expect(saveIcon.length).toBe(0);
       expect(cancelIcon.length).toBe(1);

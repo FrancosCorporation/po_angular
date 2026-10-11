@@ -1,5 +1,7 @@
 import {
   AfterViewInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   DoCheck,
   ElementRef,
@@ -8,13 +10,18 @@ import {
   IterableDiffers,
   QueryList,
   ViewChild,
-  ViewChildren
+  ViewChildren,
+  inject,
+  OnChanges,
+  SimpleChanges
 } from '@angular/core';
 import { NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
-import { removeDuplicatedOptions } from '../../../utils/util';
+import { setHelperSettings, PoUtils } from '../../../utils/util';
 
+import { PoRadioComponent } from '../po-radio/po-radio.component';
 import { PoRadioGroupBaseComponent } from './po-radio-group-base.component';
+import { PoHelperComponent } from '../../po-helper';
 
 /**
  * @docsExtends PoRadioGroupBaseComponent
@@ -24,8 +31,6 @@ import { PoRadioGroupBaseComponent } from './po-radio-group-base.component';
  * <example name="po-radio-group-basic" title="PO Radio Group Basic">
  *  <file name="sample-po-radio-group-basic/sample-po-radio-group-basic.component.html"> </file>
  *  <file name="sample-po-radio-group-basic/sample-po-radio-group-basic.component.ts"> </file>
- *  <file name="sample-po-radio-group-basic/sample-po-radio-group-basic.component.e2e-spec.ts"> </file>
- *  <file name="sample-po-radio-group-basic/sample-po-radio-group-basic.component.po.ts"> </file>
  * </example>
  *
  * <example name="po-radio-group-labs" title="PO Radio Group Labs">
@@ -47,6 +52,7 @@ import { PoRadioGroupBaseComponent } from './po-radio-group-base.component';
 @Component({
   selector: 'po-radio-group',
   templateUrl: './po-radio-group.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -58,9 +64,12 @@ import { PoRadioGroupBaseComponent } from './po-radio-group-base.component';
       useExisting: forwardRef(() => PoRadioGroupComponent),
       multi: true
     }
-  ]
+  ],
+  standalone: false
 })
-export class PoRadioGroupComponent extends PoRadioGroupBaseComponent implements AfterViewInit, DoCheck {
+export class PoRadioGroupComponent extends PoRadioGroupBaseComponent implements AfterViewInit, DoCheck, OnChanges {
+  private readonly el = inject(ElementRef);
+
   /** Label do campo. */
   @Input('p-label') label?: string;
 
@@ -68,11 +77,14 @@ export class PoRadioGroupComponent extends PoRadioGroupBaseComponent implements 
   @Input('p-help') help?: string;
 
   @ViewChild('inp', { read: ElementRef, static: true }) inputEl: ElementRef;
-  @ViewChildren('inputRadio') radioLabels: QueryList<ElementRef>;
+  @ViewChildren('inputRadio') radioLabels: QueryList<PoRadioComponent>;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
 
   differ: any;
 
-  constructor(differs: IterableDiffers) {
+  constructor() {
+    const differs = inject(IterableDiffers);
+
     super();
     this.differ = differs.find([]).create(null);
   }
@@ -86,12 +98,26 @@ export class PoRadioGroupComponent extends PoRadioGroupBaseComponent implements 
   ngDoCheck() {
     const change = this.differ.diff(this.options);
     if (change) {
-      removeDuplicatedOptions(this.options);
+      PoUtils.removeDuplicatedOptions(this.options);
+    }
+    this.cd.markForCheck();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
+  }
+
+  emitAdditionalHelp() {
+    if (this.label && this.isAdditionalHelpEventTriggered()) {
+      this.additionalHelp.emit();
     }
   }
 
   eventClick(value: any, disabled: any) {
     if (!disabled) {
+      this.onTouched?.();
       this.changeValue(value);
     }
   }
@@ -118,13 +144,39 @@ export class PoRadioGroupComponent extends PoRadioGroupBaseComponent implements 
       const radioLabel = this.radioLabels.find((_, index) => !this.options[index].disabled);
 
       if (radioLabel) {
-        radioLabel.nativeElement.focus();
+        radioLabel.focus();
       }
     }
   }
 
+  getAdditionalHelpTooltip() {
+    return this.isAdditionalHelpEventTriggered() ? null : this.additionalHelpTooltip;
+  }
+
   getElementByValue(value) {
     return this.inputEl.nativeElement.querySelector(`input[value='${value}']`);
+  }
+
+  getErrorPattern() {
+    return this.fieldErrorMessage && this.hasInvalidClass() ? this.fieldErrorMessage : '';
+  }
+
+  hasInvalidClass() {
+    return (
+      this.el.nativeElement.classList.contains('ng-invalid') && this.el.nativeElement.classList.contains('ng-dirty')
+    );
+  }
+
+  onBlur(radio: PoRadioComponent): void {
+    if (!this.isRadioOptionFocused(radio) && this.getAdditionalHelpTooltip() && this.displayAdditionalHelp) {
+      this.showAdditionalHelp();
+    }
+  }
+
+  onKeyDown(event: KeyboardEvent, radio?: PoRadioComponent): void {
+    if (this.isRadioOptionFocused(radio)) {
+      this.keydown.emit(event);
+    }
   }
 
   onKeyUp(event: KeyboardEvent, value) {
@@ -135,7 +187,76 @@ export class PoRadioGroupComponent extends PoRadioGroupBaseComponent implements 
     }
   }
 
+  /**
+   *
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * // Exemplo com p-label e p-helper
+   * <po-radio-group
+   *  #radioGroup
+   *  ...
+   *  p-label="Label do radioGroup"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, radioGroup)"
+   * ></po-radio-group>
+   * ```
+   * ```
+   * ...
+   * onKeyDown(event: KeyboardEvent, inp: PoRadioGroupComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  showAdditionalHelp(): boolean {
+    this.displayAdditionalHelp = !this.displayAdditionalHelp;
+    const helper = this.poHelperComponent();
+    const isHelpEvt = this.isAdditionalHelpEventTriggered();
+    if (!this.label && (helper || this.additionalHelpTooltip || isHelpEvt)) {
+      if (isHelpEvt) {
+        this.additionalHelp.emit();
+      }
+      if (typeof helper !== 'string' && typeof helper?.eventOnClick === 'function') {
+        helper.eventOnClick();
+        return;
+      }
+      if (this.helperEl?.helperIsVisible()) {
+        this.helperEl?.closeHelperPopover();
+        return;
+      }
+      this.helperEl?.openHelperPopover();
+      return;
+    }
+    return this.displayAdditionalHelp;
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.isAdditionalHelpEventTriggered() ? this.additionalHelp : undefined
+    );
+  }
+
+  private isAdditionalHelpEventTriggered(): boolean {
+    return (
+      this.additionalHelpEventTrigger === 'event' ||
+      (this.additionalHelpEventTrigger === undefined && this.additionalHelp.observed)
+    );
+  }
+
   private isArrowKey(key: number) {
     return key >= 37 && key <= 40;
+  }
+
+  private isRadioOptionFocused(radio: PoRadioComponent): boolean {
+    return document.activeElement === radio.radioInput.nativeElement;
   }
 }

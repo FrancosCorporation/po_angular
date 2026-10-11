@@ -10,13 +10,13 @@
       <po-widget class="po-lg-8 po-mt-2" p-title="Realize & Show">
         <div class="tht-row">
           <div class="po-sm-12">
-            <h1 class="po-font-title">Welcome, TOTVER!</h1>
+            <h1 class="po-font-title">Welcome, TOTVS!</h1>
             <p class="po-font-text-large">Let's submit your project?</p>
           </div>
         </div>
 
         <div class="tht-row">
-          <po-button class="po-sm-12 po-mt-2" p-label="Yes!" p-type="primary" (p-click)="stepper.next()"> </po-button>
+          <po-button class="po-sm-12 po-mt-2" p-label="Yes!" p-kind="primary" (p-click)="stepper.next()"> </po-button>
         </div>
       </po-widget>
     </po-step>
@@ -36,12 +36,13 @@
             </div>
 
             <div class="po-font-title po-lg-2">
-              <span class="po-icon po-icon-upload-cloud po-clickable" (click)="upload.selectFiles()"></span>
-              <span
-                class="po-icon po-icon-clear-content po-clickable"
+              <po-icon p-icon="an an-cloud-arrow-up" class="po-clickable" (click)="upload.selectFiles()"></po-icon>
+              <po-icon
+                p-icon="an an-fill an-x-circle"
+                class="po-clickable"
                 [ngClass]="{ 'po-invisible': project.length < 1 }"
                 (click)="upload.clear()"
-              ></span>
+              ></po-icon>
             </div>
           </div>
 
@@ -55,7 +56,7 @@
               p-hide-select-button
               p-hide-send-button
               p-required
-              p-url="https://thf.totvs.com.br/sample/api/uploads/addFile"
+              p-url="https://po-sample-api.onrender.com/v1/uploads/addFile"
               [p-restrictions]="restrictions"
             >
             </po-upload>
@@ -103,19 +104,17 @@
 
     <po-step p-label="Confirm">
       <po-widget class="po-lg-8 po-mt-2" p-title="Realize & Show">
-        <div class="tht-row" *ngIf="canSubmitProject()">
-          <div class="po-sm-12">
-            <p class="po-font-text-large">Confirm informations</p>
+        @if (canSubmitProject()) {
+          <div class="tht-row">
+            <div class="po-sm-12">
+              <p class="po-font-text-large">Confirm informations</p>
+            </div>
+            <po-info class="po-md-4" p-label="File name" [p-value]="project[0].name || 'N/D'"> </po-info>
+            <po-info class="po-md-4" p-label="Title" [p-value]="title || 'N/D'"> </po-info>
+            <po-info class="po-md-4" p-label="Description" [p-value]="description || 'N/D'"> </po-info>
+            <po-button class="po-sm-12 po-mt-2 po-mb-2" p-label="Confirm" (p-click)="confirmSubmit()"> </po-button>
           </div>
-
-          <po-info class="po-md-4" p-label="File name" [p-value]="project[0].name || 'N/D'"> </po-info>
-
-          <po-info class="po-md-4" p-label="Title" [p-value]="title || 'N/D'"> </po-info>
-
-          <po-info class="po-md-4" p-label="Description" [p-value]="description || 'N/D'"> </po-info>
-
-          <po-button class="po-sm-12 po-mt-2" p-label="Confirm" (p-click)="confirmSubmit()"> </po-button>
-        </div>
+        }
       </po-widget>
     </po-step>
   </po-stepper>

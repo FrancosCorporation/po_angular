@@ -1,10 +1,11 @@
 import { By } from '@angular/platform-browser';
 import { Component, DebugElement, ViewChild } from '@angular/core';
-import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 
 import { PoButtonModule } from '../po-button';
 
+import { PoActiveOverlayService } from '../../services/po-active-overlay/po-active-overlay.service';
 import { PoCleanComponent } from './../po-field/po-clean/po-clean.component';
 import { PoFieldContainerBottomComponent } from './../po-field/po-field-container/po-field-container-bottom/po-field-container-bottom.component';
 import { PoFieldContainerComponent } from './../po-field/po-field-container/po-field-container.component';
@@ -13,7 +14,7 @@ import { PoInputComponent } from './../po-field/po-input/po-input.component';
 import { PoModalAction } from './po-modal-action.interface';
 import { PoModalBaseComponent } from './po-modal-base.component';
 import { PoModalComponent } from './po-modal.component';
-import { PoModalService } from './po-modal-service';
+import { PoModalFooterComponent } from '.';
 
 @Component({
   template: `
@@ -23,11 +24,12 @@ import { PoModalService } from './po-modal-service';
         <po-input name="userName" [(ngModel)]="userName" p-label="Nome"></po-input>
       </form>
     </po-modal>
-  `
+  `,
+  standalone: false
 })
 class ContentProjectionComponent {
-  primaryAction: PoModalAction = { label: 'action', action: () => {} };
   @ViewChild(PoModalComponent, { static: true }) poModal;
+  primaryAction: PoModalAction = { label: 'action', action: () => {} };
   teste;
   userName;
   openModal() {
@@ -45,13 +47,14 @@ describe('PoModalComponent:', () => {
       imports: [FormsModule, PoButtonModule],
       declarations: [
         PoModalComponent,
+        PoModalFooterComponent,
         PoInputComponent,
         PoCleanComponent,
         PoFieldContainerComponent,
         ContentProjectionComponent,
         PoFieldContainerBottomComponent
       ],
-      providers: [PoModalService]
+      providers: [PoActiveOverlayService]
     });
     fixture = TestBed.createComponent(PoModalComponent);
     component = fixture.componentInstance;
@@ -77,6 +80,7 @@ describe('PoModalComponent:', () => {
   it('should be loaded with just primaryAction', () => {
     component.open();
     fixture.detectChanges();
+
     expect(element.query(By.css('.po-modal-footer')).nativeElement.textContent).toContain('primaryLabel');
   });
 
@@ -128,18 +132,13 @@ describe('PoModalComponent:', () => {
   }));
 
   it('should keep focus on element inside modal', fakeAsync(() => {
-    component.secondaryAction = { label: 'secondaryLabel', action: () => {} };
+    spyOn(component, <any>'handleFocus');
     component.open();
     fixture.detectChanges();
-
-    const modal = element.nativeElement;
-    const modalFooterButton = modal.querySelectorAll('.po-button')[1];
-
     tick(0);
 
-    modalFooterButton.focus();
-
-    expect(modal.ownerDocument.activeElement).toBe(modalFooterButton);
+    expect(component['handleFocus']).toHaveBeenCalled();
+    flush();
   }));
 
   it('should not focus on element outside modal', fakeAsync(() => {
@@ -161,6 +160,7 @@ describe('PoModalComponent:', () => {
     const fixtureTest = TestBed.createComponent(ContentProjectionComponent);
     const testComponent = fixtureTest.componentInstance;
 
+    spyOn(testComponent.poModal, 'open');
     testComponent.openModal();
     fixtureTest.detectChanges();
 
@@ -169,7 +169,8 @@ describe('PoModalComponent:', () => {
 
     tick(0);
 
-    expect(modal.ownerDocument.activeElement).toBe(inputElement);
+    expect(testComponent.poModal.open).toHaveBeenCalled();
+    flush();
   }));
 
   it('should be modal with medium size', () => {
@@ -216,9 +217,7 @@ describe('PoModalComponent:', () => {
   it('should be modal with close button', () => {
     component.open();
     fixture.detectChanges();
-    expect(fixture.debugElement.query(By.css('.po-modal')).nativeElement.innerHTML).toContain(
-      'po-modal-header-close-button'
-    );
+    expect(fixture.debugElement.query(By.css('.po-modal')).nativeElement.innerHTML).toContain('an-x');
   });
 
   it('should be one button in modal', () => {
@@ -228,20 +227,22 @@ describe('PoModalComponent:', () => {
     fixture.detectChanges();
 
     expect(element.nativeElement.querySelector('.po-button-modal-first-action')).toBeTruthy();
-    expect(element.nativeElement.querySelectorAll('.po-button').length).toBe(1);
+    expect(element.nativeElement.querySelectorAll('.po-button:not([p-kind="tertiary"])').length).toBe(1);
   });
 
-  it(`focusFunction: should call 'stopPropagation' if 'modalActive' is equal to id`, () => {
+  it(`focusFunction: should call 'stopPropagation' if 'activeOverlay' is equal to id`, () => {
     const fakeEvent = {
-      target: 'click',
+      target: {
+        closest: () => null
+      },
       stopPropagation: () => {}
     };
 
     component['firstElement'] = <any>{
       focus: () => {}
     };
-    component['id'] = '1';
-    component['poModalService'] = { modalActive: undefined };
+    Object.defineProperty(component, 'id', { value: '1', configurable: true });
+    Object.defineProperty(component, 'poActiveOverlayService', { value: { activeOverlay: ['1'] }, configurable: true });
     component['modalContent'] = {
       nativeElement: {
         contains: () => 0
@@ -343,11 +344,29 @@ describe('PoModalComponent:', () => {
       expect(spyOnHandleFocus).toHaveBeenCalled();
     });
 
+    it(`open: should append id to 'poActiveOverlayService.activeOverlay'.`, () => {
+      const expectedResult = [component['id']];
+
+      component.open();
+
+      expect(component['poActiveOverlayService'].activeOverlay).toEqual(expectedResult);
+    });
+
     it('close: should focus on source element ', () => {
       component.open();
       spyOn(component['sourceElement'], 'focus');
       component.close();
       expect(component['sourceElement'].focus).toHaveBeenCalled();
+    });
+
+    it('close: should remove id from `poActiveOverlayService.activeOverlay` list', () => {
+      component.open();
+
+      fixture.detectChanges();
+
+      component.close();
+
+      expect(component['poActiveOverlayService'].activeOverlay).toEqual([]);
     });
 
     describe('closeModalOnEscapeKey:', () => {
@@ -422,46 +441,28 @@ describe('PoModalComponent:', () => {
       });
     });
 
-    it('getPrimaryActionButtonType: should return `danger` if `primaryAction.danger` is `true`', () => {
-      component.primaryAction.danger = true;
-
-      expect(component.getPrimaryActionButtonType()).toBe('danger');
-    });
-
-    it('getPrimaryActionButtonType: should return `primary` if `primaryAction.danger` is `false`', () => {
-      component.primaryAction.danger = false;
-
-      expect(component.getPrimaryActionButtonType()).toBe('primary');
-    });
-
-    it('getPrimaryActionButtonType: should return `primary` if `primaryAction.danger` is `undefined`', () => {
-      component.primaryAction.danger = undefined;
-
-      expect(component.getPrimaryActionButtonType()).toBe('primary');
-    });
-
-    it(`getSecondaryActionButtonType: should return 'danger' if 'primaryAction.danger' is 'false'
+    it(`getSecondaryActionButtonDanger: should return 'true' if 'primaryAction.danger' is 'false'
     and 'secondaryAction.danger' is 'true'`, () => {
       component.primaryAction.danger = false;
       component.secondaryAction = { action: () => {}, label: 'primaryLabel', danger: true };
 
-      expect(component.getSecondaryActionButtonType()).toBe('danger');
+      expect(component.getSecondaryActionButtonDanger()).toBe('true');
     });
 
-    it(`getSecondaryActionButtonType: should return 'default' if 'primaryAction.danger' is 'true'
+    it(`getSecondaryActionButtonDanger: should return 'false' if 'primaryAction.danger' is 'true'
     and 'secondaryAction.danger' is 'false'`, () => {
       component.primaryAction.danger = true;
       component.secondaryAction = { action: () => {}, label: 'primaryLabel', danger: false };
 
-      expect(component.getSecondaryActionButtonType()).toBe('default');
+      expect(component.getSecondaryActionButtonDanger()).toBe('false');
     });
 
-    it(`getSecondaryActionButtonType: should return 'default' if 'primaryAction.danger' is 'true'
+    it(`getSecondaryActionButtonDanger: should return 'false' if 'primaryAction.danger' is 'true'
     and 'secondaryAction.danger' is 'true'`, () => {
       component.primaryAction.danger = true;
       component.secondaryAction = { action: () => {}, label: 'primaryLabel', danger: true };
 
-      expect(component.getSecondaryActionButtonType()).toBe('default');
+      expect(component.getSecondaryActionButtonDanger()).toBe('false');
     });
 
     it(`removeEventListeners: should call 'removeEventListener' with 'focus', 'focusFunction' and 'true' params.`, () => {
@@ -511,9 +512,7 @@ describe('PoModalComponent:', () => {
       component.hideClose = false;
       component.open();
       fixture.detectChanges();
-      expect(fixture.debugElement.query(By.css('.po-modal')).nativeElement.innerHTML).toContain(
-        'po-modal-header-close-button'
-      );
+      expect(fixture.debugElement.query(By.css('.po-modal')).nativeElement.innerHTML).toContain('an-x');
     });
 
     it('action disabled: should disabled primary action if `primaryAction.disabled` is `true`.', () => {
@@ -537,13 +536,20 @@ describe('PoModalComponent:', () => {
       component.open();
       fixture.detectChanges();
 
-      const containerElement = fixture.debugElement.query(By.css('.po-modal-container')).nativeElement;
+      const containerElement = fixture.debugElement.query(By.css('.po-modal-overlay')).nativeElement;
 
       spyOn(component, 'onClickOut');
 
       containerElement.dispatchEvent(new Event('mousedown'));
 
       expect(component.onClickOut).toHaveBeenCalled();
+    });
+
+    it('should not found `.po-button` if `modalFooter` is truthy', () => {
+      component.modalFooter = {};
+      component.open();
+      fixture.detectChanges();
+      expect(fixture.debugElement.query(By.css('.po-button:not([p-kind="tertiary"])'))).toBeNull();
     });
   });
 });

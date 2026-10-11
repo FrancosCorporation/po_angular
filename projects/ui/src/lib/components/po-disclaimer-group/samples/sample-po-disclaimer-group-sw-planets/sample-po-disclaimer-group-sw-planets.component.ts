@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 
 import { PoComboOption, PoDisclaimer, PoTableColumn } from '@po-ui/ng-components';
 
@@ -7,27 +7,31 @@ import { SamplePoDisclaimerGroupSwPlanetsService } from './sample-po-disclaimer-
 @Component({
   selector: 'sample-po-disclaimer-group-sw-planets',
   templateUrl: './sample-po-disclaimer-group-sw-planets.component.html',
-  providers: [SamplePoDisclaimerGroupSwPlanetsService]
+  providers: [SamplePoDisclaimerGroupSwPlanetsService],
+  standalone: false
 })
 export class SamplePoDisclaimerGroupSwPlanetsComponent implements OnInit {
+  disclaimerGroupSwPlanetsService = inject(SamplePoDisclaimerGroupSwPlanetsService);
+
   climate: string;
-  columns: Array<PoTableColumn> = this.disclaimerGroupSwPlanetsService.getColumns();
+  columns: Array<PoTableColumn>;
   filteredItems: Array<any> = [];
   filters: Array<PoDisclaimer> = [];
   items: Array<any>;
   name: string;
   terrain: string;
 
-  public readonly climates: Array<PoComboOption> = this.disclaimerGroupSwPlanetsService.getClimates();
-  public readonly terrains: Array<PoComboOption> = this.disclaimerGroupSwPlanetsService.getTerrains();
-
-  constructor(public disclaimerGroupSwPlanetsService: SamplePoDisclaimerGroupSwPlanetsService) {}
+  public climates: Array<PoComboOption>;
+  public terrains: Array<PoComboOption>;
 
   ngOnInit() {
     this.disclaimerGroupSwPlanetsService.getItems().subscribe(items => {
       this.items = items;
       this.filteredItems = [...this.items];
     });
+    this.columns = this.disclaimerGroupSwPlanetsService.getColumns();
+    this.climates = this.disclaimerGroupSwPlanetsService.getClimates();
+    this.terrains = this.disclaimerGroupSwPlanetsService.getTerrains();
   }
 
   addFilter(value: any, property: string) {

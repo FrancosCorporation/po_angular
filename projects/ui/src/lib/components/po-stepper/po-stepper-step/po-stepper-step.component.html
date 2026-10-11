@@ -1,20 +1,46 @@
-<div class="po-stepper-step" [ngClass]="getStatusClass(status)" (click)="onClick()" (keydown.enter)="onEnter()">
-  <div class="po-stepper-step-container" [style.width.px]="isVerticalOrientation ? stepSize : undefined">
-    <div
-      [class.po-stepper-step-bar-top]="isVerticalOrientation"
-      [class.po-stepper-step-bar-left]="!isVerticalOrientation"
-      [style.margin-right.px]="marginHorizontalBar"
-    ></div>
-
-    <po-stepper-circle [p-content]="circleContent" [p-icons]="stepIcons" [p-size]="stepSize" [p-status]="status">
+<div
+  class="po-stepper-step"
+  [ngClass]="getStatusClass(status)"
+  role="tab"
+  [tabindex]="status === 'disabled' || disabledClick ? -1 : 0"
+  [attr.aria-selected]="status === 'active'"
+  [attr.aria-current]="status === 'active' ? 'step' : null"
+  [attr.aria-disabled]="status === 'disabled'"
+  [attr.aria-required]="status === 'error'"
+  [class.po-stepper-disabled-click]="disabledClick"
+  (click)="onClick()"
+  (keydown.enter)="onEnter($event)"
+  (keydown.space)="onEnter($event)"
+>
+  <div class="po-stepper-step-container">
+    <po-stepper-circle
+      [p-align-center]="alignCenter"
+      [p-content]="circleContent"
+      [p-icons]="stepIcons"
+      [p-size]="stepSize"
+      [p-status]="status"
+      [p-icon-default]="iconDefault"
+      [p-step-icon-done]="iconDone"
+      [p-step-icon-active]="iconActive"
+      [class.po-stepper-circle-vertical]="isVerticalOrientation"
+      [class.po-stepper-circle-vertical-center]="alignCenter"
+      [class.po-stepper-circle-horizontal]="!isVerticalOrientation"
+      [style.minWidth.px]="minWidthCircle"
+      [style.minHeight.px]="minHeightCircle"
+    >
     </po-stepper-circle>
 
-    <div
-      [class.po-stepper-step-bar-bottom]="isVerticalOrientation"
-      [class.po-stepper-step-bar-right]="!isVerticalOrientation"
-      [style.margin-left.px]="marginHorizontalBar"
-    ></div>
+    @if (label) {
+      <po-stepper-label
+        class="po-stepper-step-label-position"
+        [p-align-center]="alignCenter"
+        [p-content]="label"
+        [p-status]="status"
+        [p-vertical-orientation]="isVerticalOrientation"
+        [attr.aria-label]="label"
+        [p-disable-click]="disabledClick"
+      >
+      </po-stepper-label>
+    }
   </div>
-
-  <po-stepper-label class="po-stepper-step-label-position" [p-content]="label"> </po-stepper-label>
 </div>

@@ -1,33 +1,54 @@
-import { Directive } from '@angular/core';
+import { Component } from '@angular/core';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { of } from 'rxjs';
 
 import { expectPropertiesValues } from './../../util-test/util-expect.spec';
 
+import { PoThemeA11yEnum } from '../../services';
 import { PoMenuBaseComponent } from './po-menu-base.component';
 import { PoMenuFilter } from './po-menu-filter/po-menu-filter.interface';
 
-@Directive()
+@Component({
+  template: '',
+  standalone: true
+})
 export class PoMenuComponent extends PoMenuBaseComponent {
   protected validateCollapseClass() {}
+  protected checkActiveMenuByUrl() {}
+  protected checkingRouterChildrenFragments() {}
 }
 
 describe('PoMenuBaseComponent:', () => {
   let component: PoMenuBaseComponent;
 
-  const languageService: any = {
-    getShortLanguage: () => {
-      return 'pt';
-    },
-    getLanguageDefault: () => {
-      return 'pt';
-    }
+  const menuGlobalService: any = {
+    sendMenus: menus => {},
+    sendId: menus => {}
   };
+
+  const languageService: any = {
+    getShortLanguage: () => 'pt',
+    getLanguageDefault: () => 'pt'
+  };
+
   const menuService: any = {
     configProperties: () => {},
     getFilteredData: () => {}
   };
-  beforeEach(() => {
-    component = new PoMenuComponent(menuService, languageService);
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [PoMenuComponent],
+      providers: [
+        { provide: 'PoMenuGlobalService', useValue: menuGlobalService },
+        { provide: 'PoMenuService', useValue: menuService },
+        { provide: 'PoLanguageService', useValue: languageService }
+      ]
+    }).compileComponents();
+
+    component = TestBed.runInInjectionContext(
+      () => new PoMenuComponent(menuGlobalService, menuService, languageService)
+    );
     component.menus = [
       {
         label: 'Level 1.1',
@@ -117,6 +138,16 @@ describe('PoMenuBaseComponent:', () => {
 
     expectPropertiesValues(component, 'filter', trueValues, true);
     expectPropertiesValues(component, 'filter', falseValues, false);
+  });
+
+  it('should set searchTreeItems when filter is true', () => {
+    const trueValues = ['', true, 1];
+    const falseValues = [undefined, null, false, 0];
+
+    component.filter = true;
+
+    expectPropertiesValues(component, 'searchTreeItems', trueValues, true);
+    expectPropertiesValues(component, 'searchTreeItems', falseValues, false);
   });
 
   it('should set menu item properties', () => {
@@ -209,14 +240,12 @@ describe('PoMenuBaseComponent:', () => {
     it(`configService: shouldn't call 'menuService.configProperties' and should set 'filterService' if service parameter
       is a custom service`, () => {
       const service: PoMenuFilter = {
-        getFilteredData: (search, params) => {
-          return of([{ label: 'Menu', link: '/' }]);
-        }
+        getFilteredData: (search, params) => of([{ label: 'Menu', link: '/', action: () => {} }])
       };
 
       const spyConfigPropeties = spyOn(component.menuService, <any>'configProperties');
 
-      component['configService'](<any>service);
+      component['configService'](service);
 
       expect(component.filterService).toEqual(<any>service);
       expect(spyConfigPropeties).not.toHaveBeenCalled();
@@ -429,36 +458,17 @@ describe('PoMenuBaseComponent:', () => {
       expectPropertiesValues(component, 'params', invalidValues, expectedValue);
     });
 
+    it('menuid: should call sendId', () => {
+      spyOn(component['menuGlobalService'], 'sendId');
+      component.menuid = 'my-id';
+
+      expect(component['menuGlobalService'].sendId).toHaveBeenCalled();
+    });
+
     it('params: should set property with valid values', () => {
       const validValues = [{}, { id: '1' }];
 
       expectPropertiesValues(component, 'params', validValues, validValues);
-    });
-
-    it('logo: should set property with `undefined` if invalid values', () => {
-      const invalidValues = ['', ' ', null, undefined, 0, false, true];
-      const expectedValue = undefined;
-
-      expectPropertiesValues(component, 'logo', invalidValues, expectedValue);
-    });
-
-    it('logo: should set property with valid values', () => {
-      const validValues = ['https://po-ui.io/logo', 'https://other.com/images/logo'];
-
-      expectPropertiesValues(component, 'logo', validValues, validValues);
-    });
-
-    it('shortLogo: should set property with `undefined` if invalid values', () => {
-      const invalidValues = ['', ' ', null, undefined, 0, false, true];
-      const expectedValue = undefined;
-
-      expectPropertiesValues(component, 'shortLogo', invalidValues, expectedValue);
-    });
-
-    it('shortLogo: should set property with valid values', () => {
-      const validValues = ['https://po-ui.io/logo', 'https://other.com/images/logo'];
-
-      expectPropertiesValues(component, 'shortLogo', validValues, validValues);
     });
 
     it('collapsed: should update property with valid values.', () => {
@@ -480,6 +490,106 @@ describe('PoMenuBaseComponent:', () => {
       const invalidValues = [0, null, undefined, 'undefined', 'null'];
 
       expectPropertiesValues(component, 'collapsed', invalidValues, false);
+    });
+
+    describe('componentsSize', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
+    it('menus: should update property with valid values.', fakeAsync(() => {
+      const validValues = [[{ label: 'Level 1.1', link: '/level-1-1', icon: 'clock' }]];
+
+      const spyCheckingRouterChildrenFragments = spyOn(component, <any>'checkingRouterChildrenFragments');
+      const spyCheckActiveMenuByUrl = spyOn(component, <any>'checkActiveMenuByUrl');
+
+      const spySendMenus = spyOn(component.menuGlobalService, <any>'sendMenus');
+
+      expectPropertiesValues(component, 'menus', validValues, validValues);
+
+      tick();
+
+      expect(spyCheckingRouterChildrenFragments).toHaveBeenCalled();
+      expect(spyCheckActiveMenuByUrl).toHaveBeenCalled();
+      expect(spySendMenus).toHaveBeenCalled();
+    }));
+
+    it('menus: should update property with `[]` if values are invalid.', () => {
+      const invalidValues = [0, null, undefined, 'undefined', 'null', {}, false, true];
+
+      expectPropertiesValues(component, 'menus', invalidValues, []);
+    });
+
+    describe('logoLink: ', () => {
+      it('should set logoLink as true if no value is provided', () => {
+        component.logoLink = undefined;
+        expect(component.logoLink).toBe(true);
+      });
+
+      it('should default to true if any other value is passed', () => {
+        component.logoLink = null;
+        expect(component.logoLink).toBe(true);
+      });
+
+      it('should set logoLink as false if the value is false', () => {
+        component.logoLink = false;
+        expect(component.logoLink).toBe(false);
+      });
     });
   });
 

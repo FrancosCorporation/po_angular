@@ -1,5 +1,12 @@
-import { HttpClient, HttpHeaders, HTTP_INTERCEPTORS, HttpRequest } from '@angular/common/http';
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import {
+  HttpClient,
+  HttpHeaders,
+  HTTP_INTERCEPTORS,
+  HttpRequest,
+  provideHttpClient,
+  withInterceptorsFromDi
+} from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { inject, TestBed } from '@angular/core/testing';
 
 import { Observable } from 'rxjs';
@@ -20,7 +27,7 @@ describe('PoHttpRequestInterceptorService: ', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule, PoHttpRequestModule],
+      imports: [PoHttpRequestModule],
       providers: [
         PoHttpRequesControltService,
         PoHttpRequestInterceptorService,
@@ -29,7 +36,9 @@ describe('PoHttpRequestInterceptorService: ', () => {
           provide: HTTP_INTERCEPTORS,
           useClass: PoHttpRequestInterceptorService,
           multi: true
-        }
+        },
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting()
       ]
     });
 
@@ -41,6 +50,27 @@ describe('PoHttpRequestInterceptorService: ', () => {
   it('should be created', () => {
     expect(httpRequestInterceptor).toBeTruthy();
   });
+
+  it('should remove `X-PO-Screen-Lock` from request', inject(
+    [HttpClient, HttpTestingController],
+    (http: HttpClient, httpMock: HttpTestingController) => {
+      const headers = new HttpHeaders().set('X-PO-Screen-Lock', 'true');
+      http.get('/data', { headers }).subscribe();
+      const req = httpMock.match('/data');
+
+      expect(req[0].request.headers.has('X-PO-Screen-Lock')).toEqual(false);
+    }
+  ));
+  it('should remove `X-PO-No-Count-Pending-Requests` from request', inject(
+    [HttpClient, HttpTestingController],
+    (http: HttpClient, httpMock: HttpTestingController) => {
+      const headers = new HttpHeaders().set('X-PO-No-Count-Pending-Requests', 'true');
+      http.get('/data', { headers }).subscribe();
+      const req = httpMock.match('/data');
+
+      expect(req[0].request.headers.has('X-PO-No-Count-Pending-Requests')).toEqual(false);
+    }
+  ));
 
   describe('Methods: ', () => {
     it('getCountPendingRequests: should return observable when call `getCountPendingRequests` method.', () => {

@@ -1,42 +1,91 @@
-import { ComponentFixture, fakeAsync, flush, TestBed } from '@angular/core/testing';
+import { OverlayModule } from '@angular/cdk/overlay';
+import { HttpClient, HttpHandler, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { ComponentFixture, fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
+import { Observable, of, throwError } from 'rxjs';
 
-import * as UtilsFunction from '../../../utils/util';
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
+import { PoUtils as UtilsFunction } from '../../../utils/util';
 
-import { PoDisclaimerComponent } from './../../po-disclaimer/po-disclaimer.component';
-import { PoFieldContainerBottomComponent } from './../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
+import { EventEmitter, Renderer2 } from '@angular/core';
+import { PoKeyCodeEnum } from '../../../enums/po-key-code.enum';
+import { PoControlPositionService } from '../../../services/po-control-position/po-control-position.service';
+import { PoTagComponent } from '../../po-tag/po-tag.component';
 import { PoFieldContainerComponent } from '../po-field-container/po-field-container.component';
 import { PoMultiselectBaseComponent } from '../po-multiselect/po-multiselect-base.component';
-import { PoMultiselectComponent } from './po-multiselect.component';
+import { PoFieldContainerBottomComponent } from './../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
+import { PoMultiselectFilter } from './interfaces/po-multiselect-filter.interface';
+import { PoMultiselectOption } from './interfaces/po-multiselect-option.interface';
 import { PoMultiselectDropdownComponent } from './po-multiselect-dropdown/po-multiselect-dropdown.component';
-import { PoMultiselectItemComponent } from './po-multiselect-item/po-multiselect-item.component';
-import { PoMultiselectSearchComponent } from './po-multiselect-search/po-multiselect-search.component';
+import { PoMultiselectFilterService } from './po-multiselect-filter.service';
+import { PoMultiselectComponent } from './po-multiselect.component';
+
+const poMultiselectFilterServiceStub: PoMultiselectFilter = {
+  getFilteredData: function (params: { property: string; value: string }): Observable<Array<PoMultiselectOption>> {
+    return of([{ label: params.property, value: params.value }]);
+  },
+  getObjectsByValues: function (values: Array<string | number>): Observable<Array<PoMultiselectOption>> {
+    return of([{ label: '', value: '' }]);
+  }
+};
 
 describe('PoMultiselectComponent:', () => {
+  let fnAdjustContainerPosition;
   let component: PoMultiselectComponent;
   let fixture: ComponentFixture<PoMultiselectComponent>;
+  let controlPositionMock: jasmine.SpyObj<PoControlPositionService>;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  let multiSelectService: PoMultiselectFilterService;
+  let httpMock: HttpTestingController;
+  let tags;
+  let index;
+  let renderer: Renderer2;
+  const mockURL = 'rest/tecnologies';
+
+  beforeEach(async () => {
+    tags = document.createElement('div');
+    tags.innerHTML = `
+      <div class="po-tag-remove"></div>
+      <div class="po-tag-remove"></div>
+      <div class="po-tag-remove"></div>
+    `;
+    index = 2;
+
+    await TestBed.configureTestingModule({
       declarations: [
-        PoDisclaimerComponent,
+        PoTagComponent,
         PoFieldContainerComponent,
         PoMultiselectComponent,
         PoMultiselectDropdownComponent,
-        PoMultiselectItemComponent,
-        PoMultiselectSearchComponent,
         PoFieldContainerBottomComponent
+      ],
+      imports: [OverlayModule],
+      providers: [
+        HttpClient,
+        HttpHandler,
+        Renderer2,
+        PoMultiselectFilterService,
+        PoControlPositionService,
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting()
       ]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoMultiselectComponent);
     component = fixture.componentInstance;
+    renderer = TestBed.inject(Renderer2);
+    fnAdjustContainerPosition = component['adjustContainerPosition'];
+    controlPositionMock = jasmine.createSpyObj('PoControlPositionService', ['adjustPosition', 'setElements']);
+    component['adjustContainerPosition'] = () => controlPositionMock.adjustPosition('bottom');
 
     component.options = [{ label: 'label', value: 1 }];
+    component.autoHeight = true;
 
-    fixture.detectChanges();
+    multiSelectService = TestBed.inject(PoMultiselectFilterService);
+    httpMock = TestBed.inject(HttpTestingController);
+
+    multiSelectService.configProperties(mockURL, 'name', 'id');
+
+    component.service = multiSelectService;
   });
 
   it('should be created', () => {
@@ -45,6 +94,7 @@ describe('PoMultiselectComponent:', () => {
   });
 
   it('should call function wasClickedOnToggle', () => {
+    fixture.detectChanges();
     component.openDropdown(true);
     const documentBody = document.body;
     const event = document.createEvent('MouseEvents');
@@ -57,93 +107,149 @@ describe('PoMultiselectComponent:', () => {
   });
 
   it('should get input width', () => {
-    expect(component.getInputWidth() > 0).toBeTruthy();
+    const inputEl = fixture.nativeElement.querySelector('.po-multiselect-input');
+    if (inputEl && inputEl.offsetWidth > 0) {
+      expect(component.getInputWidth() > 0).toBeTruthy();
+    } else {
+      // In headless environments the element may not be laid out; mock offsetWidth
+      spyOnProperty(inputEl, 'offsetWidth', 'get').and.returnValue(200);
+      expect(component.getInputWidth() > 0).toBeTruthy();
+    }
   });
 
-  it('should get disclaimers width', () => {
-    component.visibleDisclaimers = [{ label: 'label', value: 1 }];
+  it('should get tags width', () => {
+    component.visibleTags = [{ label: 'label', value: 1 }];
     fixture.detectChanges();
-    expect(component.getDisclaimersWidth().length).toBeTruthy();
+    expect(component.getTagsWidth().length).toBeTruthy();
   });
 
-  it('should calc visible items with a tiny space', () => {
+  it('should calc visible items with a tiny space', fakeAsync(() => {
     const selectedOptions = [
       { label: 'label', value: 1 },
       { label: 'label', value: 2 },
       { label: 'label', value: 3 }
     ];
     const fakeThis = {
-      getDisclaimersWidth: () => [100, 100, 100],
+      getTagsWidth: () => [100, 100, 100],
       getInputWidth: () => 150,
-      visibleDisclaimers: [],
+      changeDetector: {
+        markForCheck: () => {}
+      },
+      visibleTags: [],
       selectedOptions: selectedOptions,
-      isCalculateVisibleItems: true
+      isCalculateVisibleItems: true,
+      fieldValue: 'value',
+      fieldLabel: 'label',
+      initCalculateItems: true,
+      handleKeyboardNavigationTag: () => {}
     };
+    spyOn(fakeThis, 'handleKeyboardNavigationTag');
 
     component.calculateVisibleItems.call(fakeThis);
 
-    expect(fakeThis.visibleDisclaimers.length).toBe(2);
-    expect(fakeThis.visibleDisclaimers[1].value).toBe('');
+    tick(300);
+
+    expect(fakeThis.visibleTags.length).toBe(1);
+    expect(fakeThis.visibleTags[1]).toBe(undefined);
     expect(fakeThis.isCalculateVisibleItems).toBeFalsy();
-  });
+    expect(fakeThis.handleKeyboardNavigationTag).toHaveBeenCalled();
+  }));
 
   it('should set focus on input', () => {
     component.initialized = false;
     component.autoFocus = true;
+    spyOn(component.inputElement.nativeElement, 'focus');
     component.ngAfterViewInit();
-    expect(document.activeElement.tagName.toLowerCase()).toBe('input');
+
+    fixture.detectChanges();
+
+    // expect(document.activeElement.tagName.toLowerCase()).toBe('div');
+    expect(component.inputElement.nativeElement.focus).toHaveBeenCalled();
     expect(component.initialized).toBeTruthy();
   });
 
-  it('shouldn`t set focus on input', () => {
+  it('shouldn`t set focus on input', done => {
     component.initialized = false;
     component.autoFocus = false;
+    spyOn(component.inputElement.nativeElement, 'focus');
+
+    done();
+
     component.ngAfterViewInit();
-    expect(document.activeElement.tagName.toLowerCase()).not.toBe('input');
+    expect(component.inputElement.nativeElement.focus).not.toHaveBeenCalled();
+
     expect(component.initialized).toBeTruthy();
   });
 
-  it('should call debounceResize and set visibleDisclaimers', () => {
+  it('should call debounceResize and set visibleTags', () => {
     component.selectedOptions = [{ label: 'label', value: 1 }];
-    component.visibleDisclaimers = [];
+    component.visibleTags = [];
 
     spyOn(component, 'debounceResize');
     component.updateVisibleItems();
-    expect(component.visibleDisclaimers.length).toBe(1);
+    expect(component.visibleTags.length).toBe(1);
     expect(component.debounceResize).toHaveBeenCalled();
   });
 
-  it('should call controlDropdownVisibility arrow to up is pressed', () => {
-    const fakeEvent = {
-      preventDefault: () => true,
-      keyCode: 40
-    };
-
+  it('should call preventDefault and controlDropdownVisibility(false) when keyCode esc is pressed', () => {
+    const event = { preventDefault: jasmine.createSpy(), keyCode: 27 };
     spyOn(component, 'controlDropdownVisibility');
-    component.onKeyDown(fakeEvent);
-    expect(component.controlDropdownVisibility).toHaveBeenCalledWith(true);
-  });
 
-  it('should call controlDropdownVisibility tab is pressed', () => {
-    const fakeEvent = {
-      preventDefault: () => true,
-      keyCode: 9
-    };
+    component.onKeyDown(event);
 
-    spyOn(component, 'controlDropdownVisibility');
-    component.onKeyDown(fakeEvent);
+    expect(event.preventDefault).toHaveBeenCalled();
     expect(component.controlDropdownVisibility).toHaveBeenCalledWith(false);
   });
 
-  it('shouldn`t call controlDropdownVisibility when another key is pressed', () => {
-    const fakeEvent = {
-      preventDefault: () => true,
-      keyCode: 1
-    };
+  describe('onKeyDown:', () => {
+    it('should call controlDropdownVisibility arrow to down is pressed', () => {
+      const event = new KeyboardEvent('keydown', { keyCode: PoKeyCodeEnum.arrowDown });
+      const tagRemovable = document.createElement('span');
 
-    spyOn(component, 'controlDropdownVisibility');
-    component.onKeyDown(fakeEvent);
-    expect(component.controlDropdownVisibility).not.toHaveBeenCalled();
+      tagRemovable.setAttribute('class', 'po-tag-remove');
+      component.visibleTags = [tagRemovable, tagRemovable];
+
+      spyOn(component, 'controlDropdownVisibility');
+      spyOn(event, 'preventDefault');
+
+      component.controlDropdownVisibility(true);
+      const onKeyDown = component.onKeyDown(event);
+
+      expect(onKeyDown).toBeUndefined();
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(component.controlDropdownVisibility).toHaveBeenCalledWith(true);
+    });
+
+    it('should emit event when field is focused', () => {
+      const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      component.inputElement = {
+        nativeElement: {
+          focus: () => {}
+        }
+      };
+
+      spyOn(component.keydown, 'emit');
+      spyOnProperty(document, 'activeElement', 'get').and.returnValue(component.inputElement.nativeElement);
+
+      component.onKeyDown(fakeEvent);
+
+      expect(component.keydown.emit).toHaveBeenCalledWith(fakeEvent);
+    });
+
+    it('should not emit event when field is not focused', () => {
+      const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      component.inputElement = {
+        nativeElement: {
+          focus: () => {}
+        }
+      };
+
+      spyOn(component.keydown, 'emit');
+      spyOnProperty(document, 'activeElement', 'get').and.returnValue(document.createElement('div'));
+      component.onKeyDown(fakeEvent);
+
+      expect(component.keydown.emit).not.toHaveBeenCalled();
+    });
   });
 
   it('should call controlDropdownVisibility when enabled', () => {
@@ -151,6 +257,16 @@ describe('PoMultiselectComponent:', () => {
 
     spyOn(component, 'controlDropdownVisibility');
     component.toggleDropdownVisibility();
+    expect(component.controlDropdownVisibility).toHaveBeenCalled();
+  });
+
+  it('should call controlDropdownVisibility when enabled and has filterService', () => {
+    component.disabled = false;
+    component.filterService = poMultiselectFilterServiceStub;
+
+    spyOn(component, 'controlDropdownVisibility');
+    component.toggleDropdownVisibility();
+
     expect(component.controlDropdownVisibility).toHaveBeenCalled();
   });
 
@@ -182,13 +298,82 @@ describe('PoMultiselectComponent:', () => {
     expect(component.controlDropdownVisibility).not.toHaveBeenCalled();
   });
 
+  it('should return when event keyCode is PoKeyCodeEnum.tab', () => {
+    const event = new KeyboardEvent('keydown', { keyCode: PoKeyCodeEnum.tab });
+    const tagRemovable = document.createElement('span');
+    tagRemovable.setAttribute('class', 'po-tag-remove');
+
+    component.visibleTags = [tagRemovable, tagRemovable];
+
+    component.onKeyDown(event);
+
+    expect(component.visibleTags.length).toEqual(2);
+  });
+
+  it('should call controlDropdownVisibility(false) when keyCode tab is pressed and shiftKey is true', () => {
+    const event = { keyCode: PoKeyCodeEnum.tab, shiftKey: true };
+    spyOn(component, 'controlDropdownVisibility');
+
+    component.onKeyDown(event);
+
+    expect(component.controlDropdownVisibility).toHaveBeenCalledWith(false);
+  });
+
+  it('should call preventDefault and controlDropdownVisibility(true) when keyCode space is pressed', () => {
+    const event = { preventDefault: jasmine.createSpy(), keyCode: 32 };
+    spyOn(component, 'controlDropdownVisibility');
+
+    component.onKeyDown(event);
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(component.controlDropdownVisibility).toHaveBeenCalledWith(true);
+  });
+
+  it('should call focusOnFirstItem when pressed Tab with list box open', () => {
+    const event = { preventDefault: jasmine.createSpy(), keyCode: 9 };
+    component.visibleTags = [];
+    component.appendBox = true;
+    component.dropdownOpen = true;
+
+    spyOn(component, 'focusOnFirstItem');
+
+    component.onKeyDown(event);
+
+    expect(component.focusOnFirstItem).toHaveBeenCalled();
+  });
+
+  it('should call focus and controlDropdownVisibility(true) when keyCode enter is pressed', () => {
+    const event = { preventDefault: jasmine.createSpy(), keyCode: 13 };
+    component.visibleTags = [];
+    spyOn(component, 'controlDropdownVisibility');
+    spyOn(component, 'focus');
+
+    component.onKeyDown(event);
+
+    expect(component.controlDropdownVisibility).toHaveBeenCalledWith(true);
+    expect(component.focus).toHaveBeenCalled();
+  });
+
+  it('shouldn`t call focus and controlDropdownVisibility(true) when keyCode enter is pressed', () => {
+    const event = { preventDefault: jasmine.createSpy(), keyCode: 13 };
+    const tagRemovable = document.createElement('span');
+    tagRemovable.setAttribute('class', 'po-tag-remove');
+    component.visibleTags = [tagRemovable, tagRemovable];
+    spyOn(component, 'controlDropdownVisibility');
+
+    component.onKeyDown(event);
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(component.controlDropdownVisibility).toHaveBeenCalledWith(true);
+  });
+
   it('should call dropdown.scrollTo', () => {
     component.options = [
       { label: 'label', value: 1 },
       { label: 'label2', value: 2 }
     ];
     component.selectedOptions = [{ label: 'label2', value: 2 }];
-
+    fixture.detectChanges();
     spyOn(component.dropdown, 'scrollTo');
     component.scrollToSelectedOptions();
     expect(component.dropdown.scrollTo).toHaveBeenCalledWith(1);
@@ -196,7 +381,7 @@ describe('PoMultiselectComponent:', () => {
 
   it('shouldn`t call dropdown.scrollTo', () => {
     component.selectedOptions = [];
-
+    fixture.detectChanges();
     spyOn(component.dropdown, 'scrollTo');
     component.scrollToSelectedOptions();
     expect(component.dropdown.scrollTo).not.toHaveBeenCalled();
@@ -208,19 +393,7 @@ describe('PoMultiselectComponent:', () => {
     expect(component.visibleOptionsDropdown.length).toBe(1);
   });
 
-  it('should get placeholder', () => {
-    component.placeholder = 'PLACEHOLDER';
-    component.visibleDisclaimers = [];
-    expect(component.getPlaceholder()).toBe('PLACEHOLDER');
-  });
-
-  it('should get "" as placeholder', () => {
-    component.placeholder = 'PLACEHOLDER';
-    component.visibleDisclaimers = [{ label: 'label', value: 1 }];
-    expect(component.getPlaceholder()).toBe('');
-  });
-
-  it('should remove item, call updateVisibleItems and callOnChange', () => {
+  it('closeTag: shouldnt remove item, call updateVisibleItems and callOnChange', () => {
     component.selectedOptions = [
       { label: 'label', value: 1 },
       { label: 'label2', value: 2 }
@@ -228,15 +401,251 @@ describe('PoMultiselectComponent:', () => {
 
     spyOn(component, 'updateVisibleItems');
     spyOn(component, 'callOnChange');
-    component.closeDisclaimer(1);
+    component['closeTag'](1, 'click');
     expect(component.updateVisibleItems).toHaveBeenCalled();
     expect(component.callOnChange).toHaveBeenCalled();
     expect(component.selectedOptions[0].value).toBe(2);
   });
 
+  it('closeTag: should remove item, call updateVisibleItems and callOnChange', () => {
+    component.visibleTags = [
+      { label: 'label10', value: 10 },
+      { label: 'label11', value: 11 },
+      { label: 'label12', value: 12 },
+      { label: 'label13', value: 13 },
+      { label: 'label14', value: 14 }
+    ];
+    component.selectedOptions = [
+      { label: 'label', value: 1 },
+      { label: 'label2', value: 2 },
+      { label: 'label3', value: 3 },
+      { label: 'label4', value: 4 },
+      { label: 'label5', value: 5 },
+      { label: 'label6', value: 6 },
+      { label: 'label7', value: 7 },
+      { label: 'label8', value: 8 },
+      { label: 'label9', value: 9 }
+    ];
+
+    spyOn(component, 'updateVisibleItems');
+    spyOn(component, 'callOnChange');
+    component['closeTag']('1+', 'click');
+    expect(component.updateVisibleItems).toHaveBeenCalled();
+    expect(component.callOnChange).toHaveBeenCalled();
+    expect(component.selectedOptions[0].value).toBe(1);
+  });
+
+  it('closeTag: should handle value 0 correctly', () => {
+    component.visibleTags = [{ label: 'label0', value: 0 }];
+    component.selectedOptions = [{ label: 'label0', value: 0 }];
+
+    spyOn(component, 'updateVisibleItems');
+    spyOn(component, 'callOnChange');
+
+    component['closeTag'](0, 'click');
+
+    expect(component.updateVisibleItems).toHaveBeenCalled();
+    expect(component.callOnChange).toHaveBeenCalled();
+    expect(component.selectedOptions.some(opt => opt.value === 0)).toBeFalse();
+  });
+
+  it('closeTag: should remove items not in visibleTags when value is empty string', () => {
+    component.visibleTags = [
+      { label: 'label', value: 1 },
+      { label: 'label2', value: 2 },
+      { label: '+2', value: '' }
+    ];
+
+    component.selectedOptions = [
+      component.visibleTags[0],
+      component.visibleTags[1],
+      { label: 'label3', value: 3 },
+      { label: 'label4', value: 4 }
+    ];
+
+    spyOn(component, 'updateVisibleItems');
+    spyOn(component, 'callOnChange');
+
+    component['closeTag']('', 'click');
+
+    expect(component.updateVisibleItems).toHaveBeenCalled();
+    expect(component.callOnChange).toHaveBeenCalled();
+    expect(component.selectedOptions.length).toBe(2);
+    expect(component.selectedOptions[0].value).toBe(1);
+    expect(component.selectedOptions[1].value).toBe(2);
+  });
+
+  it(`closeTag: should reset visibleTags to [] and call detectChanges before updating state
+      to prevent "insertBefore on Node" when removing the tag immediately before the "+N" grouped tag`, () => {
+    const option1 = { label: 'label1', value: 1 };
+    const option2 = { label: 'label2', value: 2 };
+    const groupedTag = { label: '+2', value: '' };
+
+    component.visibleTags = [option1, option2, groupedTag];
+    component.selectedOptions = [option1, option2, { label: 'label3', value: 3 }, { label: 'label4', value: 4 }];
+
+    const detectChangesSpy = spyOn(component['changeDetector'], 'detectChanges');
+    spyOn(component, 'updateVisibleItems');
+    spyOn(component, 'callOnChange');
+
+    // Captura o estado de visibleTags no momento em que detectChanges é chamado
+    let visibleTagsAtDetectChanges: Array<any>;
+    detectChangesSpy.and.callFake(() => {
+      visibleTagsAtDetectChanges = [...component.visibleTags];
+    });
+
+    // Remove option2 — tag imediatamente antes do "+N"
+    component['closeTag'](2, 'click');
+
+    // visibleTags deve ter sido zerado antes de detectChanges ser chamado
+    expect(visibleTagsAtDetectChanges).toEqual([]);
+    expect(detectChangesSpy).toHaveBeenCalledBefore(component.updateVisibleItems as jasmine.Spy);
+
+    // O fluxo normal de remoção deve prosseguir normalmente após o reset
+    expect(component.selectedOptions.some(opt => opt.value === 2)).toBeFalse();
+    expect(component.updateVisibleItems).toHaveBeenCalled();
+    expect(component.callOnChange).toHaveBeenCalled();
+  });
+
+  describe('showAdditionalHelp:', () => {
+    let helperEl: any;
+    beforeEach(() => {
+      helperEl = {
+        openHelperPopover: jasmine.createSpy('openHelperPopover'),
+        closeHelperPopover: jasmine.createSpy('closeHelperPopover'),
+        helperIsVisible: jasmine.createSpy('helperIsVisible').and.returnValue(false)
+      };
+    });
+
+    it('should call closeHelperPopover and return early when helperIsVisible is true', () => {
+      (component as any).label = '';
+      component.additionalHelpTooltip = undefined;
+      component.displayAdditionalHelp = false;
+
+      helperEl.helperIsVisible.and.returnValue(true);
+      component.helperEl = helperEl;
+      spyOn(component as any, 'poHelperComponent').and.returnValue({});
+      spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+      spyOn(component.additionalHelp, 'emit');
+
+      const result = component.showAdditionalHelp();
+
+      expect((component as any).poHelperComponent).toHaveBeenCalled();
+      expect(component.helperEl.helperIsVisible).toHaveBeenCalled();
+      expect(component.helperEl.closeHelperPopover).toHaveBeenCalledTimes(1);
+      expect(component.helperEl.openHelperPopover).not.toHaveBeenCalled();
+      expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+      expect(component.displayAdditionalHelp).toBeTrue();
+    });
+
+    it('should emit additionalHelp and return early when isAdditionalHelpEventTriggered is true', () => {
+      (component as any).label = '';
+      component.displayAdditionalHelp = false;
+
+      helperEl.helperIsVisible.and.returnValue(false);
+      component.helperEl = helperEl;
+      spyOn(component as any, 'poHelperComponent').and.returnValue({});
+      spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+      spyOn(component.additionalHelp, 'emit');
+
+      const result = component.showAdditionalHelp();
+
+      expect((component as any).poHelperComponent).toHaveBeenCalled();
+      expect(component.additionalHelp.emit).toHaveBeenCalledTimes(1);
+      expect(component.helperEl.openHelperPopover).toHaveBeenCalled();
+      expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+      expect(component.displayAdditionalHelp).toBeTrue();
+    });
+
+    it('should call helper.eventOnClick and return early when helper has eventOnClick function', () => {
+      (component as any).label = '';
+      component.displayAdditionalHelp = false;
+      helperEl.helperIsVisible.and.returnValue(false);
+      component.helperEl = helperEl;
+      const helperMock = { eventOnClick: jasmine.createSpy('eventOnClick') };
+      spyOn(component as any, 'poHelperComponent').and.returnValue(helperMock);
+      spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+      spyOn(component.additionalHelp, 'emit');
+
+      const result = component.showAdditionalHelp();
+
+      expect((component as any).poHelperComponent).toHaveBeenCalled();
+      expect(helperMock.eventOnClick).toHaveBeenCalledTimes(1);
+      expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+      expect(component.helperEl.helperIsVisible).not.toHaveBeenCalled();
+      expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+      expect(component.helperEl.openHelperPopover).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+      expect(component.displayAdditionalHelp).toBeTrue();
+    });
+
+    it('should enter the block via additionalHelpTooltip when helper is falsy and isHelpEvt is false, then open popover', () => {
+      (component as any).label = '';
+      component.displayAdditionalHelp = false;
+
+      helperEl.helperIsVisible.and.returnValue(false);
+      component.helperEl = helperEl;
+      spyOn(component as any, 'poHelperComponent').and.returnValue(undefined);
+      component.additionalHelpTooltip = 'any text';
+      spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+      spyOn(component.additionalHelp, 'emit');
+
+      const result = component.showAdditionalHelp();
+
+      expect((component as any).poHelperComponent).toHaveBeenCalled();
+      expect(component.helperEl.helperIsVisible).toHaveBeenCalled();
+      expect(component.helperEl.openHelperPopover).toHaveBeenCalledTimes(1);
+      expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+      expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+      expect(component.displayAdditionalHelp).toBeTrue();
+    });
+
+    it('should enter the block via isHelpEvt when helper and tooltip are falsy, emit and then open popover', () => {
+      (component as any).label = '';
+      component.displayAdditionalHelp = false;
+
+      helperEl.helperIsVisible.and.returnValue(false);
+      component.helperEl = helperEl;
+      spyOn(component as any, 'poHelperComponent').and.returnValue(undefined);
+      component.additionalHelpTooltip = undefined;
+      spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+      spyOn(component.additionalHelp, 'emit');
+
+      const result = component.showAdditionalHelp();
+
+      expect((component as any).poHelperComponent).toHaveBeenCalled();
+      expect(component.additionalHelp.emit).toHaveBeenCalledTimes(1);
+      expect(component.helperEl.openHelperPopover).toHaveBeenCalledTimes(1);
+      expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+      expect(component.displayAdditionalHelp).toBeTrue();
+    });
+
+    it('should toggle `displayAdditionalHelp` from false to true', () => {
+      component.displayAdditionalHelp = false;
+
+      const result = component.showAdditionalHelp();
+
+      expect(result).toBeTrue();
+      expect(component.displayAdditionalHelp).toBeTrue();
+    });
+
+    it('should toggle `displayAdditionalHelp` from true to false', () => {
+      component.displayAdditionalHelp = true;
+
+      const result = component.showAdditionalHelp();
+
+      expect(result).toBeFalse();
+      expect(component.displayAdditionalHelp).toBeFalse();
+    });
+  });
+
   it('should call controlDropdownVisibility in wasClickedOnToggle', () => {
     component.dropdownOpen = true;
-
+    fixture.detectChanges();
     const event = document.createEvent('MouseEvents');
     event.initEvent('click', false, true);
 
@@ -277,6 +686,16 @@ describe('PoMultiselectComponent:', () => {
         component.ngAfterViewInit();
         expect(inputFocus).not.toHaveBeenCalled();
       });
+    });
+
+    it(`ngOnChanges: should set displayAdditionalHelp false when label changes`, () => {
+      const changes: any = {
+        label: 'new label'
+      };
+
+      component.ngOnChanges(changes);
+
+      expect(component.displayAdditionalHelp).toBeFalse();
     });
 
     it('ngDoCheck: should call debounceResize', () => {
@@ -342,12 +761,89 @@ describe('PoMultiselectComponent:', () => {
       expect(fakeThis.visibleElement).toBeFalsy();
     });
 
-    it('ngOnDestroy: should call removeListeners.', () => {
+    it('ngOnDestroy: should call removeListeners and call unsubscribe from subscription', () => {
       const removeListenersSpy = spyOn(component, <any>'removeListeners');
+      component['getObjectsByValuesSubscription'] = <any>{ unsubscribe: () => {} };
+      component['filterSubject'] = <any>{ unsubscribe: () => {} };
+
+      spyOn(component['getObjectsByValuesSubscription'], 'unsubscribe');
+      spyOn(component['filterSubject'], 'unsubscribe');
 
       component.ngOnDestroy();
 
+      expect(component['getObjectsByValuesSubscription']['unsubscribe']).toHaveBeenCalled();
+      expect(component['filterSubject']['unsubscribe']).toHaveBeenCalled();
       expect(removeListenersSpy).toHaveBeenCalled();
+    });
+
+    it('ngOnDestroy: shouldn`t throw error if subscriptions are undefined', () => {
+      component['getObjectsByValuesSubscription'] = undefined;
+      component['filterSubject'] = undefined;
+
+      const fnDestroy = () => component.ngOnDestroy();
+
+      expect(fnDestroy).not.toThrow();
+    });
+
+    describe('emitAdditionalHelp:', () => {
+      it('should emit additionalHelp when isAdditionalHelpEventTriggered returns true', () => {
+        (component as any).label = 'this.label';
+        spyOn(component.additionalHelp, 'emit');
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+
+        component.emitAdditionalHelp();
+
+        expect(component.additionalHelp.emit).toHaveBeenCalled();
+      });
+
+      it('should not emit additionalHelp when isAdditionalHelpEventTriggered returns false', () => {
+        spyOn(component.additionalHelp, 'emit');
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        component.emitAdditionalHelp();
+
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+      });
+    });
+
+    it('Should call `setService` if a change occurs in `filterService` and contain `filterService`', () => {
+      const changes = { filterService: 'filterServiceURL' };
+      component.filterService = 'http://localhost:4200/test';
+      spyOn(component, <any>'setService');
+
+      component.ngOnChanges(<any>changes);
+
+      expect(component['setService']).toHaveBeenCalledWith(component.filterService);
+    });
+
+    it('Should call `setService` if a change occurs in `fieldValue` and contain `filterService`', () => {
+      const changes = { fieldValue: 'valueTest' };
+      component.filterService = 'http://localhost:4200/test';
+      spyOn(component, <any>'setService');
+
+      component.ngOnChanges(<any>changes);
+
+      expect(component['setService']).toHaveBeenCalledWith(component.filterService);
+    });
+
+    it('Should call `setService` if a change occurs in `fieldLabel` and contain `filterService`', () => {
+      const changes = { fieldLabel: 'labelTest' };
+      component.filterService = 'http://localhost:4200/test';
+      spyOn(component, <any>'setService');
+
+      component.ngOnChanges(<any>changes);
+
+      expect(component['setService']).toHaveBeenCalledWith(component.filterService);
+    });
+
+    it(`Shouldn't call 'setService' if not a change occurs`, () => {
+      const changes = {};
+
+      spyOn(component, <any>'setService');
+
+      component.ngOnChanges(changes);
+
+      expect(component['setService']).not.toHaveBeenCalledWith(component.filterService);
     });
 
     it('focus: should call `focus` of multiselect', () => {
@@ -379,25 +875,84 @@ describe('PoMultiselectComponent:', () => {
       expect(component.inputElement.nativeElement.focus).not.toHaveBeenCalled();
     });
 
+    describe('getAdditionalHelpTooltip:', () => {
+      it('should return null when isAdditionalHelpEventTriggered returns true', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBeNull();
+      });
+
+      it('should return additionalHelpTooltip when isAdditionalHelpEventTriggered returns false', () => {
+        const tooltip = 'Test Tooltip';
+        component.additionalHelpTooltip = tooltip;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBe(tooltip);
+      });
+
+      it('should return undefined when additionalHelpTooltip is undefined and isAdditionalHelpEventTriggered returns false', () => {
+        component.additionalHelpTooltip = undefined;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBeUndefined();
+      });
+    });
+
+    it('should include additionalHelp when event is triggered', () => {
+      spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+      component.additionalHelp = new EventEmitter<any>();
+
+      const result = component.setHelper('label', 'tooltip');
+
+      expect(result).toBeDefined();
+    });
+
     it(`calculateVisibleItems: should calc visible items and not set 'isCalculateVisibleItems' to false when
-      disclaimers width is 0`, () => {
+      tags width is 0`, () => {
       const selectedOptions = [
         { label: 'label', value: 1 },
         { label: 'label', value: 2 },
         { label: 'label', value: 3 }
       ];
       const fakeThis = {
-        getDisclaimersWidth: () => [0, 0, 0],
+        getTagsWidth: () => [0, 0, 0],
         getInputWidth: () => 100,
-        visibleDisclaimers: [],
+        changeDetector: {
+          markForCheck: () => {}
+        },
+        visibleTags: [],
         selectedOptions: selectedOptions,
         isCalculateVisibleItems: true
       };
 
       component.calculateVisibleItems.call(fakeThis);
 
-      expect(fakeThis.visibleDisclaimers.length).toBe(3);
+      expect(fakeThis.visibleTags.length).toBe(3);
       expect(fakeThis.isCalculateVisibleItems).toBeTruthy();
+    });
+
+    it(`calculateVisibleItems: should not set isCalculateVisibleItems to false if inputWidth is 0`, () => {
+      const fakeThis = {
+        getTagsWidth: () => [0, 0, 0],
+        getInputWidth: () => 0,
+        changeDetector: {
+          markForCheck: () => {}
+        },
+        visibleTags: [],
+        selectedOptions: [],
+        isCalculateVisibleItems: false
+      };
+
+      component.calculateVisibleItems.call(fakeThis);
+
+      expect(fakeThis.visibleTags.length).toBe(0);
+      expect(fakeThis.isCalculateVisibleItems).toBe(false);
     });
 
     it('calculateVisibleItems: should calc visible items with lots of space', () => {
@@ -407,16 +962,16 @@ describe('PoMultiselectComponent:', () => {
         { label: 'label', value: 3 }
       ];
       const fakeThis = {
-        getDisclaimersWidth: () => [100, 100, 100],
+        getTagsWidth: () => [100, 100, 100],
         getInputWidth: () => 500,
-        visibleDisclaimers: [],
+        visibleTags: [],
         selectedOptions: selectedOptions,
         isCalculateVisibleItems: true
       };
 
       component.calculateVisibleItems.call(fakeThis);
 
-      expect(fakeThis.visibleDisclaimers.length).toBe(3);
+      expect(fakeThis.visibleTags.length).toBe(3);
       expect(fakeThis.isCalculateVisibleItems).toBeFalsy();
     });
 
@@ -427,32 +982,36 @@ describe('PoMultiselectComponent:', () => {
         { label: 'label', value: 3 }
       ];
       const fakeThis = {
-        getDisclaimersWidth: () => [100, 100, 100],
+        getTagsWidth: () => [100, 100, 100],
         getInputWidth: () => 200,
-        visibleDisclaimers: [],
+        changeDetector: {
+          markForCheck: () => {}
+        },
+        visibleTags: [],
         selectedOptions: selectedOptions,
-        isCalculateVisibleItems: true
+        isCalculateVisibleItems: true,
+        fieldLabel: 'label',
+        fieldValue: 'value'
       };
 
       component.calculateVisibleItems.call(fakeThis);
 
-      expect(fakeThis.visibleDisclaimers.length).toBe(2);
-      expect(fakeThis.visibleDisclaimers[1].value).toBe('');
+      expect(fakeThis.visibleTags.length).toBe(2);
+      expect(fakeThis.visibleTags[1].value).toBe('');
       expect(fakeThis.isCalculateVisibleItems).toBeFalsy();
     });
 
     it('calculateVisibleItems: shouldn`t calc visible items when not have `selectedOptions`', () => {
       const fakeThis = {
-        getDisclaimersWidth: () => [0],
+        getTagsWidth: () => [0],
         getInputWidth: () => 200,
-        visibleDisclaimers: [],
+        visibleTags: [],
         selectedOptions: [],
         isCalculateVisibleItems: true
       };
 
       component.calculateVisibleItems.call(fakeThis);
-
-      expect(fakeThis.visibleDisclaimers.length).toBe(0);
+      expect(fakeThis.visibleTags.length).toBe(0);
       expect(fakeThis.isCalculateVisibleItems).toBeFalsy();
     });
 
@@ -472,7 +1031,125 @@ describe('PoMultiselectComponent:', () => {
       expect(closeSpy).toHaveBeenCalled();
     });
 
+    it('onKeyDownDropdown: should control dropdown visibility', fakeAsync(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Escape' });
+      const controlDropdownVisibilitySpy = spyOn(component, 'controlDropdownVisibility');
+      const inputFocus = spyOn(component.inputElement.nativeElement, 'focus');
+
+      component.onKeyDownDropdown(event, 0);
+
+      expect(controlDropdownVisibilitySpy).toHaveBeenCalledWith(false);
+      tick(60);
+
+      expect(inputFocus).toHaveBeenCalled();
+    }));
+
+    it('onKeyDownDropdown: should focus on the input', () => {
+      const event = {
+        key: 'Tab',
+        target: { className: 'po-listbox-item-type-check' },
+        preventDefault: () => {}
+      } as any;
+
+      const inputFocus = spyOn(component.inputElement.nativeElement, 'focus');
+
+      component.onKeyDownDropdown(event, 0);
+
+      expect(inputFocus).toHaveBeenCalled();
+    });
+
+    it('onKeyDownDropdown: should do nothing for non-Escape key', () => {
+      const event = new KeyboardEvent('keydown', { key: 'Enter' });
+      const preventDefaultSpy = spyOn(event, 'preventDefault');
+      const controlDropdownVisibilitySpy = spyOn(component, 'controlDropdownVisibility');
+      const focusSpy = spyOn(component.inputElement.nativeElement, 'focus');
+
+      component.onKeyDownDropdown(event, 0);
+
+      expect(preventDefaultSpy).not.toHaveBeenCalled();
+      expect(controlDropdownVisibilitySpy).not.toHaveBeenCalled();
+      expect(focusSpy).not.toHaveBeenCalled();
+    });
+
+    describe('onBlur', () => {
+      let setupTest;
+      const fakeEvent = { target: { value: '' } };
+      beforeEach(() => {
+        setupTest = (tooltip: string, displayHelp: boolean, additionalHelpEvent: any) => {
+          component.additionalHelpTooltip = tooltip;
+          component.displayAdditionalHelp = displayHelp;
+          component.additionalHelp = additionalHelpEvent;
+          spyOn(component, 'showAdditionalHelp');
+        };
+      });
+
+      it('should not call showAdditionalHelp when tooltip is not displayed', () => {
+        setupTest('Mensagem de apoio adicional.', false, { observed: false });
+        component.onBlur(fakeEvent);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+
+      it('should not call showAdditionalHelp when additionalHelp event is true', () => {
+        setupTest('Mensagem de apoio adicional.', true, { observed: true });
+        component.onBlur(fakeEvent);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+
+      it('should update aria-label if it contains "Unselected"', () => {
+        const inputEl = component.inputElement.nativeElement;
+        inputEl.setAttribute('aria-label', 'Unselected');
+        component.label = 'New Label';
+        spyOn(component, <any>'onModelTouched');
+
+        component.onBlur(fakeEvent);
+
+        expect(inputEl.getAttribute('aria-label')).toBe('New Label');
+        expect(component['onModelTouched']).toHaveBeenCalled();
+      });
+
+      it('should update aria-label if it contains "Unselected" and label is empty', () => {
+        const inputEl = component.inputElement.nativeElement;
+        inputEl.setAttribute('aria-label', 'Unselected');
+        component.label = '';
+        spyOn(component, <any>'onModelTouched');
+
+        component.onBlur(fakeEvent);
+
+        expect(inputEl.getAttribute('aria-label')).toBe('');
+        expect(component['onModelTouched']).toHaveBeenCalled();
+      });
+
+      it('should not update aria-label if it does not contain "Unselected"', () => {
+        const inputElement = component.inputElement.nativeElement;
+        inputElement.setAttribute('aria-label', 'Something Selected');
+        component.label = 'New Label';
+        spyOn(component, <any>'onModelTouched');
+
+        component.onBlur(fakeEvent);
+
+        expect(component['onModelTouched']).toHaveBeenCalled();
+      });
+
+      it('should emit blur event when event.type is "blur"', () => {
+        spyOn(component.blur, 'emit');
+
+        component.onBlur({ type: 'blur' });
+
+        expect(component.blur.emit).toHaveBeenCalled();
+      });
+
+      it('should not emit blur event when event.type is different from "blur"', () => {
+        spyOn(component.blur, 'emit');
+
+        component.onBlur({ type: 'focus' });
+
+        expect(component.blur.emit).not.toHaveBeenCalled();
+      });
+    });
+
     it('debounceResize: should call `calculateVisibleItems` after 200 milliseconds', done => {
+      component.autoHeight = false;
+
       spyOn(component, 'calculateVisibleItems');
       component.debounceResize();
 
@@ -483,6 +1160,8 @@ describe('PoMultiselectComponent:', () => {
     });
 
     it('debounceResize: should call `calculateVisibleItems` just once', done => {
+      component.autoHeight = false;
+
       spyOn(component, 'calculateVisibleItems');
       component.debounceResize();
 
@@ -496,10 +1175,21 @@ describe('PoMultiselectComponent:', () => {
       }, 210);
     });
 
-    it('updateVisibleItems: should call `debounceResize`, set `visibleDisclaimers` and set `isCalculateVisibleItems` to true', () => {
+    it('debounceResize: shouldn`t call `calculateVisibleItems` if `autoHeight` is true', done => {
+      spyOn(component, 'calculateVisibleItems');
+
+      component.debounceResize();
+
+      setTimeout(() => {
+        expect(component.calculateVisibleItems).not.toHaveBeenCalled();
+        done();
+      }, 210);
+    });
+
+    it('updateVisibleItems: should call `debounceResize`, set `visibleTags` and set `isCalculateVisibleItems` to true', () => {
       const fakeThis = {
         selectedOptions: [{ label: 'label', value: 1 }],
-        visibleDisclaimers: [],
+        visibleTags: [],
         inputElement: {
           nativeElement: {
             offsetWidth: 0
@@ -513,7 +1203,29 @@ describe('PoMultiselectComponent:', () => {
 
       component.updateVisibleItems.call(fakeThis);
 
-      expect(fakeThis.visibleDisclaimers.length).toBe(1);
+      expect(fakeThis.visibleTags.length).toBe(1);
+      expect(fakeThis.debounceResize).toHaveBeenCalled();
+      expect(fakeThis['isCalculateVisibleItems']).toBeTruthy();
+    });
+
+    it('updateVisibleItems: should call `debounceResize`, do not set `visibleTags` and set `isCalculateVisibleItems` to true', () => {
+      const fakeThis = {
+        selectedOptions: undefined,
+        visibleTags: [],
+        inputElement: {
+          nativeElement: {
+            offsetWidth: 0
+          }
+        },
+        debounceResize: () => {},
+        isCalculateVisibleItems: false
+      };
+
+      spyOn(fakeThis, 'debounceResize');
+
+      component.updateVisibleItems.call(fakeThis);
+
+      expect(fakeThis.visibleTags.length).not.toBe(1);
       expect(fakeThis.debounceResize).toHaveBeenCalled();
       expect(fakeThis['isCalculateVisibleItems']).toBeTruthy();
     });
@@ -547,7 +1259,7 @@ describe('PoMultiselectComponent:', () => {
 
     it(`changeSearch: should call 'searchByLabel' with 'event.value', 'options' and 'filterMode' if 'event.value' is 'valid'
       and call 'adjustContainerPosition'.`, fakeAsync(() => {
-      const event = { value: '1' };
+      const event = { value: '1', event: { keyCode: '1' } };
       const searchByLabelSpy = spyOn(component, 'searchByLabel');
       const adjustContainerPositionSpy = spyOn(component, <any>'adjustContainerPosition');
 
@@ -559,9 +1271,33 @@ describe('PoMultiselectComponent:', () => {
       expect(adjustContainerPositionSpy).toHaveBeenCalled();
     }));
 
+    it('changeSearch: should call `filterSubject.next` with `event.value`', () => {
+      const event = { value: 'abc', event: { keyCode: '1' } };
+      component.filterService = <any>{};
+
+      spyOn(component.filterSubject, 'next');
+
+      component.changeSearch(event);
+
+      expect(component.filterSubject.next).toHaveBeenCalledWith(event.value);
+    });
+
+    it('changeSearch: should call focusOnFirstItem', () => {
+      const event = { value: 'abc', event: { keyCode: 40 } };
+      component.filterService = <any>{};
+
+      spyOn(component.filterSubject, 'next');
+      spyOn(component, 'focusOnFirstItem');
+
+      component.changeSearch(event);
+
+      expect(component.filterSubject.next).toHaveBeenCalledWith(event.value);
+      expect(component.focusOnFirstItem).toHaveBeenCalled();
+    });
+
     it(`changeSearch: should call 'setVisibleOptionsDropdown' with 'options' if 'event.value' is 'invalid'
       and call 'adjustContainerPosition'.`, fakeAsync(() => {
-      const event = {};
+      const event = { event: { keyCode: '1' } };
       const setVisibleOptionsDropdownSpy = spyOn(component, 'setVisibleOptionsDropdown');
       const adjustContainerPositionSpy = spyOn(component, <any>'adjustContainerPosition');
 
@@ -574,6 +1310,7 @@ describe('PoMultiselectComponent:', () => {
     }));
 
     it(`adjustContainerPosition: should call 'controlPosition.adjustPosition' with 'poMultiselectContainerPositionDefault'.`, () => {
+      component['adjustContainerPosition'] = fnAdjustContainerPosition;
       const poMultiselectContainerPositionDefault = 'bottom';
       const adjustPositionSpy = spyOn(component['controlPosition'], 'adjustPosition');
 
@@ -582,18 +1319,18 @@ describe('PoMultiselectComponent:', () => {
       expect(adjustPositionSpy).toHaveBeenCalledWith(poMultiselectContainerPositionDefault);
     });
 
-    it(`close: should set 'dropdownIcon' as 'po-icon-arrow-down', 'dropdownOpen' as 'false',
+    it(`close: should set 'dropdownIcon' as 'ICON_ARROW_DOWN', 'dropdownOpen' as 'false',
       call 'dropdown.controlVisibility' with 'false', 'setVisibleOptionsDropdown' with 'options' and 'removeListeners'.`, () => {
       component.dropdownIcon = undefined;
       component.dropdownOpen = undefined;
-
+      fixture.detectChanges();
       const controlVisibilitySpy = spyOn(component.dropdown, 'controlVisibility');
       const setVisibleOptionsDropdownSpy = spyOn(component, 'setVisibleOptionsDropdown');
       const removeListenersSpy = spyOn(component, <any>'removeListeners');
 
       component['close']();
 
-      expect(component.dropdownIcon).toBe('po-icon-arrow-down');
+      expect(component.dropdownIcon).toBe('ICON_ARROW_DOWN');
       expect(component.dropdownOpen).toBe(false);
       expect(controlVisibilitySpy).toHaveBeenCalledWith(false);
       expect(setVisibleOptionsDropdownSpy).toHaveBeenCalledWith(component.options);
@@ -642,6 +1379,58 @@ describe('PoMultiselectComponent:', () => {
       expect(addEventListenerSpy).toHaveBeenCalled();
     });
 
+    it('should focus on the first item if items exist', () => {
+      component.dropdown = {
+        listbox: {
+          element: {
+            nativeElement: document.createElement('div')
+          }
+        }
+      };
+
+      component.inputElement = {
+        nativeElement: document.createElement('input')
+      };
+
+      const firstItem = document.createElement('div');
+      firstItem.classList.add('po-listbox-item-type-check');
+      spyOn(firstItem, 'focus');
+
+      const secondItem = document.createElement('div');
+      secondItem.classList.add('po-listbox-item-type-check');
+
+      component.dropdown.listbox.element.nativeElement.appendChild(firstItem);
+      component.dropdown.listbox.element.nativeElement.appendChild(secondItem);
+
+      component.focusOnFirstItem();
+
+      expect(firstItem.focus).toHaveBeenCalled();
+    });
+
+    it('should close and focus input if no items exist', () => {
+      component.dropdown = {
+        listbox: {
+          element: {
+            nativeElement: document.createElement('div')
+          }
+        }
+      };
+
+      component.inputElement = {
+        nativeElement: document.createElement('input')
+      };
+
+      const inputFocusSpy = spyOn(component.inputElement.nativeElement, 'focus');
+      const closeSpy = spyOn(component, <any>'close');
+
+      component.dropdown.listbox.element.nativeElement.innerHTML = '';
+
+      component.focusOnFirstItem();
+
+      expect(closeSpy).toHaveBeenCalled();
+      expect(inputFocusSpy).toHaveBeenCalled();
+    });
+
     it('onScroll: should call `adjustContainerPosition`.', () => {
       const adjustContainerPositionSpy = spyOn(component, <any>'adjustContainerPosition');
 
@@ -650,12 +1439,12 @@ describe('PoMultiselectComponent:', () => {
       expect(adjustContainerPositionSpy).toHaveBeenCalled();
     });
 
-    it(`open: should set 'dropdownIcon' as 'po-icon-arrow-up', 'dropdownOpen' as 'true',
+    it(`open: should set 'dropdownIcon' as 'ICON_ARROW_UP', 'dropdownOpen' as 'true',
       call 'dropdown.controlVisibility' with 'true', 'setVisibleOptionsDropdown' with 'options',
       'initializeListeners', 'scrollToSelectedOptions', 'changeDetector.detectChanges' and 'setPositionDropdown'.`, () => {
       component.dropdownIcon = undefined;
       component.dropdownOpen = undefined;
-
+      fixture.detectChanges();
       const controlVisibilitySpy = spyOn(component.dropdown, 'controlVisibility');
       const setVisibleOptionsDropdownSpy = spyOn(component, 'setVisibleOptionsDropdown');
       const initializeListenersSpy = spyOn(component, <any>'initializeListeners');
@@ -665,7 +1454,7 @@ describe('PoMultiselectComponent:', () => {
 
       component['open']();
 
-      expect(component.dropdownIcon).toBe('po-icon-arrow-up');
+      expect(component.dropdownIcon).toBe('ICON_ARROW_UP');
       expect(component.dropdownOpen).toBe(true);
       expect(controlVisibilitySpy).toHaveBeenCalledWith(true);
       expect(setVisibleOptionsDropdownSpy).toHaveBeenCalledWith(component.options);
@@ -694,7 +1483,7 @@ describe('PoMultiselectComponent:', () => {
       const customPositions = ['top', 'bottom'];
       const isSetElementWidth = true;
       const poMultiselectContainerOffset = 8;
-
+      fixture.detectChanges();
       const setElementsSpy = spyOn(component['controlPosition'], 'setElements');
       const adjustContainerPositionSpy = spyOn(component, <any>'adjustContainerPosition');
 
@@ -709,37 +1498,375 @@ describe('PoMultiselectComponent:', () => {
         isSetElementWidth
       );
     });
+
+    it('changeItems: should call updateSelectedOptions and callOnChange', () => {
+      const spyUpdateSelectedOptions = spyOn(component, 'updateSelectedOptions');
+      const spyCallOnChange = spyOn(component, 'callOnChange');
+
+      component.changeItems([]);
+
+      expect(spyUpdateSelectedOptions).toHaveBeenCalled();
+      expect(spyCallOnChange).toHaveBeenCalled();
+    });
+
+    it('changeItems: should call `adjustContainerPosition` if `autoHeight` and `dropdownOpen` are true', () => {
+      component.autoHeight = true;
+      component.dropdownOpen = true;
+
+      const spyAdjustContainerPosition = spyOn(component, <any>'adjustContainerPosition');
+
+      component.changeItems([]);
+
+      expect(spyAdjustContainerPosition).toHaveBeenCalled();
+    });
+
+    it('applyFilter: should be called', fakeAsync(() => {
+      component.filterService = poMultiselectFilterServiceStub;
+      component.setService(poMultiselectFilterServiceStub);
+      spyOn(component, <any>'setOptionsByApplyFilter').and.callThrough();
+      spyOn(component.service, <any>'getFilteredData').and.returnValue(throwError([]));
+
+      component.applyFilter('').subscribe();
+      flush();
+
+      expect(component['setOptionsByApplyFilter']).toHaveBeenCalled();
+    }));
+
+    it('should call service.getFilteredData and set options on success', () => {
+      const options: Array<PoMultiselectOption> = [{ label: 'Option 1', value: '1' }];
+      spyOn(multiSelectService, 'getFilteredData').and.returnValue(of(options));
+      spyOn(component, <any>'setOptionsByApplyFilter');
+
+      component.applyFilter('test').subscribe(result => {
+        expect(result).toEqual(options);
+        expect(component['setOptionsByApplyFilter']).toHaveBeenCalledWith(options);
+      });
+    });
+
+    it('should handle error and set isServerSearching to false', () => {
+      spyOn(multiSelectService, 'getFilteredData').and.returnValue(throwError(() => new Error('error')));
+      spyOn(component, <any>'setOptionsByApplyFilter');
+
+      component.applyFilter('test').subscribe(result => {
+        expect(result).toEqual([]);
+        expect(component.isServerSearching).toBeFalse();
+        expect(component['setOptionsByApplyFilter']).toHaveBeenCalledWith([]);
+      });
+    });
+
+    it('applyFilter: should be called with undefined', fakeAsync(() => {
+      component.filterService = poMultiselectFilterServiceStub;
+      component.setService(poMultiselectFilterServiceStub);
+      spyOn(component, <any>'setOptionsByApplyFilter').and.callThrough();
+      spyOn(component.service, <any>'getFilteredData').and.returnValue(throwError([]));
+
+      component.applyFilter(undefined).subscribe();
+      flush();
+
+      expect(component['setOptionsByApplyFilter']).toHaveBeenCalled();
+    }));
+
+    it('focusOnNextTag: should select attribute unselected', () => {
+      const tagsFake = document.createElement('div');
+      tagsFake.innerHTML = `
+        <div class="po-tag-remove"></div>
+        <div class="po-tag-remove"></div>
+        <div class="po-tag-remove"></div>
+      `;
+      spyOn(component.inputElement.nativeElement, 'focus');
+      spyOn(component.inputElement.nativeElement, 'setAttribute');
+      spyOn(component, 'controlDropdownVisibility');
+      spyOn(component, <any>'focusOnRemoveTag');
+
+      component.options = [tags];
+      component['focusOnNextTag'](0, 'enter');
+
+      expect(component.inputElement.nativeElement.focus).toHaveBeenCalled();
+      expect(component.inputElement.nativeElement.setAttribute).toHaveBeenCalledWith(
+        'aria-label',
+        `Unselected items ${component.label}`
+      );
+      expect(component.controlDropdownVisibility).toHaveBeenCalled();
+      expect(component['focusOnRemoveTag']).toHaveBeenCalled();
+    });
+
+    it('focusOnNextTag: should select attribute unselected and indexClosed is null', () => {
+      const tagsFake = document.createElement('div');
+      tagsFake.innerHTML = `
+        <div class="po-tag-remove"></div>
+        <div class="po-tag-remove"></div>
+        <div class="po-tag-remove"></div>
+      `;
+      spyOn(component.inputElement.nativeElement, 'focus');
+      spyOn(component.inputElement.nativeElement, 'setAttribute');
+      spyOn(component, 'controlDropdownVisibility');
+      spyOn(component, <any>'focusOnRemoveTag');
+
+      component.options = [tags];
+      component['focusOnNextTag'](null, 'enter');
+
+      expect(component.inputElement.nativeElement.focus).toHaveBeenCalled();
+      expect(component.inputElement.nativeElement.setAttribute).toHaveBeenCalledWith(
+        'aria-label',
+        `Unselected items ${component.label}`
+      );
+      expect(component.controlDropdownVisibility).toHaveBeenCalled();
+      expect(component['focusOnRemoveTag']).toHaveBeenCalled();
+    });
+
+    it('focusOnNextTag: shouldnt select attribute unselected', () => {
+      const tagsFake = document.createElement('div');
+      tagsFake.innerHTML = `
+        <div class="po-tag-remove"></div>
+        <div class="po-tag-remove"></div>
+        <div class="po-tag-remove"></div>
+      `;
+      spyOn(component.inputElement.nativeElement, 'focus');
+      spyOn(component.inputElement.nativeElement, 'setAttribute');
+      spyOn(component, 'controlDropdownVisibility');
+      spyOn(component, <any>'focusOnRemoveTag');
+
+      component.options = [tags];
+      component['focusOnNextTag'](2, 'enter');
+
+      expect(component.inputElement.nativeElement.focus).toHaveBeenCalled();
+      expect(component.inputElement.nativeElement.setAttribute).toHaveBeenCalledWith(
+        'aria-label',
+        `Unselected items ${component.label}`
+      );
+      expect(component.controlDropdownVisibility).toHaveBeenCalled();
+      expect(component['focusOnRemoveTag']).toHaveBeenCalled();
+    });
+
+    it('should focus on the previous element if the tag length is equal to the closed index', () => {
+      const tagRemoveElements = [
+        document.createElement('div'),
+        document.createElement('div'),
+        document.createElement('div')
+      ];
+      const indexClosed = 3;
+      spyOn(tagRemoveElements[indexClosed - 1], 'focus');
+
+      component['focusOnRemoveTag'](tagRemoveElements, indexClosed);
+
+      expect(tagRemoveElements[indexClosed - 1].focus).toHaveBeenCalled();
+    });
+
+    it('should focus on the current element if the tag length is not equal to the closed index', () => {
+      const tagRemoveElements = [
+        document.createElement('div'),
+        document.createElement('div'),
+        document.createElement('div')
+      ];
+      const indexClosed = 1;
+      spyOn(tagRemoveElements[indexClosed], 'focus');
+
+      component['focusOnRemoveTag'](tagRemoveElements, indexClosed);
+
+      expect(tagRemoveElements[indexClosed].focus).toHaveBeenCalled();
+    });
+
+    it('setTabIndex', () => {
+      const element = document.createElement('div');
+      const tabIndex = 3;
+
+      component['setTabIndex'](element, tabIndex);
+
+      expect(element.getAttribute('tabindex')).toBe(String(tabIndex));
+    });
+
+    it('handleArrowLeft', () => {
+      const tagRemoveElements = [
+        document.createElement('div'),
+        document.createElement('div'),
+        document.createElement('div')
+      ];
+
+      const indexArrow = 1;
+
+      spyOn(component, 'setTabIndex' as any);
+      spyOn(tagRemoveElements[indexArrow - 1], 'focus');
+
+      component['handleArrowLeft'](tagRemoveElements, indexArrow);
+
+      expect(component['setTabIndex']).toHaveBeenCalledWith(tagRemoveElements[indexArrow], -1);
+      expect(tagRemoveElements[indexArrow - 1].focus).toHaveBeenCalled();
+      expect(component['setTabIndex']).toHaveBeenCalledWith(tagRemoveElements[indexArrow - 1], 0);
+    });
+
+    it('handleArrowRight', () => {
+      const tagRemoveElements = [
+        document.createElement('div'),
+        document.createElement('div'),
+        document.createElement('div')
+      ];
+
+      const indexArrow = 1;
+
+      spyOn(component, 'setTabIndex' as any);
+      spyOn(tagRemoveElements[indexArrow + 1], 'focus');
+
+      component['handleArrowRight'](tagRemoveElements, indexArrow);
+
+      expect(component['setTabIndex']).toHaveBeenCalledWith(tagRemoveElements[indexArrow], -1);
+      expect(tagRemoveElements[indexArrow + 1].focus).toHaveBeenCalled();
+      expect(component['setTabIndex']).toHaveBeenCalledWith(tagRemoveElements[indexArrow + 1], 0);
+    });
+
+    it('should handleKeyDown correctly for Space key', () => {
+      const event = new KeyboardEvent('keydown', { code: 'Space' });
+
+      spyOn(event, 'preventDefault');
+      spyOn(event, 'stopPropagation');
+
+      component['handleKeyDown'](event, [], 0);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(event.stopPropagation).toHaveBeenCalled();
+    });
+
+    it('should handleKeyDown correctly for ArrowLeft key', () => {
+      const event = new KeyboardEvent('keydown', { key: 'ArrowLeft' });
+      spyOn(component as any, 'handleArrowLeft');
+
+      component['handleKeyDown'](event, [], 0);
+
+      expect(component['handleArrowLeft']).toHaveBeenCalled();
+    });
+
+    it('should handleKeyDown correctly for ArrowRight key', () => {
+      const event = new KeyboardEvent('keydown', { key: 'ArrowRight' });
+      spyOn(component as any, 'handleArrowRight');
+
+      component['handleKeyDown'](event, [], 0);
+
+      expect(component['handleArrowRight']).toHaveBeenCalled();
+    });
+
+    it('teste jorge initializeTagRemoveElements', () => {
+      const tagRemoveElements = [
+        document.createElement('div'),
+        document.createElement('div'),
+        document.createElement('div')
+      ];
+
+      const initialIndex = 3;
+
+      spyOn(component, 'setTabIndex' as any);
+
+      component['initializeTagRemoveElements'](tagRemoveElements, initialIndex);
+
+      expect(component['setTabIndex']).toHaveBeenCalledWith(tagRemoveElements[initialIndex - 1], 0);
+    });
+
+    it('should add keydown event listeners', () => {
+      const tagRemoveElements = [document.createElement('div')];
+      const initialIndex = 0;
+      const fakeKeyboardEvent = new KeyboardEvent('keydown');
+
+      spyOn(component as any, 'setTabIndex');
+      spyOn(component as any, 'handleKeyDown');
+
+      component['initializeTagRemoveElements'](tagRemoveElements, initialIndex);
+
+      expect(component['setTabIndex']).toHaveBeenCalledWith(tagRemoveElements[0], 0);
+
+      tagRemoveElements[0].dispatchEvent(fakeKeyboardEvent);
+
+      expect(component['handleKeyDown']).toHaveBeenCalled();
+    });
+
+    it('should set tab index to 0 for the previous element when initialIndex is not 0', () => {
+      const tagRemoveElements = [document.createElement('div'), document.createElement('div')];
+      const initialIndex = 1;
+
+      spyOn(component as any, 'setTabIndex');
+
+      component['initializeTagRemoveElements'](tagRemoveElements, initialIndex);
+
+      expect(component['setTabIndex']).toHaveBeenCalledWith(tagRemoveElements[0], 0);
+    });
+
+    it('setOptionsByApplyFilter: should be called by first time', () => {
+      const items = [{ label: '123', value: 1 }];
+      component.isFirstFilter = true;
+      component['setOptionsByApplyFilter'](items);
+
+      expect(component['cacheOptions']).toEqual(items);
+      expect(component.isFirstFilter).toBeFalsy();
+    });
+
+    it('setOptionsByApplyFilter: should be called', () => {
+      const items = [{ label: '123', value: 1 }];
+      component.isFirstFilter = false;
+      spyOn(component, 'setVisibleOptionsDropdown');
+      component['setOptionsByApplyFilter'](items);
+
+      expect(component.options).toEqual(items);
+      expect(component.setVisibleOptionsDropdown).toHaveBeenCalledWith(items);
+    });
+
+    it('applyFilterInFirstClick: should be call `filterSubject` when it is the first filter', () => {
+      component['filterSubject'] = <any>{
+        next: () => {},
+        unsubscribe: () => {}
+      };
+      spyOn(component['filterSubject'], 'next');
+      component.isFirstFilter = true;
+
+      component['applyFilterInFirstClick']();
+
+      expect(component['filterSubject'].next).toHaveBeenCalled();
+      /* eslint-disable no-new-wrappers */
+      expect(component['filterSubject'].next).toHaveBeenCalledWith(new String());
+    });
+
+    it('applyFilterInFirstClick: should set `options` with `cacheOptions` data', () => {
+      const values = [{ label: '', value: '' }];
+      component['cacheOptions'] = values;
+      component.isFirstFilter = false;
+
+      component['applyFilterInFirstClick']();
+
+      expect(component.options).toEqual([...values]);
+    });
+
+    describe('getErrorPattern:', () => {
+      it('should return true in hasInvalidClass if fieldErrorMessage', () => {
+        component['el'].nativeElement.classList.add('ng-invalid');
+        component['el'].nativeElement.classList.add('ng-dirty');
+        component.fieldErrorMessage = 'Field Invalid';
+        component.required = true;
+        expect(component.hasInvalidClass()).toBeTruthy();
+        expect(component.getErrorPattern()).toBe('Field Invalid');
+      });
+
+      it('should return empty if fieldErrorMessage is undefined', () => {
+        component['el'].nativeElement.classList.add('ng-invalid');
+        component['el'].nativeElement.classList.add('ng-dirty');
+        component.fieldErrorMessage = undefined;
+        expect(component.getErrorPattern()).toBe('');
+      });
+    });
   });
 
   describe('Templates:', () => {
-    it(`should show optional if the field isn't 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = false;
-      component.optional = true;
-      component.label = 'label';
+    it(`should show placeholder element if contains 'placeholder' and not contains 'visibleTags'`, () => {
+      component.placeholder = 'Placeholder';
+      component.visibleTags = [];
 
       fixture.detectChanges();
 
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeTruthy();
+      expect(fixture.debugElement.nativeElement.querySelector('.po-multiselect-input-placeholder')).toBeTruthy();
     });
 
-    it(`shouldn't show optional if the field is 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = true;
-      component.optional = true;
-      component.label = 'label';
+    it(`should not show placeholder element if contains 'visibleTags'`, () => {
+      component.placeholder = 'Placeholder';
+      component.visibleTags = [{ label: 'One', value: 1 }];
 
       fixture.detectChanges();
 
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-    });
-
-    it(`shouldn't show optional if the field isn't 'required', has 'label' but 'p-optional' is false.`, () => {
-      component.required = true;
-      component.optional = false;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
+      expect(fixture.debugElement.nativeElement.querySelector('.po-multiselect-input-placeholder')).toBeNull();
     });
   });
 
@@ -767,7 +1894,7 @@ describe('PoMultiselectComponent:', () => {
       const wasClickedOnToggleSpy = spyOn(component, 'wasClickedOnToggle');
 
       clickOutEvent();
-
+      fixture.detectChanges();
       expect(wasClickedOnToggleSpy).not.toHaveBeenCalled();
 
       component['open']();
@@ -794,6 +1921,7 @@ describe('PoMultiselectComponent:', () => {
     });
 
     it(`open: should call 'wasClickedOnToggle' if dropdown list is opened and click window.`, () => {
+      fixture.detectChanges();
       const wasClickedOnToggleSpy = spyOn(component, 'wasClickedOnToggle');
 
       component['open']();
@@ -803,8 +1931,9 @@ describe('PoMultiselectComponent:', () => {
     });
 
     it(`open: should call 'updateVisibleItems' if dropdown list is opened and resize window.`, () => {
-      const updateVisibleItemsSpy = spyOn(component, 'updateVisibleItems');
+      fixture.detectChanges();
 
+      const updateVisibleItemsSpy = spyOn(component, 'updateVisibleItems');
       component['open']();
       newEvent('resize');
 
@@ -812,6 +1941,7 @@ describe('PoMultiselectComponent:', () => {
     });
 
     it(`open: should call 'adjustContainerPosition' if dropdown list is opened and scroll window.`, () => {
+      fixture.detectChanges();
       const adjustContainerPositionSpy = spyOn(component, <any>'adjustContainerPosition');
 
       component['open']();

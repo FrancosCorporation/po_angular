@@ -4,13 +4,18 @@ import { PoCheckboxGroupOption, PoRadioGroupOption } from '@po-ui/ng-components'
 
 @Component({
   selector: 'sample-po-popover-labs',
-  templateUrl: './sample-po-popover-labs.component.html'
+  templateUrl: './sample-po-popover-labs.component.html',
+  standalone: false
 })
 export class SamplePoPopoverLabsComponent {
+  @ViewChild('buttonClick', { read: ElementRef, static: true }) buttonClickRef: ElementRef;
+  @ViewChild('buttonHover', { read: ElementRef, static: true }) buttonHoverRef: ElementRef;
+
   content: string = '';
   position: string = '';
   properties: Array<string> = [];
   title: string = '';
+  offset: number = 8;
 
   public readonly positionOptions: Array<PoRadioGroupOption> = [
     { label: 'Right', value: 'right' },
@@ -27,15 +32,21 @@ export class SamplePoPopoverLabsComponent {
     { label: 'Top-right', value: 'top-right' }
   ];
 
-  public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [{ value: 'hideArrow', label: 'Hide arrow' }];
+  public readonly offsetOptions: Array<PoRadioGroupOption> = [
+    { label: '0', value: 0 },
+    { label: '4', value: 4 },
+    { label: '8 (default)', value: 8 },
+    { label: '16', value: 16 },
+    { label: '32', value: 32 }
+  ];
 
-  @ViewChild('buttonClick', { read: ElementRef, static: true }) buttonClickRef: ElementRef;
-  @ViewChild('buttonHover', { read: ElementRef, static: true }) buttonHoverRef: ElementRef;
+  public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [{ value: 'hideArrow', label: 'Hide arrow' }];
 
   restore() {
     this.content = '';
     this.position = undefined;
     this.properties = [];
     this.title = '';
+    this.offset = 8;
   }
 }

@@ -1,36 +1,37 @@
-import { ComponentFixture, fakeAsync, TestBed, tick, waitForAsync } from '@angular/core/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { FormsModule, NgForm } from '@angular/forms';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick, waitForAsync } from '@angular/core/testing';
+import { FormControl, FormsModule, NgForm, Validators } from '@angular/forms';
 import { RouterTestingModule } from '@angular/router/testing';
 
-import { throwError, of, EMPTY } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
-import { PoDialogModule } from '@po-ui/ng-components';
+import { PoDialogModule, PoThemeA11yEnum } from '@po-ui/ng-components';
 
-import * as util from './../../utils/util';
 import { expectPropertiesValues } from './../../util-test/util-expect.spec';
+import { PoUtils as util } from './../../utils/util';
 
-import { PoPageDynamicEditComponent } from './po-page-dynamic-edit.component';
+import { poLocaleDefault } from './../../../../../ui/src/lib/services/po-language/po-language.constant';
+
 import { PoPageDynamicEditActions } from './interfaces/po-page-dynamic-edit-actions.interface';
-import { PoDynamicFormStubComponent } from './test/po-dynamic-form-stub-component';
-import { PoPageDynamicEditBeforeSave } from './interfaces/po-page-dynamic-edit-before-save.interface';
 import { PoPageDynamicEditBeforeSaveNew } from './interfaces/po-page-dynamic-edit-before-save-new.interface';
+import { PoPageDynamicEditBeforeSave } from './interfaces/po-page-dynamic-edit-before-save.interface';
+import { PoPageDynamicEditComponent, poPageDynamicEditLiteralsDefault } from './po-page-dynamic-edit.component';
+import { PoDynamicFormStubComponent } from './test/po-dynamic-form-stub-component';
 
 describe('PoPageDynamicEditComponent: ', () => {
   let component: PoPageDynamicEditComponent;
   let fixture: ComponentFixture<PoPageDynamicEditComponent>;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [FormsModule, HttpClientTestingModule, RouterTestingModule.withRoutes([]), PoDialogModule],
-        providers: [],
-        declarations: [PoPageDynamicEditComponent, PoDynamicFormStubComponent],
-        schemas: [NO_ERRORS_SCHEMA]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoPageDynamicEditComponent, PoDynamicFormStubComponent],
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [FormsModule, RouterTestingModule.withRoutes([]), PoDialogModule],
+      providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoPageDynamicEditComponent);
@@ -80,6 +81,66 @@ describe('PoPageDynamicEditComponent: ', () => {
       expect(component['_actions']).toEqual({});
     });
 
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
     it('p-fields: should call `getKeysByFields` and `getDuplicatesByFields` and set property with valid values', () => {
       const validValues = [[{ property: 'name' }], []];
 
@@ -109,6 +170,95 @@ describe('PoPageDynamicEditComponent: ', () => {
       expectPropertiesValues(component, 'autoRouter', invalidValues, false);
     });
 
+    it('p-notification-type: should set property to `error` if value equal `error`', () => {
+      const notificationType = 'error';
+
+      component.notificationType = notificationType;
+
+      expect(component['_notificationType']).toEqual(notificationType);
+    });
+
+    it('p-notification-type: should set property to `warning` if invalid values', () => {
+      const invalidValues = ['teste', undefined, null, NaN, 0, 'false', false];
+
+      expectPropertiesValues(component, 'notificationType', invalidValues, 'warning');
+    });
+
+    it('p-notification-type: should set property to `warning` if value is empty', () => {
+      component.notificationType = '';
+
+      expect(component.notificationType).toEqual('warning');
+    });
+
+    describe('p-literals:', () => {
+      it('should be in portuguese if browser is setted with an unsupported language', () => {
+        Object.defineProperty(component, 'language', { value: 'zw', configurable: true });
+
+        component.literals = {};
+
+        expect(component.literals).toEqual(poPageDynamicEditLiteralsDefault[poLocaleDefault]);
+      });
+
+      it('should be in portuguese if browser is setted with `pt`', () => {
+        Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
+
+        component.literals = {};
+
+        expect(component.literals).toEqual(poPageDynamicEditLiteralsDefault.pt);
+      });
+
+      it('should be in english if browser is setted with `en`', () => {
+        Object.defineProperty(component, 'language', { value: 'en', configurable: true });
+
+        component.literals = {};
+
+        expect(component.literals).toEqual(poPageDynamicEditLiteralsDefault.en);
+      });
+
+      it('should be in spanish if browser is setted with `es`', () => {
+        Object.defineProperty(component, 'language', { value: 'es', configurable: true });
+
+        component.literals = {};
+
+        expect(component.literals).toEqual(poPageDynamicEditLiteralsDefault.es);
+      });
+
+      it('should be in russian if browser is setted with `ru`', () => {
+        Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
+
+        component.literals = {};
+
+        expect(component.literals).toEqual(poPageDynamicEditLiteralsDefault.ru);
+      });
+
+      it('should accept custom literals', () => {
+        Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
+
+        const customLiterals = Object.assign({}, poPageDynamicEditLiteralsDefault[poLocaleDefault]);
+
+        customLiterals.pageActionSave = 'Salvar';
+        customLiterals.pageActionSaveNew = 'Salvar e novo';
+
+        component.literals = customLiterals;
+
+        expect(component.literals).toEqual(customLiterals);
+      });
+
+      it('should update property with default literals if is setted with invalid values', () => {
+        const invalidValues = [null, undefined, false, true, '', 'literals', 0, 10, [], [1, 2], () => {}];
+
+        Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
+
+        expectPropertiesValues(component, 'literals', invalidValues, poPageDynamicEditLiteralsDefault[poLocaleDefault]);
+      });
+
+      it('should get literals directly from poPageDynamicEditLiteralsDefault if it not initialized', () => {
+        Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
+
+        expect(component.literals).toEqual(poPageDynamicEditLiteralsDefault['pt']);
+      });
+    });
+
     it('duplicates: get duplicates', () => {
       const duplicates = [{ property: 'name' }];
 
@@ -126,9 +276,15 @@ describe('PoPageDynamicEditComponent: ', () => {
       }
     };
 
+    const fakeFormControl = {
+      control1: new FormControl('', Validators.required),
+      control2: new FormControl('', Validators.required)
+    };
+
     const dynamicFormInvalid: any = {
       form: {
-        invalid: true
+        invalid: true,
+        controls: fakeFormControl
       }
     };
 
@@ -369,6 +525,15 @@ describe('PoPageDynamicEditComponent: ', () => {
       expect(spy).toHaveBeenCalled();
     });
 
+    it('showAdditionalHelp: should call `fieldsComponent.showAdditionalHelp` with the given property', () => {
+      const property = 'name';
+      const dynamicFormMock = jasmine.createSpyObj('PoDynamicFormComponent', ['showAdditionalHelp']);
+      component.dynamicForm = dynamicFormMock;
+      component.showAdditionalHelp(property);
+
+      expect(dynamicFormMock.showAdditionalHelp).toHaveBeenCalledWith(property);
+    });
+
     describe('ngOnInit:', () => {
       it('should call `loadData` with `paramId` and `duplicate` if `activatedRoute.snapshot.data.serviceApi` is falsy', () => {
         const id = 1;
@@ -389,7 +554,7 @@ describe('PoPageDynamicEditComponent: ', () => {
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(of({}));
         spyOn(component['poPageDynamicService'], <any>'configServiceApi');
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         component.ngOnInit();
 
@@ -423,7 +588,7 @@ describe('PoPageDynamicEditComponent: ', () => {
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(of({}));
         spyOn(component['poPageDynamicService'], <any>'configServiceApi');
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         component.ngOnInit();
 
@@ -446,19 +611,17 @@ describe('PoPageDynamicEditComponent: ', () => {
         component.fields = [{ property: 'filter1' }, { property: 'filter2' }];
         component.title = 'Original Title';
 
-        component.onLoad = () => {
-          return {
-            title: 'New Title',
-            breadcrumb: {
-              items: [{ label: 'Test' }, { label: 'Test2' }]
-            },
-            actions: {
-              cancel: '/newcancel',
-              saveNew: '/savenew'
-            },
-            fields: [{ property: 'filter1' }, { property: 'filter3' }]
-          };
-        };
+        component.onLoad = () => ({
+          title: 'New Title',
+          breadcrumb: {
+            items: [{ label: 'Test' }, { label: 'Test2' }]
+          },
+          actions: {
+            cancel: '/newcancel',
+            saveNew: '/savenew'
+          },
+          fields: [{ property: 'filter1' }, { property: 'filter3' }]
+        });
 
         spyOn(component, <any>'loadData').and.returnValue(of({}));
 
@@ -477,13 +640,13 @@ describe('PoPageDynamicEditComponent: ', () => {
           items: [{ label: 'Test' }, { label: 'Test2' }]
         });
 
-        component['subscriptions'] = null;
+        Object.defineProperty(component, 'subscriptions', { value: null, configurable: true });
         component.ngOnDestroy();
       }));
 
       it('should configure properties based on the return of onload route', fakeAsync(() => {
         component.autoRouter = false;
-        component.actions = <any>{};
+        component.actions = {};
         component.breadcrumb = <any>{};
         component.fields = [];
         component.title = '';
@@ -513,7 +676,7 @@ describe('PoPageDynamicEditComponent: ', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of(metadata));
         spyOn(<any>component['poPageCustomizationService'], 'createObservable').and.returnValue(of(custom));
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         component.ngOnInit();
 
@@ -550,7 +713,7 @@ describe('PoPageDynamicEditComponent: ', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of(response));
         spyOn(component, <any>'loadData').and.returnValue(of({}));
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(of({}));
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
         component['loadDataFromAPI']();
 
         tick();
@@ -578,7 +741,7 @@ describe('PoPageDynamicEditComponent: ', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of({}));
         spyOn(component, <any>'loadData').and.returnValue(of({}));
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(of({}));
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
         component['loadDataFromAPI']();
 
         tick();
@@ -676,6 +839,25 @@ describe('PoPageDynamicEditComponent: ', () => {
 
         tick();
       }));
+
+      it('should call `onLoadData` and set `model` with the custom data', fakeAsync(() => {
+        const id = '1';
+        const responseExpected = { name: 'angular' };
+        const customModelValue = { newValue: 'custom' };
+
+        const expectedModel = { ...responseExpected, ...customModelValue };
+
+        component.model = undefined;
+        component.onLoadData = model => ({ ...model, ...customModelValue });
+
+        spyOn(component['poPageDynamicService'], 'getResource').and.returnValue(of(responseExpected));
+
+        component['loadData'](id).subscribe(response => {
+          expect(component.model).toEqual(expectedModel);
+        });
+
+        tick();
+      }));
     });
 
     describe('saveOperation:', () => {
@@ -715,7 +897,7 @@ describe('PoPageDynamicEditComponent: ', () => {
         };
 
         component.dynamicForm = dynamicFormValid;
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
         component.model = model;
 
         spyOn(component['poNotification'], 'warning');
@@ -745,7 +927,7 @@ describe('PoPageDynamicEditComponent: ', () => {
 
         component.model = model;
         component.dynamicForm = dynamicFormValid;
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         spyOn(component['poNotification'], 'warning');
 
@@ -759,6 +941,96 @@ describe('PoPageDynamicEditComponent: ', () => {
 
         tick();
       }));
+
+      it('should mark controls as dirty with a Input Element control', () => {
+        component.dynamicForm = dynamicFormInvalid;
+        const fakeInputElement = document.createElement('input');
+        fakeInputElement.setAttribute('name', 'control1');
+
+        spyOn(document, 'querySelector').and.returnValue(fakeInputElement);
+
+        component['saveOperation']();
+
+        expect(component.dynamicForm.form.controls.control1.dirty).toBeTrue();
+        expect(component.dynamicForm.form.controls.control2.dirty).toBeTrue();
+        expect(document.querySelector).toHaveBeenCalledWith('[name=control1]');
+      });
+
+      it('should focus radio input', () => {
+        component.dynamicForm = dynamicFormInvalid;
+        const fakeRadioComponent = document.createElement('po-radio');
+        fakeRadioComponent.setAttribute('ng-reflect-name', 'control1');
+        fakeRadioComponent.setAttribute('ng-reflect-disabled', 'false');
+
+        const fakeParentElement = document.createElement('span');
+        fakeParentElement.setAttribute('name', 'control1');
+
+        const fakeInput = document.createElement('input');
+        fakeParentElement.appendChild(fakeRadioComponent).appendChild(fakeInput);
+
+        spyOn(document, 'querySelector').and.returnValue(fakeParentElement);
+        component['saveOperation']();
+
+        expect(document.querySelector).toHaveBeenCalledWith('[name=control1]');
+      });
+
+      it('should focus radio input but radios are all disabled', () => {
+        component.dynamicForm = dynamicFormInvalid;
+        const fakeRadioComponent = document.createElement('po-radio');
+        fakeRadioComponent.setAttribute('ng-reflect-name', 'control1');
+        fakeRadioComponent.setAttribute('ng-reflect-disabled', 'true');
+
+        const fakeParentElement = document.createElement('span');
+        fakeParentElement.setAttribute('name', 'control1');
+
+        fakeParentElement.appendChild(fakeRadioComponent);
+
+        spyOn(document, 'querySelector').and.returnValue(fakeParentElement);
+        component['saveOperation']();
+
+        expect(document.querySelector).toHaveBeenCalledWith('[name=control1]');
+        expect(component['indexFocus']).toBe(0);
+      });
+
+      it('should focus checkbox input', () => {
+        component.dynamicForm = dynamicFormInvalid;
+        const fakeCheckboxInputElement = document.createElement('po-checkbox-group');
+        fakeCheckboxInputElement.setAttribute('ng-reflect-name', 'control1');
+
+        const fakeCheckboxComponent = document.createElement('po-checkbox');
+        fakeCheckboxComponent.setAttribute('ng-reflect-name', 'control1');
+        fakeCheckboxComponent.setAttribute('ng-reflect-disabled', 'false');
+
+        const fakeOutline = document.createElement('div');
+        fakeOutline.classList.add('po-checkbox-outline');
+        fakeCheckboxInputElement.appendChild(fakeCheckboxComponent).appendChild(fakeOutline);
+
+        spyOn(document, 'querySelector').and.returnValue(fakeCheckboxInputElement);
+
+        component['focusCheckboxInput']('control1');
+
+        expect(document.querySelector).toHaveBeenCalledWith('po-checkbox-group[ng-reflect-name=control1]');
+      });
+
+      it('should focus checkbox input but checkboxes are all disabled', () => {
+        component.dynamicForm = dynamicFormInvalid;
+        const fakeCheckboxInputElement = document.createElement('po-checkbox-group');
+        fakeCheckboxInputElement.setAttribute('ng-reflect-name', 'control1');
+
+        const fakeCheckboxComponent = document.createElement('po-checkbox');
+        fakeCheckboxComponent.setAttribute('ng-reflect-name', 'control1');
+        fakeCheckboxComponent.setAttribute('ng-reflect-disabled', 'true');
+
+        fakeCheckboxInputElement.appendChild(fakeCheckboxComponent);
+
+        spyOn(document, 'querySelector').and.returnValue(fakeCheckboxInputElement);
+
+        component['indexFocus'] = 1;
+        component['focusCheckboxInput']('control1');
+
+        expect(document.querySelector).toHaveBeenCalledWith('po-checkbox-group[ng-reflect-name=control1]');
+        expect(component['indexFocus']).toBe(0);
+      });
     });
 
     describe('save:', () => {
@@ -982,6 +1254,14 @@ describe('PoPageDynamicEditComponent: ', () => {
       });
     });
 
+    describe('showNotification:', () => {
+      it(`should call 'showNotification and notificationType be equal 'error'`, () => {
+        spyOn(component['poNotification'], 'error');
+        component['showNotification']('error');
+        expect(component['poNotification'].error).toHaveBeenCalled();
+      });
+    });
+
     it('updateModel: should merge the properties', () => {
       const newResource = { prop4: 'test 4', prop5: 'test 5' };
       component.model = { prop1: 'test 1', prop2: 'test 2' };
@@ -998,27 +1278,6 @@ describe('PoPageDynamicEditComponent: ', () => {
       component['updateModel'](newResource);
 
       expect(component.model).toEqual(result);
-    });
-
-    it('updateModel: should keep model if newResource is undefined', () => {
-      const newResource = undefined;
-      component.model = { prop1: 'test 1', prop2: 'test 2' };
-      const result = { prop1: 'test 1', prop2: 'test 2' };
-
-      component.dynamicForm = <any>{
-        form: {
-          form: {
-            patchValue: () => {}
-          }
-        }
-      };
-
-      const patchValueSpy = spyOn(component.dynamicForm.form.form, 'patchValue');
-
-      component['updateModel'](newResource);
-
-      expect(component.model).toEqual(result);
-      expect(patchValueSpy).toHaveBeenCalled();
     });
 
     it('executeSave: should call `saveOperation`, `poNotification.success` and `navigateTo`', fakeAsync(() => {
@@ -1041,6 +1300,111 @@ describe('PoPageDynamicEditComponent: ', () => {
       tick();
     }));
 
+    it('updateModel: should update model and call patchValue when newResource is defined and not empty', () => {
+      const newResource = { prop3: 'test 3' }; // Define newResource com uma nova propriedade
+      component.model = { prop1: 'test 1', prop2: 'test 2' }; // Estado inicial do modelo
+      const expectedModel = { ...component.model, ...newResource }; // Resultado esperado após a atualização
+
+      component.dynamicForm = <any>{
+        form: {
+          form: {
+            patchValue: () => {}
+          }
+        }
+      };
+
+      const patchValueSpy = spyOn(component.dynamicForm.form.form, 'patchValue');
+
+      component['updateModel'](newResource);
+
+      // Verifica se o modelo foi atualizado corretamente
+      expect(component.model).toEqual(expectedModel);
+      // Verifica se patchValue foi chamado com o modelo atualizado
+      expect(patchValueSpy).toHaveBeenCalledWith(expectedModel);
+    });
+
+    // Exemplo de teste ajustado sem modificar `keys`
+    it('updateModel: should update model properly without modifying read-only keys property', () => {
+      const newResource = { prop3: 'test 3' }; // Recurso para atualização
+      component.model = { prop1: 'test 1', prop2: 'test 2' };
+
+      component.dynamicForm = <any>{
+        form: {
+          form: {
+            patchValue: () => {}
+          }
+        }
+      };
+
+      const patchValueSpy = spyOn(component.dynamicForm.form.form, 'patchValue');
+
+      component['updateModel'](newResource);
+
+      // Verifique se o modelo foi atualizado corretamente
+      expect(component.model).toEqual(jasmine.objectContaining(newResource));
+      // Verifique se patchValue foi chamado
+      expect(patchValueSpy).toHaveBeenCalled();
+    });
+
+    it('updateModel: should not update model or call patchValue when newResource is undefined', () => {
+      component.model = { prop1: 'value1', prop2: 'value2' };
+      const originalModel = { ...component.model };
+
+      component.dynamicForm = <any>{
+        form: {
+          form: {
+            patchValue: () => {}
+          }
+        }
+      };
+      const patchValueSpy = spyOn(component.dynamicForm.form.form, 'patchValue');
+
+      component['updateModel'](undefined);
+
+      expect(component.model).toEqual(originalModel);
+      expect(patchValueSpy).not.toHaveBeenCalled();
+    });
+
+    it('updateModel: should not update model or call patchValue when newResource is an empty object', () => {
+      component.model = { prop1: 'value1', prop2: 'value2' };
+      const originalModel = { ...component.model };
+
+      component.dynamicForm = <any>{
+        form: {
+          form: {
+            patchValue: () => {}
+          }
+        }
+      };
+
+      const patchValueSpy = spyOn(component.dynamicForm.form.form, 'patchValue');
+
+      component['updateModel']({});
+
+      expect(component.model).toEqual(originalModel);
+      expect(patchValueSpy).not.toHaveBeenCalled();
+    });
+
+    it('updateModel: should update model and call patchValue when newResource is provided', () => {
+      component.model = { prop1: 'value1', prop2: 'value2' };
+      const newResource = { prop3: 'value3' };
+
+      component.dynamicForm = <any>{
+        form: {
+          form: {
+            patchValue: () => {}
+          }
+        }
+      };
+
+      const patchValueSpy = spyOn(component.dynamicForm.form.form, 'patchValue');
+
+      component['updateModel'](newResource);
+
+      expect(component.model).toEqual({ ...component.model, ...newResource });
+      expect(patchValueSpy).toHaveBeenCalledWith(component.model);
+    });
+
     it('executeSaveNew: should call `saveOperation`, `poNotification.success` and `navigateTo`', fakeAsync(() => {
       const saveNewRedirectPath = 'people';
 
@@ -1051,7 +1415,7 @@ describe('PoPageDynamicEditComponent: ', () => {
         }
       };
 
-      component['activatedRoute'] = activatedRoute;
+      Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
       spyOn(component, <any>'saveOperation').and.returnValue(of(message));
       spyOn(component['poNotification'], 'success');
@@ -1071,7 +1435,7 @@ describe('PoPageDynamicEditComponent: ', () => {
     it('executeSaveNew: should call `saveOperation`, `poNotification.success` and reset dynamicForm ', fakeAsync(() => {
       const saveNewRedirectPath = 'people';
 
-      const message = component.literals.saveNotificationSuccess;
+      const message = component.literals.saveNotificationSuccessSave;
       const activatedRoute: any = {
         snapshot: {
           params: { id: undefined }
@@ -1079,7 +1443,7 @@ describe('PoPageDynamicEditComponent: ', () => {
       };
 
       component.dynamicForm = dynamicFormValid;
-      component['activatedRoute'] = activatedRoute;
+      Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
       spyOn(component, <any>'saveOperation').and.returnValue(of(message));
       spyOn(component['poNotification'], 'success');
@@ -1087,7 +1451,9 @@ describe('PoPageDynamicEditComponent: ', () => {
       spyOn(component, <any>'navigateTo');
 
       component['executeSaveNew'](saveNewRedirectPath).subscribe(() => {
-        expect(component['poNotification'].success).toHaveBeenCalledWith(component.literals.saveNotificationSuccess);
+        expect(component['poNotification'].success).toHaveBeenCalledWith(
+          component.literals.saveNotificationSuccessSave
+        );
         expect(component.model).toEqual({});
         expect(component.dynamicForm.form.reset).toHaveBeenCalled();
 
@@ -1220,7 +1586,7 @@ describe('PoPageDynamicEditComponent: ', () => {
           }
         };
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue('1');
 
@@ -1239,7 +1605,7 @@ describe('PoPageDynamicEditComponent: ', () => {
           }
         };
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         spyOn(component, <any>'formatUniqueKey');
 
@@ -1247,6 +1613,71 @@ describe('PoPageDynamicEditComponent: ', () => {
 
         expect(component['formatUniqueKey']).not.toHaveBeenCalled();
         expect(expectedResult).toBe(undefined);
+      });
+    });
+
+    describe('beforeSetModel:', () => {
+      it('should call `onLoadData` and pass the model data', () => {
+        const responseParam = { name: 'angular' };
+        const customModelValue = { newValue: 'custom' };
+
+        component.model = undefined;
+        component.onLoadData = model => ({ ...model, ...customModelValue });
+
+        spyOn(component, 'onLoadData');
+
+        component['beforeSetModel'](responseParam);
+
+        expect(component['onLoadData']).toHaveBeenCalledWith(responseParam);
+      });
+
+      it('should set custom data to `model` when has param `onLoadData` as function', () => {
+        const responseParam = { name: 'angular' };
+        const customModelValue = { newValue: 'custom' };
+
+        const expectedModel = { ...responseParam, ...customModelValue };
+
+        component.model = undefined;
+        component.onLoadData = model => ({ ...model, ...customModelValue });
+        component['beforeSetModel'](responseParam);
+
+        expect(component.model).toEqual(expectedModel);
+      });
+
+      it('should set custom data to `model` when has param `onLoadData` as Observable', () => {
+        const responseParam = { name: 'angular' };
+        const customModelValue = { newValue: 'custom' };
+
+        const expectedModel = { ...responseParam, ...customModelValue };
+
+        component.model = undefined;
+        component.onLoadData = model => of({ ...model, ...customModelValue });
+        component['beforeSetModel'](responseParam);
+
+        expect(component.model).toEqual(expectedModel);
+      });
+
+      it('should set response to `model` if has no `onLoadData`', () => {
+        const expectedModel = { name: 'angular' };
+
+        component.model = undefined;
+        component.onLoadData = undefined;
+        component['beforeSetModel'](expectedModel);
+
+        expect(component.model).toEqual(expectedModel);
+      });
+
+      it('should set response to `model` if `onLoadData` return error', () => {
+        const expectedModel = { name: 'angular' };
+
+        component.model = undefined;
+        component.onLoadData = model => {
+          const err = new Error('test');
+          return throwError(() => err);
+        };
+        component['beforeSetModel'](expectedModel);
+
+        expect(component.model).toEqual(expectedModel);
       });
     });
   });

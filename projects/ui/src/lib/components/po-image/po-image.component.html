@@ -1,0 +1,16 @@
+@if (source) {
+  <po-container class="po-container-image" [p-height]="height">
+    @if (!isBase64) {
+      <img
+        class="po-image"
+        [attr.alt]="alternate"
+        [priority]="priority"
+        [loading]="loading"
+        [fill]="true"
+        [ngSrc]="source"
+      />
+    } @else {
+      <img class="po-image" [attr.alt]="alternate" [loading]="loading" [src]="source" />
+    }
+  </po-container>
+}

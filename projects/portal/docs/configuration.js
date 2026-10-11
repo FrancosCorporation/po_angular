@@ -33,11 +33,6 @@ module.exports = {
       url: urlProject('po-style'),
       version: portalVersion
     },
-    {
-      name: 'po-tslint',
-      url: urlProject('po-tslint'),
-      version: portalVersion
-    }
   ],
 
   /** Folder that contains api templates */
@@ -57,9 +52,11 @@ module.exports = {
     { name: 'examplePrivate' },
     { name: 'description' },
     { name: 'docsExtends' },
+    { name: 'ignoreExtendedDescription' },
     { name: 'usedBy' },
     { name: 'optional' },
-    { name: 'default' }
+    { name: 'default' },
+    { name: 'override' }
   ],
 
   protractorWebBaseUrl: `browser.baseUrl + '/documentation/{component}?view=web'`

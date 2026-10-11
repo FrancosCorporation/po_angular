@@ -1,10 +1,26 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
-import { AbstractControl, ControlValueAccessor, Validator } from '@angular/forms';
+import {
+  ChangeDetectorRef,
+  Directive,
+  EventEmitter,
+  HostBinding,
+  HostListener,
+  input,
+  Input,
+  OnDestroy,
+  Output,
+  TemplateRef,
+  ViewChild
+} from '@angular/core';
+import { AbstractControl, ControlValueAccessor, Validator, Validators } from '@angular/forms';
 
-import { convertToBoolean } from '../../../utils/util';
-import { requiredFailed, maxlengpoailed, minlengpoailed, patternFailed } from './../validators';
-import { InputBoolean } from '../../../decorators';
+import { Subscription, switchMap } from 'rxjs';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import { convertToBoolean, getDefaultSizeFn, mapInputSizeToLoadingIcon, validateSizeFn } from '../../../utils/util';
+import { ErrorAsyncProperties } from '../shared/interfaces/error-async-properties.interface';
+import { maxlengpoailed, minlengpoailed, patternFailed, requiredFailed } from './../validators';
 import { PoMask } from './po-mask';
+import { PoHelperComponent, PoHelperOptions } from '../../po-helper';
+import { PoFieldContainerComponent } from '../po-field-container';
 
 /**
  * @description
@@ -21,16 +37,77 @@ import { PoMask } from './po-mask';
  * Então você precisa informar o atributo name ou o atributo [ngModelOptions]="{standalone: true}".
  * Exemplo: [(ngModel)]="pessoa.nome" [ngModelOptions]="{standalone: true}".
  *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS): <br>
+ * Obs: Só é possível realizar alterações ao adicionar a classe `.po-input`
+ *
+ * > Para correto alinhamento é recomendado o uso das classes de espaçamento do [Grid System](https://po-ui.io/guides/grid-system).
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                    |
+ * |----------------------------------------|-------------------------------------------------------|-------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                 |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                      |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                      |
+ * | `--text-color-placeholder`             | Cor do texto placeholder                              | `var(--color-neutral-light-30)`                 |
+ * | `--color`                              | Cor pincipal do input                                 | `var(--color-neutral-dark-70)`                  |
+ * | `--background`                         | Cor de background                                     | `var(--color-neutral-light-05)`                 |
+ * | `--padding`                            | Preenchimento                                         |  `0 0.5rem`                                     |
+ * | `--text-color`                         | Cor do texto                                          | `var(--color-neutral-dark-90)`                  |
+ * | `--field-container-title-justify`      | Alinhamento horizontal do título (`justify-content`)  | `space-between`                                 |
+ * | `--field-container-title-flex`         | Flex do título (`flex`)                               | `1 auto`                                        |
+ * | **Hover**                              |                                                       |                                                 |
+ * | `--color-hover`                        | Cor principal no estado hover                         | `var(--color-brand-01-dark)`                    |
+ * | `--background-hover`                   | Cor de background no estado hover                     | `var(--color-brand-01-lightest)`                |
+ * | **Focused**                            |                                                       |                                                 |
+ * | `--color-focused`                      | Cor principal no estado de focus                      | `var(--color-action-default)`                   |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                     |
+ * | **Disabled**                           |                                                       |                                                 |
+ * | `--color-disabled`                     | Cor principal no estado disabled                      | `var(--color-neutral-light-30)`                 |
+ * | `--background-disabled`                | Cor de background no estado disabled                  | `var(--color-neutral-light-20)`                 |
+ * | `--text-color-disabled`                | Cor do texto no estado disabled                       | `var(--color-neutral-dark-70)`                  |
+ *
+ * <br>
  */
 @Directive()
-export abstract class PoInputBaseComponent implements ControlValueAccessor, Validator {
-  private _maxlength?: number;
-  private _minlength?: number;
-  private _noAutocomplete?: boolean = false;
-  private _placeholder?: string = '';
+export abstract class PoInputBaseComponent implements ControlValueAccessor, Validator, OnDestroy {
+  @ViewChild('fieldContainer', { read: PoFieldContainerComponent, static: false })
+  fieldContainer?: PoFieldContainerComponent;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
+  // Propriedade interna que define se o ícone de ajuda adicional terá cursor clicável (evento) ou padrão (tooltip).
+  @Input() additionalHelpEventTrigger: string | undefined;
 
-  protected passedWriteValue: boolean = false;
-  protected validatorChange: any;
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de ajuda adicional, com o texto desta propriedade sendo passado para o popover do componente `po-helper`.
+   * **Como boa prática, indica-se utilizar um texto com até 140 caracteres.**
+   * > Requer um recuo mínimo de 8px se o componente estiver próximo à lateral da tela.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Input('p-additional-help-tooltip') additionalHelpTooltip?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define que o popover (`p-helper` e/ou `p-error-limit`) será incluído no body da página e não
+   * dentro do componente. Essa opção pode ser necessária em cenários com containers que possuem scroll ou overflow
+   * escondido, garantindo o posicionamento correto do tooltip próximo ao elemento.
+   *
+   * > Quando utilizado com `p-helper`, leitores de tela como o NVDA podem não ler o conteúdo do popover.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-append-in-body', transform: convertToBoolean }) appendBox: boolean = false;
 
   /**
    * @optional
@@ -43,7 +120,45 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
    *
    * @default `false`
    */
-  @Input('p-auto-focus') @InputBoolean() autoFocus: boolean = false;
+  @Input({ alias: 'p-auto-focus', transform: convertToBoolean }) autoFocus: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   * Define se o título do campo será exibido de forma compacta.
+   *
+   * Quando habilitado (`true`), o modo compacto afeta o conjunto composto por:
+   * - `po-label`
+   * - `p-requirement (showRequired)`
+   * - `po-helper`
+   *
+   * Ou seja, todos os elementos relacionados ao título do campo
+   * (rótulo, indicador de obrigatoriedade e componente auxiliar) passam
+   * a seguir o comportamento de layout compacto.
+   *
+   * Também é possível definir esse comportamento de forma global,
+   * uma única vez, na folha de estilo geral da aplicação, por meio
+   * da customização dos tokens CSS:
+   *
+   * - `--field-container-title-justify`
+   * - `--field-container-title-flex`
+   *
+   * Exemplo:
+   *
+   * ```
+   * :root {
+   *   --field-container-title-justify: flex-start;
+   *   --field-container-title-flex: 0 1 auto;
+   * }
+   * ```
+   *
+   * Dessa forma, o layout compacto passa a ser o padrão da aplicação,
+   * sem a necessidade de definir a propriedade individualmente em cada campo.
+   *
+   * @default `false`
+   */
+  compactLabel = input<boolean, unknown>(false, { alias: 'p-compact-label', transform: convertToBoolean });
 
   /**
    * @optional
@@ -52,9 +167,36 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
    *
    * Define o ícone que será exibido no início do campo.
    *
-   * > Veja a disponibilidade de ícones em [biblioteca de ícones](guides/icons).
+   * É possível usar qualquer um dos ícones da [Biblioteca de ícones](https://po-ui.io/icons). conforme exemplo abaixo:
+   * ```
+   * <po-input p-icon="an an-user" p-label="PO input"></po-input>
+   * ```
+   * Também é possível utilizar outras fontes de ícones, por exemplo a biblioteca *Font Awesome*, da seguinte forma:
+   * ```
+   * <po-input p-icon="fa fa-podcast" p-label="PO input"></po-input>
+   * ```
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * ```
+   * <po-input [p-icon]="template" p-label="input template ionic"></po-input>
+   *
+   * <ng-template #template>
+   *  <ion-icon style="font-size: inherit" name="heart"></ion-icon>
+   * </ng-template>
+   * ```
+   * > Para o ícone enquadrar corretamente, deve-se utilizar `font-size: inherit` caso o ícone utilizado não aplique-o.
    */
-  @Input('p-icon') icon?: string;
+  @Input('p-icon') icon?: string | TemplateRef<void>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Sempre emite as alterações do model mesmo quando o valor atual for igual ao valor anterior.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-emit-all-changes', transform: convertToBoolean }) emitAllChanges: boolean = false;
 
   /** Rótulo do campo. */
   @Input('p-label') label?: string;
@@ -70,14 +212,209 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
    *
    * @description
    *
+   * Realiza alguma validação customizada assíncrona no componente.
+   * Aconselhamos a utilização dessa propriedade somente em componentes que não estejam
+   * utilizando `Reactive Forms`. Em formulários reativos, pode-se utilizar o próprio `asyncValidators`.
+   */
+  @Input('p-error-async-properties') errorAsyncProperties: ErrorAsyncProperties;
+
+  /**
+   * @description
+   *
+   * Mensagem que será apresentada quando o `pattern` ou a máscara não for satisfeita.
+   *
+   * > Por padrão, esta mensagem não é apresentada quando o campo estiver vazio, mesmo que ele seja requerido.
+   * Para exibir a mensagem com o campo vazio, utilize a propriedade `p-required-field-error-message` em conjunto.
+   */
+  @Input('p-error-pattern') errorPattern?: string = '';
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Limita a exibição da mensagem de erro a duas linhas e exibe um tooltip com o texto completo.
+   *
+   * > Caso essa propriedade seja definida como `true`, a mensagem de erro será limitada a duas linhas
+   * e um tooltip será exibido ao passar o mouse sobre a mensagem para mostrar o conteúdo completo.
+   *
+   * @default `false`
+   */
+  @Input('p-error-limit') errorLimit: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define se a indicação de campo opcional será exibida.
+   *
+   * > Não será exibida a indicação se:
+   * - O campo conter `p-required`;
+   * - Não possuir `p-help` e/ou `p-label`.
+   *
+   * @default `false`
+   */
+  @Input('p-optional') optional: boolean;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Exibe a mensagem setada na propriedade `p-error-pattern` se o campo estiver vazio e for requerido.
+   *
+   * > Necessário que a propriedade `p-required` esteja habilitada.
+   *
+   * @default `false`
+   */
+  @Input('p-required-field-error-message') showErrorMessageRequired: boolean = false;
+
+  /**
+   * @description
+   *
+   * Converte o conteúdo do campo em maiúsulo automaticamente.
+   *
+   */
+  @Input({ alias: 'p-upper-case', transform: convertToBoolean }) upperCase: boolean = false;
+
+  _maskNoLengthValidation = false;
+  /**
+   * @description
+   *
+   * Controla como o componente aplica as validações de comprimento mínimo (`minLength`) e máximo (`maxLength`) quando há uma máscara (`p-mask`) definida.
+   *
+   * - Quando `true`, apenas os caracteres alfanuméricos serão contabilizados para a validação dos comprimentos.
+   * - Quando `false`, todos os caracteres, incluindo os especiais da máscara, serão considerados na validação.
+   *
+   * > Esta propriedade é ignorada quando utilizada em conjunto com `p-mask-format-model`.
+   *
+   * Exemplo:
+   * ```
+   * <po-input
+   *   p-mask="999-999"
+   *   p-maxlength="6"
+   *   p-minlength="4"
+   *   p-mask-no-length-validation="true"
+   * ></po-input>
+   * ```
+   * - Entrada: `123-456` → Validação será aplicada somente aos números, ignorando o caractere especial `-`.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-mask-no-length-validation', transform: convertToBoolean }) set maskNoLengthValidation(
+    value: boolean
+  ) {
+    this._maskNoLengthValidation = value;
+
+    this.validateModel();
+  }
+
+  get maskNoLengthValidation() {
+    return this._maskNoLengthValidation;
+  }
+
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Evento disparado ao clicar no ícone de ajuda adicional.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Output('p-additional-help') additionalHelp = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao sair do campo.
+   */
+  @Output('p-blur') blur: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao entrar do campo.
+   */
+  @Output('p-enter') enter: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao alterar valor e deixar o campo.
+   */
+  @Output('p-change') change: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado sempre que o valor do model é alterado, seja por interação do usuário
+   * ou por atualização programática (ex: `setValue`, `patchValue`, carregamento assíncrono).
+   *
+   * Diferentemente do `p-change`, que é disparado apenas por interação do usuário,
+   * o `p-change-model` cobre todos os cenários de alteração de valor.
+   *
+   * Não emite quando o novo valor é idêntico ao anterior (deduplicação automática).
+   */
+  @Output('p-change-model') changeModel: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado quando uma tecla é pressionada enquanto o foco está no componente.
+   * Retorna um objeto `KeyboardEvent` com informações sobre a tecla.
+   */
+  @Output('p-keydown') keydown: EventEmitter<KeyboardEvent> = new EventEmitter<KeyboardEvent>();
+
+  displayAdditionalHelp: boolean = false;
+  type: string;
+  onChangePropagate: any = null;
+  objMask: any;
+  modelLastUpdate: any;
+  isInvalid: boolean;
+  hasValidatorRequired = false;
+
+  private subscription: Subscription = new Subscription();
+  protected onTouched: any = null;
+
+  protected passedWriteValue: boolean = false;
+  protected validatorChange: any;
+
+  private _loading = false;
+  private _maxlength?: number;
+  private _minlength?: number;
+  private _noAutocomplete?: boolean = false;
+  private _placeholder?: string = '';
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
    * Define a propriedade nativa `autocomplete` do campo como `off`.
    *
    * > No componente `po-password` será definido como `new-password`.
    *
+   * Nos componentes `po-password` e `po-login` o valor padrão será `true`.
+   *
    * @default `false`
    */
-  @Input('p-no-autocomplete') set noAutocomplete(value: boolean) {
-    this._noAutocomplete = convertToBoolean(value);
+  @Input({ alias: 'p-no-autocomplete', transform: convertToBoolean }) set noAutocomplete(value: boolean) {
+    this._noAutocomplete = value;
   }
 
   get noAutocomplete() {
@@ -107,39 +444,100 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
    *
    * @default `false`
    */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   disabled?: boolean = false;
-  @Input('p-disabled') set setDisabled(disabled: string) {
-    this.disabled = disabled === '' ? true : convertToBoolean(disabled);
+  @Input({ alias: 'p-disabled', transform: convertToBoolean }) set setDisabled(disabled: boolean) {
+    this.disabled = disabled;
 
     this.validateModel();
   }
 
+  /**
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de carregamento no lado direito do campo para sinalizar que uma operação está em andamento.
+   *
+   * @default `false`
+   */
+  @HostBinding('attr.p-loading')
+  @Input({ alias: 'p-loading', transform: convertToBoolean })
+  set loading(value: boolean) {
+    this._loading = value;
+    this.cd?.markForCheck();
+  }
+
+  get loading(): boolean {
+    return this._loading;
+  }
+
+  get isDisabled(): boolean {
+    return this.disabled || this.loading;
+  }
+
   /** Indica que o campo será somente leitura. */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   readonly?: boolean = false;
-  @Input('p-readonly') set setReadonly(readonly: string) {
-    this.readonly = readonly === '' ? true : convertToBoolean(readonly);
+  @Input({ alias: 'p-readonly', transform: convertToBoolean }) set setReadonly(readonly: boolean) {
+    this.readonly = readonly;
   }
 
   /**
+   * @optional
+   *
    * @description
    *
-   * Indica que o campo será obrigatório.
-   *
+   * Define que o campo será obrigatório.
    * > Esta propriedade é desconsiderada quando o input está desabilitado `(p-disabled)`.
    *
    * @default `false`
    */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   required?: boolean = false;
-  @Input('p-required') set setRequired(required: string) {
-    this.required = required === '' ? true : convertToBoolean(required);
+  @Input({ alias: 'p-required', transform: convertToBoolean }) set setRequired(required: boolean) {
+    this.required = required;
 
     this.validateModel();
   }
 
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho do componente:
+   * - `small`: altura do input como 32px (disponível apenas para acessibilidade AA).
+   * - `medium`: altura do input como 44px.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  /**
+   * Define se a indicação de campo obrigatório será exibida.
+   *
+   * > Não será exibida a indicação se:
+   * - Não possuir `p-help` e/ou `p-label`.
+   */
+  @Input('p-show-required') showRequired: boolean = false;
+
   /** Se verdadeiro, o campo receberá um botão para ser limpo. */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   clean?: boolean = false;
-  @Input('p-clean') set setClean(clean: string) {
-    this.clean = clean === '' ? true : convertToBoolean(clean);
+  @Input({ alias: 'p-clean', transform: convertToBoolean }) set setClean(clean: boolean) {
+    this.clean = clean;
   }
 
   /**
@@ -149,21 +547,13 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
    * Quando o campo possuir uma máscara `(p-mask)` será automaticamente validado por ela, porém
    * é possível definir um p-pattern para substituir a validação da máscara.
    */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   pattern?: string;
   @Input('p-pattern') set setPattern(pattern: string) {
     this.pattern = pattern;
 
     this.validateModel();
   }
-
-  /**
-   * @description
-   *
-   * Mensagem que será apresentada quando o `pattern` ou a máscara não for satisfeita.
-   *
-   * > Esta mensagem não é apresentada quando o campo estiver vazio, mesmo que ele seja requerido.
-   */
-  @Input('p-error-pattern') errorPattern?: string = '';
 
   /**
    * @optional
@@ -220,14 +610,13 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
    * O campo será sinalizado e o formulário ficará inválido quando o valor informado estiver fora do padrão definido,
    * mesmo quando desabilitado.
    */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   mask?: string = '';
   @Input('p-mask') set setMask(mask: string) {
     this.mask = mask;
 
     // Atualiza Máscara do Campo
     this.objMask = new PoMask(this.mask, this.maskFormatModel);
-
-    this.validateModel();
   }
 
   /**
@@ -237,9 +626,12 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
    *
    * @default `false`
    */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   maskFormatModel?: boolean = false;
-  @Input('p-mask-format-model') set setMaskFormatModel(maskFormatModel: string) {
-    this.maskFormatModel = maskFormatModel === '' ? true : convertToBoolean(maskFormatModel);
+  @Input({ alias: 'p-mask-format-model', transform: convertToBoolean }) set setMaskFormatModel(
+    maskFormatModel: boolean
+  ) {
+    this.maskFormatModel = maskFormatModel;
 
     if (this.objMask instanceof PoMask) {
       this.objMask.formatModel = this.maskFormatModel;
@@ -253,58 +645,38 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
    *
    * @description
    *
-   * Define se a indicação de campo opcional será exibida.
+   * Define as opções do componente de ajuda (po-helper) que será exibido ao lado do label quando a propriedade `p-label` for definida, ou, ao lado do componente na ausência da propriedade `p-label`.
+   * > Para mais informações acesse: https://po-ui.io/documentation/po-helper.
    *
-   * > Não será exibida a indicação se:
-   * - O campo conter `p-required`;
-   * - Não possuir `p-help` e/ou `p-label`.
+   * > Ao configurar esta propriedade, o antigo ícone de ajuda adicional (`p-additional-help-tooltip` e `p-additional-help`) será ignorado.
+   */
+  poHelperComponent = input<PoHelperOptions | string>(undefined, { alias: 'p-helper' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita a quebra automática do texto da propriedade `p-label`. Quando `p-label-text-wrap` for verdadeiro, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
    *
    * @default `false`
    */
-  @Input('p-optional') optional: boolean;
+  labelTextWrap = input<boolean>(false, { alias: 'p-label-text-wrap' });
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado ao sair do campo.
-   */
-  @Output('p-blur') blur: EventEmitter<any> = new EventEmitter();
+  constructor(protected cd?: ChangeDetectorRef) {
+    this.objMask = new PoMask(this.mask, this.maskFormatModel);
+  }
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado ao entrar do campo.
-   */
-  @Output('p-enter') enter: EventEmitter<any> = new EventEmitter();
+  ngOnDestroy(): void {
+    this.subscription.unsubscribe();
+  }
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado ao alterar valor e deixar o campo.
-   */
-  @Output('p-change') change: EventEmitter<any> = new EventEmitter();
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado ao alterar valor do model.
-   */
-  @Output('p-change-model') changeModel: EventEmitter<any> = new EventEmitter();
-
-  type: string;
-
-  onChangePropagate: any = null;
-  onTouched: any = null;
-  objMask: any;
-  modelLastUpdate: any;
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
 
   callOnChange(value: any) {
     this.updateModel(value);
@@ -317,10 +689,207 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
   }
 
   controlChangeModelEmitter(value: any) {
-    if (this.modelLastUpdate !== value) {
+    if (this.modelLastUpdate !== value || this.emitAllChanges) {
       this.changeModel.emit(value);
       this.modelLastUpdate = value;
     }
+  }
+
+  emitAdditionalHelp() {
+    if (this.label && this.isAdditionalHelpEventTriggered()) {
+      this.additionalHelp.emit();
+    }
+  }
+
+  getAdditionalHelpTooltip() {
+    return this.isAdditionalHelpEventTriggered() ? null : this.additionalHelpTooltip;
+  }
+
+  // Função implementada do ControlValueAccessor
+  // Usada para interceptar os estados de habilitado via forms api
+  setDisabledState(isDisabled: boolean) {
+    this.disabled = isDisabled;
+    this.cd?.markForCheck();
+  }
+
+  // Função implementada do ControlValueAccessor
+  // Usada para interceptar as mudanças e não atualizar automaticamente o Model
+  registerOnChange(func: any): void {
+    this.onChangePropagate = func;
+  }
+
+  // Função implementada do ControlValueAccessor
+  // Usada para interceptar as mudanças e não atualizar automaticamente o Model
+  registerOnTouched(func: any): void {
+    this.onTouched = func;
+  }
+
+  registerOnValidatorChange(fn: () => void) {
+    this.validatorChange = fn;
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * // Exemplo com p-label e p-helper
+   * <po-nome-component
+   *  #component
+   *  ...
+   *  p-label="Label do componente"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, component)"
+   * ></po-nome-component>
+   * ```
+   *
+   * ```
+   * ...
+   * onKeyDown(event: KeyboardEvent, inp: PoNomeDoComponente): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  showAdditionalHelp(): boolean {
+    this.displayAdditionalHelp = !this.displayAdditionalHelp;
+    const helper = this.poHelperComponent();
+    const isHelpEvt = this.isAdditionalHelpEventTriggered();
+    if (!this.label && (helper || this.additionalHelpTooltip || isHelpEvt)) {
+      if (isHelpEvt) {
+        this.additionalHelp.emit();
+      }
+      if (typeof helper !== 'string' && typeof helper?.eventOnClick === 'function') {
+        helper.eventOnClick();
+        return;
+      }
+      if (this.helperEl?.helperIsVisible()) {
+        this.helperEl?.closeHelperPopover();
+        return;
+      }
+      this.helperEl?.openHelperPopover();
+      return;
+    }
+    return this.displayAdditionalHelp;
+  }
+
+  updateModel(value: any) {
+    // Quando o input não possui um formulário, então esta função não é registrada
+    if (this.onChangePropagate) {
+      this.onChangePropagate(value);
+    }
+  }
+
+  validate(c: AbstractControl): { [key: string]: any } {
+    this.subscription?.unsubscribe();
+    if (!this.hasValidatorRequired && this.showErrorMessageRequired && c.hasValidator(Validators.required)) {
+      this.hasValidatorRequired = true;
+    }
+
+    if (requiredFailed(this.required, this.disabled, this.getScreenValue())) {
+      this.isInvalid = true;
+      this.cd?.markForCheck();
+      return {
+        required: {
+          valid: false
+        }
+      };
+    }
+
+    if (
+      maxlengpoailed(this.maxlength, this.getScreenValue(), this.maskFormatModel ? false : this.maskNoLengthValidation)
+    ) {
+      this.isInvalid = true;
+      this.cd?.markForCheck();
+      return {
+        maxlength: {
+          valid: false
+        }
+      };
+    }
+
+    if (
+      minlengpoailed(this.minlength, this.getScreenValue(), this.maskFormatModel ? false : this.maskNoLengthValidation)
+    ) {
+      this.isInvalid = true;
+      this.cd?.markForCheck();
+      return {
+        minlength: {
+          valid: false
+        }
+      };
+    }
+
+    if (patternFailed(this.pattern, c.value)) {
+      this.isInvalid = true;
+      this.cd?.markForCheck();
+      this.validatePatternOnWriteValue(c.value);
+      return {
+        pattern: {
+          valid: false
+        }
+      };
+    }
+
+    if (this.errorPattern !== '') {
+      this.subscription = c.statusChanges
+        .pipe(
+          switchMap(status => {
+            if (status === 'INVALID') {
+              this.isInvalid = true;
+              this.cd?.markForCheck();
+            }
+            return [];
+          })
+        )
+        .subscribe();
+    }
+
+    this.isInvalid = false;
+    return this.extraValidation(c);
+  }
+
+  // Função implementada do ControlValueAccessor
+  writeValue(value: any) {
+    this.writeValueModel(value);
+    this.cd?.markForCheck();
+  }
+
+  protected validateModel() {
+    if (this.validatorChange) {
+      this.validatorChange();
+    }
+  }
+
+  protected isAdditionalHelpEventTriggered(): boolean {
+    return (
+      this.additionalHelpEventTrigger === 'event' ||
+      (this.additionalHelpEventTrigger === undefined && this.additionalHelp.observed)
+    );
+  }
+
+  //Transforma o tamanho do input para o tamanho do ícone de loading correspondente
+  mapSizeToIcon(size: string): string {
+    return mapInputSizeToLoadingIcon(size);
+  }
+
+  // utilizado para validar o pattern na inicializacao, fazendo dessa forma o campo fica sujo (dirty).
+  private validatePatternOnWriteValue(value: string) {
+    if (value && this.passedWriteValue) {
+      setTimeout(() => {
+        this.updateModel(value);
+      });
+
+      this.passedWriteValue = false;
+    }
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
   }
 
   /**
@@ -342,83 +911,6 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
    */
   abstract focus(): void;
 
-  // Função implementada do ControlValueAccessor
-  // Usada para interceptar os estados de habilitado via forms api
-  setDisabledState(isDisabled: boolean) {
-    this.disabled = isDisabled;
-  }
-
-  // Função implementada do ControlValueAccessor
-  // Usada para interceptar as mudanças e não atualizar automaticamente o Model
-  registerOnChange(func: any): void {
-    this.onChangePropagate = func;
-  }
-
-  // Função implementada do ControlValueAccessor
-  // Usada para interceptar as mudanças e não atualizar automaticamente o Model
-  registerOnTouched(func: any): void {
-    this.onTouched = func;
-  }
-
-  registerOnValidatorChange(fn: () => void) {
-    this.validatorChange = fn;
-  }
-
-  updateModel(value: any) {
-    // Quando o input não possui um formulário, então esta função não é registrada
-    if (this.onChangePropagate) {
-      this.onChangePropagate(value);
-    }
-  }
-
-  validate(c: AbstractControl): { [key: string]: any } {
-    if (requiredFailed(this.required, this.disabled, this.getScreenValue())) {
-      return {
-        required: {
-          valid: false
-        }
-      };
-    }
-
-    if (maxlengpoailed(this.maxlength, this.getScreenValue())) {
-      return {
-        maxlength: {
-          valid: false
-        }
-      };
-    }
-
-    if (minlengpoailed(this.minlength, this.getScreenValue())) {
-      return {
-        minlength: {
-          valid: false
-        }
-      };
-    }
-
-    if (patternFailed(this.pattern, c.value)) {
-      this.validatePatternOnWriteValue(c.value);
-      return {
-        pattern: {
-          valid: false
-        }
-      };
-    }
-
-    return this.extraValidation(c);
-  }
-
-  // Função implementada do ControlValueAccessor
-  writeValue(value: any) {
-    this.writeValueModel(value);
-  }
-
-  protected validateModel() {
-    if (this.validatorChange) {
-      this.validatorChange();
-    }
-  }
-
   // Método que receberá o valor do model
   abstract writeValueModel(value: any): void;
 
@@ -427,15 +919,4 @@ export abstract class PoInputBaseComponent implements ControlValueAccessor, Vali
 
   // Deve retornar o valor do campo
   abstract getScreenValue(): string;
-
-  // utilizado para validar o pattern na inicializacao, fazendo dessa forma o campo fica sujo (dirty).
-  private validatePatternOnWriteValue(value: string) {
-    if (value && this.passedWriteValue) {
-      setTimeout(() => {
-        this.updateModel(value);
-      });
-
-      this.passedWriteValue = false;
-    }
-  }
 }

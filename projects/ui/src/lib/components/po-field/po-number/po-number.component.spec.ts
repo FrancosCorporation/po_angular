@@ -1,5 +1,5 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { FormControl } from '@angular/forms';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { UntypedFormControl } from '@angular/forms';
 
 import { expectSettersMethod, configureTestSuite } from '../../../util-test/util-expect.spec';
 
@@ -26,8 +26,6 @@ describe('PoNumberComponent:', () => {
     component.help = 'Help de teste';
     component.clean = true;
 
-    fixture.detectChanges();
-
     nativeElement = fixture.debugElement.nativeElement;
   });
 
@@ -36,14 +34,12 @@ describe('PoNumberComponent:', () => {
   });
 
   it('should create button clean', () => {
+    fixture.detectChanges();
     expect(nativeElement.querySelector('po-clean')).not.toBeNull();
   });
 
-  it('should have a Label', () => {
-    expect(fixture.debugElement.nativeElement.innerHTML).toContain('Label de teste');
-  });
-
   it('should have a Help', () => {
+    fixture.detectChanges();
     expect(fixture.debugElement.nativeElement.innerHTML).toContain('Help de teste');
   });
 
@@ -58,13 +54,13 @@ describe('PoNumberComponent:', () => {
   it('should call minFailed', () => {
     component.min = 4;
 
-    expect(component.validate(new FormControl('2'))).not.toBeNull();
+    expect(component.validate(new UntypedFormControl('2'))).not.toBeNull();
   });
 
   it('should call maxFailed', () => {
     component.max = 5;
 
-    expect(component.validate(new FormControl('10'))).not.toBeNull();
+    expect(component.validate(new UntypedFormControl('10'))).not.toBeNull();
   });
 
   describe('Methods: ', () => {
@@ -73,7 +69,7 @@ describe('PoNumberComponent:', () => {
       component.errorPattern = 'errorPattern';
 
       const expectedReturn = { number: { valid: false } };
-      const result = component.validate(new FormControl('2e'));
+      const result = component.validate(new UntypedFormControl('2e'));
 
       expect(result).toEqual(expectedReturn);
       expect(component.errorPattern).toBe('errorPattern');
@@ -84,7 +80,7 @@ describe('PoNumberComponent:', () => {
       component.errorPattern = 'Valor Inválido';
 
       const expectedReturn = { number: { valid: false } };
-      const result = component.validate(new FormControl('2e'));
+      const result = component.validate(new UntypedFormControl('2e'));
 
       expect(result).toEqual(expectedReturn);
       expect(component.errorPattern).toBe('Valor Inválido');
@@ -95,19 +91,38 @@ describe('PoNumberComponent:', () => {
       component.max = 0;
       component['invalidInputValueOnBlur'] = false;
 
-      expect(component.extraValidation(new FormControl(null))).toBeNull();
+      expect(component.extraValidation(new UntypedFormControl(null))).toBeNull();
     });
 
     it('should return null stating that there is no validation error in the value between max and min in format decimal', () => {
       component.min = 0.6;
       component.max = 0.9;
-      expect(component.validate(new FormControl(0.7))).toBeNull();
+      expect(component.validate(new UntypedFormControl(0.7))).toBeNull();
     });
 
     it('should not return null stating that there is a validation error in the value between max and min in decimal format', () => {
       component.min = 1.6;
       component.max = 3.9;
-      expect(component.validate(new FormControl(5))).not.toBeNull();
+      expect(component.validate(new UntypedFormControl(5))).not.toBeNull();
+    });
+
+    it('containsInvalidClass: should return true in containsInvalidClass if showErrorMessageRequired and required is true', () => {
+      component.el.nativeElement.classList.add('ng-invalid');
+      component.el.nativeElement.classList.add('ng-dirty');
+      component.inputEl.nativeElement.value = '';
+      component.showErrorMessageRequired = true;
+      component.required = true;
+      expect(component['containsInvalidClass']()).toBeTruthy();
+    });
+
+    it('containsInvalidClass: should return true in containsInvalidClass if showErrorMessageRequired and hasValidatorRequired is true', () => {
+      component.el.nativeElement.classList.add('ng-invalid');
+      component.el.nativeElement.classList.add('ng-dirty');
+      component.inputEl.nativeElement.value = '';
+      component.showErrorMessageRequired = true;
+      component.hasValidatorRequired = true;
+      component.required = false;
+      expect(component['containsInvalidClass']()).toBeTruthy();
     });
 
     describe('getErrorPatternMessage: ', () => {
@@ -131,6 +146,7 @@ describe('PoNumberComponent:', () => {
       });
 
       it('should return empty string if errorPattern is empty', () => {
+        fixture.detectChanges();
         component.errorPattern = '';
 
         const expectedResult = component.getErrorPatternMessage();
@@ -169,36 +185,6 @@ describe('PoNumberComponent:', () => {
       expect(nativeElement.querySelector('.po-input[tabindex="0"]')).toBeTruthy();
     });
 
-    it(`should show optional if the field isn't 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = false;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeTruthy();
-    });
-
-    it(`shouldn't show optional if the field is 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = true;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-    });
-
-    it(`shouldn't show optional if the field isn't 'required', has 'label' but 'p-optional' is false.`, () => {
-      component.required = true;
-      component.optional = false;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-    });
-
     it('should show po-clean if `clean` is true and `disabled` and `readonly` are false', () => {
       component.clean = true;
       component.disabled = false;
@@ -231,6 +217,12 @@ describe('PoNumberComponent:', () => {
 
       fixture.detectChanges();
       expect(fixture.debugElement.nativeElement.querySelector('po-clean')).toBe(null);
+    });
+
+    it('should avoid pattern on scroll event', () => {
+      const event = new WheelEvent('wheel', { cancelable: true });
+      component.onWheel(event);
+      expect(event.defaultPrevented).toBeTruthy();
     });
   });
 });

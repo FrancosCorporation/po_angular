@@ -2,7 +2,9 @@ import { Injectable } from '@angular/core';
 
 import { PoMenuItem } from '@po-ui/ng-components';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class MenuGuidesService {
   constructor() {}
 
@@ -10,24 +12,25 @@ export class MenuGuidesService {
     return new Array<PoMenuItem>(
       { label: 'Guia de implementação de APIs', link: 'guides/api' },
       { label: 'Compatibilidade com os navegadores', link: 'guides/browser-support' },
+      { label: 'Depreciações', link: 'guides/deprecations' },
       { label: 'Contribuindo para o PO UI', link: 'guides/development-flow' },
       { label: 'Primeiros passos', link: 'guides/getting-started' },
-      { label: 'Guia de codificação', link: 'guides/guide-code' },
+      { label: 'Guia de uso para Gráficos', link: 'guides/guide-charts' },
       { label: 'Migração do PO UI para V2', link: 'guides/migration-poui-v2' },
-      { label: 'Migração do PO UI para V3', link: 'guides/migration-poui-v3' },
-      { label: 'Migração do PO UI para V4', link: 'guides/migration-poui-v4' },
+      { label: 'Migração do PO UI', link: 'guides/migration-poui' },
       { label: 'Migração do THF para o PO UI v1.x', link: 'guides/migration-thf-to-po-ui' },
       { label: 'Press Kit', link: 'guides/press-kit' },
+      { label: 'Lançamentos e suporte', link: 'guides/release-schedule' },
+      { label: 'Releases', link: 'guides/releases' },
       { label: 'Schematics', link: 'guides/schematics' },
       { label: 'Fundamentos do PO Sync', link: 'guides/sync-fundamentals' },
       { label: 'Começando com o PO Sync', link: 'guides/sync-get-started' },
-      { label: 'Customizando cores do tema padrão', link: 'guides/colors-customization' },
+      { label: 'Customização de Temas usando o serviço PO-UI', link: 'guides/theme-service' },
       { label: 'Criando um tema para o PO UI', link: 'guides/create-theme-customization' },
       { label: 'Grid System', link: 'guides/grid-system' },
-      { label: 'Biblioteca de ícones', link: 'guides/icons' },
       { label: 'Espaçamento', link: 'guides/spacing' },
-      { label: 'Tipografia', link: 'guides/typography' },
-      { label: 'Começando com PO TSLint', link: 'guides/getting-started-po-tslint' }
+      { label: 'Personalizando o Tema Padrão com Tokens CSS', link: 'guides/theme-customization' },
+      { label: 'Tipografia', link: 'guides/typography' }
     );
   }
 }

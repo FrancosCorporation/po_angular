@@ -1,5 +1,17 @@
-import { AfterViewInit, Component, ElementRef, forwardRef, OnDestroy } from '@angular/core';
-import { AbstractControl, NG_VALUE_ACCESSOR, NG_VALIDATORS } from '@angular/forms';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  forwardRef,
+  OnDestroy,
+  inject,
+  OnChanges,
+  SimpleChanges
+} from '@angular/core';
+import { AbstractControl, NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { uuid } from '../../../utils/util';
 
 import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 
@@ -8,7 +20,7 @@ import { PoInputGeneric } from '../po-input-generic/po-input-generic';
  *
  * @description
  *
- * po-url é um input específico para receber URL, com o pattern já configurado.
+ * O `po-url` é um input específico para receber URL, com o pattern já configurado.
  *
  * @example
  *
@@ -31,6 +43,7 @@ import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 @Component({
   selector: 'po-url',
   templateUrl: '../po-input/po-input.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -42,10 +55,12 @@ import { PoInputGeneric } from '../po-input-generic/po-input-generic';
       useExisting: forwardRef(() => PoUrlComponent),
       multi: true
     }
-  ]
+  ],
+  standalone: false
 })
-export class PoUrlComponent extends PoInputGeneric implements AfterViewInit, OnDestroy {
-  icon = 'po-icon-world';
+export class PoUrlComponent extends PoInputGeneric implements AfterViewInit, OnDestroy, OnChanges {
+  id = `po-url[${uuid()}]`;
+  icon = 'ICON_WORLD';
 
   type = 'url';
 
@@ -59,11 +74,14 @@ export class PoUrlComponent extends PoInputGeneric implements AfterViewInit, OnD
 
   mask = '';
 
-  private listener = this.validateClassesForPattern.bind(this);
+  private readonly listener = this.validateClassesForPattern.bind(this);
 
   /* istanbul ignore next */
-  constructor(el: ElementRef) {
-    super(el);
+  constructor() {
+    const el = inject(ElementRef);
+    const cd = inject(ChangeDetectorRef);
+
+    super(el, cd);
     this.maxlength = 254;
   }
 
@@ -80,6 +98,12 @@ export class PoUrlComponent extends PoInputGeneric implements AfterViewInit, OnD
   ngOnDestroy() {
     if (!this.onChangePropagate) {
       this.inputEl.nativeElement.removeEventListener('keyup', this.listener);
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
     }
   }
 

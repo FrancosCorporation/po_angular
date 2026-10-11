@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 
-import { isExternalLink } from '../../utils/util';
+import { PoUtils } from '../../utils/util';
 
 import { PoInfoBaseComponent } from './po-info-base.component';
 
@@ -27,10 +27,11 @@ import { PoInfoBaseComponent } from './po-info-base.component';
 @Component({
   selector: 'po-info',
   templateUrl: './po-info.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
 export class PoInfoComponent extends PoInfoBaseComponent {
   get isExternalLink() {
-    return isExternalLink(this.url);
+    return PoUtils.isExternalLink(this.url);
   }
 }

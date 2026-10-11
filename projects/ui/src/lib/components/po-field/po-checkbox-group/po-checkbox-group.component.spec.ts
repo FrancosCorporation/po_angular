@@ -1,11 +1,11 @@
-import { ChangeDetectorRef } from '@angular/core';
+import { ChangeDetectorRef, EventEmitter, NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
-
+import { PoCheckboxComponent } from '../po-checkbox/po-checkbox.component';
 import { PoCheckboxGroupComponent } from './po-checkbox-group.component';
 import { PoFieldContainerBottomComponent } from './../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
 import { PoFieldContainerComponent } from '../po-field-container/po-field-container.component';
+import { NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 describe('PoCheckboxGroupComponent:', () => {
   let changeDetector: any;
@@ -21,13 +21,12 @@ describe('PoCheckboxGroupComponent:', () => {
     }
   };
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      declarations: [PoCheckboxGroupComponent, PoFieldContainerComponent, PoFieldContainerBottomComponent]
-    });
-  });
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [PoCheckboxGroupComponent, PoFieldContainerComponent, PoFieldContainerBottomComponent],
+      schemas: [NO_ERRORS_SCHEMA]
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoCheckboxGroupComponent);
 
     component = fixture.componentInstance;
@@ -40,6 +39,9 @@ describe('PoCheckboxGroupComponent:', () => {
     ];
 
     changeDetector = fixture.componentRef.injector.get(ChangeDetectorRef);
+    fixture.debugElement.injector.get(NG_VALUE_ACCESSOR);
+    fixture.debugElement.injector.get(NG_VALIDATORS);
+
     changeDetector.detectChanges();
 
     nativeElement = fixture.debugElement.nativeElement;
@@ -49,26 +51,8 @@ describe('PoCheckboxGroupComponent:', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should have label', () => {
-    expect(nativeElement.querySelector('.po-field-title').innerHTML).toContain('Label');
-  });
-
-  it('should have help', () => {
-    expect(nativeElement.querySelector('.po-field-help').innerHTML).toContain('Help');
-  });
-
-  it('should be required', () => {
-    component.required = true;
-    changeDetector.detectChanges();
-    expect(nativeElement.querySelector('.po-field-optional')).toBeFalsy();
-  });
-
   it('should create 2 checkbox options', () => {
-    expect(nativeElement.querySelectorAll('.po-checkbox-group-input').length).toBe(2);
-  });
-
-  it('should disable checkbox option value 2', () => {
-    expect(nativeElement.querySelector('input[type="checkbox"]:disabled+label').innerHTML).toContain('2');
+    expect(nativeElement.querySelectorAll('po-checkbox').length).toBe(2);
   });
 
   it('should call setValidators on ngAfterViewChecked', () => {
@@ -77,32 +61,17 @@ describe('PoCheckboxGroupComponent:', () => {
     expect(fakeInstance.changeDetector.detectChanges).toHaveBeenCalled();
   });
 
-  it('should toggle checkbox option value 1', () => {
-    component.checkOption(component.options[0]);
-    changeDetector.detectChanges();
-
-    expect(nativeElement.querySelector('.po-checkbox-group-input-checked+label').innerHTML).toContain('1');
-    expect(component.checkedOptions).toEqual({ 1: true });
-    expect(component.checkedOptionsList).toEqual(['1']);
-
-    component.checkOption(component.options[0]);
-    changeDetector.detectChanges();
-
-    expect(nativeElement.querySelector('.po-checkbox-group-input-checked')).toBeFalsy();
-    expect(component.checkedOptions).toEqual({ 1: false });
-    expect(component.checkedOptionsList).not.toContain('1');
-  });
-
-  it('should create indeterminate checkbox option value 1', () => {
-    component.checkedOptions = { 1: null };
-    component.indeterminate = true;
-
-    changeDetector.detectChanges();
-
-    expect(nativeElement.querySelector('.po-checkbox-group-input-indeterminate+label').innerHTML).toContain('1');
-  });
-
   describe('Methods:', () => {
+    it(`ngOnChanges: should set displayAdditionalHelp false when label changes`, () => {
+      const changes: any = {
+        label: 'new label'
+      };
+
+      component.ngOnChanges(changes);
+
+      expect(component.displayAdditionalHelp).toBeFalse();
+    });
+
     it('ngAfterViewInit: should call `focus` if `autoFocus` is true.', () => {
       component.autoFocus = true;
 
@@ -123,20 +92,101 @@ describe('PoCheckboxGroupComponent:', () => {
       expect(spyFocus).not.toHaveBeenCalled();
     });
 
+    describe('onBlur:', () => {
+      let setupTest;
+      let checkboxMock;
+
+      beforeEach(() => {
+        setupTest = (tooltip: string, displayHelp: boolean, additionalHelpEvent: any) => {
+          component.additionalHelpTooltip = tooltip;
+          component.displayAdditionalHelp = displayHelp;
+          component.additionalHelp = additionalHelpEvent;
+          spyOn(component, 'showAdditionalHelp');
+        };
+
+        checkboxMock = {
+          checkboxLabel: { nativeElement: document.createElement('input') }
+        } as PoCheckboxComponent;
+      });
+
+      it('should call showAdditionalHelp when the tooltip is displayed', () => {
+        setupTest('Mensagem de apoio adicional.', true, { observed: false });
+        component.onBlur(checkboxMock);
+        expect(component.showAdditionalHelp).toHaveBeenCalled();
+      });
+
+      it('should not call showAdditionalHelp when tooltip is not displayed', () => {
+        setupTest('Mensagem de apoio adicional.', false, { observed: false });
+        component.onBlur(checkboxMock);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+
+      it('should not call showAdditionalHelp when additionalHelp event is true', () => {
+        setupTest('Mensagem de apoio adicional.', true, { observed: true });
+        component.onBlur(checkboxMock);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('emitAdditionalHelp:', () => {
+      it('should emit additionalHelp when isAdditionalHelpEventTriggered returns true', () => {
+        spyOn(component.additionalHelp, 'emit');
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+
+        component.emitAdditionalHelp();
+
+        expect(component.additionalHelp.emit).toHaveBeenCalled();
+      });
+
+      it('should not emit additionalHelp when isAdditionalHelpEventTriggered returns false', () => {
+        spyOn(component.additionalHelp, 'emit');
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        component.emitAdditionalHelp();
+
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+      });
+
+      it('should include additionalHelp when event is triggered', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        component.additionalHelp = new EventEmitter<any>();
+
+        const result = component.setHelper('label', 'tooltip');
+
+        expect(result).toBeDefined();
+      });
+    });
+
     describe('focus:', () => {
+      const checkbox1 = document.createElement('po-checkbox');
+      const checkbox2 = document.createElement('po-checkbox');
+      const checkboxLabel = [
+        {
+          checkboxLabel: {
+            nativeElement: checkbox1
+          }
+        },
+        {
+          checkboxLabel: {
+            nativeElement: checkbox2
+          }
+        }
+      ] as any;
+
       it('should call `focus` of checkbox.', () => {
         component.options = [
           { label: 'teste1', value: 'teste1' },
           { label: 'teste2', value: 'teste2' }
         ];
 
+        component.checkboxLabels = checkboxLabel;
         changeDetector.detectChanges();
 
-        spyOn(component.checkboxLabels.toArray()[0].nativeElement, 'focus');
+        spyOn(component.checkboxLabels[0].checkboxLabel.nativeElement, 'focus');
 
         component.focus();
 
-        expect(component.checkboxLabels.toArray()[0].nativeElement.focus).toHaveBeenCalled();
+        expect(component.checkboxLabels[0].checkboxLabel.nativeElement.focus).toHaveBeenCalled();
       });
 
       it('shouldn`t call `focus` of checkbox if option is `disabled`.', () => {
@@ -145,15 +195,16 @@ describe('PoCheckboxGroupComponent:', () => {
           { label: 'teste2', value: 'teste2' }
         ];
 
+        component.checkboxLabels = checkboxLabel;
         changeDetector.detectChanges();
 
-        spyOn(component.checkboxLabels.toArray()[0].nativeElement, 'focus');
-        spyOn(component.checkboxLabels.toArray()[1].nativeElement, 'focus');
+        spyOn(component.checkboxLabels[0].checkboxLabel.nativeElement, 'focus');
+        spyOn(component.checkboxLabels[1].checkboxLabel.nativeElement, 'focus');
 
         component.focus();
 
-        expect(component.checkboxLabels.toArray()[0].nativeElement.focus).not.toHaveBeenCalled();
-        expect(component.checkboxLabels.toArray()[1].nativeElement.focus).toHaveBeenCalled();
+        expect(component.checkboxLabels[0].checkboxLabel.nativeElement.focus).not.toHaveBeenCalled();
+        expect(component.checkboxLabels[1].checkboxLabel.nativeElement.focus).toHaveBeenCalled();
       });
 
       it('shouldn`t call `focus` if component is `disabled`.', () => {
@@ -163,15 +214,16 @@ describe('PoCheckboxGroupComponent:', () => {
         ];
         component.disabled = true;
 
+        component.checkboxLabels = checkboxLabel;
         changeDetector.detectChanges();
 
-        spyOn(component.checkboxLabels.toArray()[0].nativeElement, 'focus');
-        spyOn(component.checkboxLabels.toArray()[1].nativeElement, 'focus');
+        spyOn(component.checkboxLabels[0].checkboxLabel.nativeElement, 'focus');
+        spyOn(component.checkboxLabels[1].checkboxLabel.nativeElement, 'focus');
 
         component.focus();
 
-        expect(component.checkboxLabels.toArray()[0].nativeElement.focus).not.toHaveBeenCalled();
-        expect(component.checkboxLabels.toArray()[1].nativeElement.focus).not.toHaveBeenCalled();
+        expect(component.checkboxLabels[0].checkboxLabel.nativeElement.focus).not.toHaveBeenCalled();
+        expect(component.checkboxLabels[1].checkboxLabel.nativeElement.focus).not.toHaveBeenCalled();
       });
 
       it('shouldn`t call `focus` if all checkboxes are `disabled`.', () => {
@@ -180,15 +232,63 @@ describe('PoCheckboxGroupComponent:', () => {
           { label: 'teste2', value: 'teste2', disabled: true }
         ];
 
+        component.checkboxLabels = checkboxLabel;
         changeDetector.detectChanges();
 
-        spyOn(component.checkboxLabels.toArray()[0].nativeElement, 'focus');
-        spyOn(component.checkboxLabels.toArray()[1].nativeElement, 'focus');
+        spyOn(component.checkboxLabels[0].checkboxLabel.nativeElement, 'focus');
+        spyOn(component.checkboxLabels[1].checkboxLabel.nativeElement, 'focus');
 
         component.focus();
 
-        expect(component.checkboxLabels.toArray()[0].nativeElement.focus).not.toHaveBeenCalled();
-        expect(component.checkboxLabels.toArray()[1].nativeElement.focus).not.toHaveBeenCalled();
+        expect(component.checkboxLabels[0].checkboxLabel.nativeElement.focus).not.toHaveBeenCalled();
+        expect(component.checkboxLabels[1].checkboxLabel.nativeElement.focus).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('getAdditionalHelpTooltip:', () => {
+      it('should return null when isAdditionalHelpEventTriggered returns true', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBeNull();
+      });
+
+      it('should return additionalHelpTooltip when isAdditionalHelpEventTriggered returns false', () => {
+        const tooltip = 'Test Tooltip';
+        component.additionalHelpTooltip = tooltip;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBe(tooltip);
+      });
+
+      it('should return undefined when additionalHelpTooltip is undefined and isAdditionalHelpEventTriggered returns false', () => {
+        component.additionalHelpTooltip = undefined;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBeUndefined();
+      });
+    });
+
+    describe('getErrorPattern:', () => {
+      it('should return true in hasInvalidClass if fieldErrorMessage', () => {
+        component['el'].nativeElement.classList.add('ng-invalid');
+        component['el'].nativeElement.classList.add('ng-dirty');
+        component.fieldErrorMessage = 'Field Invalid';
+        component.required = true;
+        expect(component.hasInvalidClass()).toBeTruthy();
+        expect(component.getErrorPattern()).toBe('Field Invalid');
+      });
+
+      it('should return empty if fieldErrorMessage is undefined', () => {
+        component['el'].nativeElement.classList.add('ng-invalid');
+        component['el'].nativeElement.classList.add('ng-dirty');
+        component.fieldErrorMessage = undefined;
+        expect(component.getErrorPattern()).toBe('');
       });
     });
 
@@ -200,6 +300,7 @@ describe('PoCheckboxGroupComponent:', () => {
     describe('onKeyDown:', () => {
       let option;
       let fakeEvent: any;
+      let checkboxMock: PoCheckboxComponent;
 
       beforeEach(() => {
         option = {
@@ -212,13 +313,18 @@ describe('PoCheckboxGroupComponent:', () => {
           keyCode: 32,
           preventDefault: () => {}
         };
+
+        checkboxMock = {
+          checkboxLabel: { nativeElement: document.createElement('input') },
+          focus: jasmine.createSpy('focus')
+        } as unknown as PoCheckboxComponent;
       });
 
       it('should call `checkOption` and `preventDefault` when event which from spacebar', () => {
         spyOn(component, 'checkOption');
         spyOn(fakeEvent, 'preventDefault');
 
-        component.onKeyDown(fakeEvent, option);
+        component.onKeyDown(fakeEvent, option, checkboxMock);
 
         expect(fakeEvent.preventDefault).toHaveBeenCalled();
         expect(component.checkOption).toHaveBeenCalledWith(option);
@@ -231,7 +337,7 @@ describe('PoCheckboxGroupComponent:', () => {
         spyOn(component, 'checkOption');
         spyOn(fakeEvent, 'preventDefault');
 
-        component.onKeyDown(fakeEvent, option);
+        component.onKeyDown(fakeEvent, option, checkboxMock);
 
         expect(component.checkOption).not.toHaveBeenCalled();
         expect(fakeEvent.preventDefault).not.toHaveBeenCalled();
@@ -243,97 +349,167 @@ describe('PoCheckboxGroupComponent:', () => {
         spyOn(component, 'checkOption');
         spyOn(fakeEvent, 'preventDefault');
 
-        component.onKeyDown(fakeEvent, option);
+        component.onKeyDown(fakeEvent, option, checkboxMock);
 
         expect(fakeEvent.preventDefault).toHaveBeenCalled();
         expect(component.checkOption).toHaveBeenCalledWith(option);
       });
+
+      it('should emit event when field is focused', () => {
+        spyOn(component.keydown, 'emit');
+        spyOnProperty(document, 'activeElement', 'get').and.returnValue(checkboxMock.checkboxLabel.nativeElement);
+
+        component.onKeyDown(fakeEvent, option, checkboxMock);
+
+        expect(component.keydown.emit).toHaveBeenCalledWith(fakeEvent);
+      });
     });
 
-    describe('Templates:', () => {
-      it('should set tabindex to -1 when checkbox-group is disabled', () => {
-        component.disabled = true;
-        changeDetector.detectChanges();
-
-        expect(nativeElement.querySelector('label.po-checkbox-group-label[tabindex="-1"]')).toBeTruthy();
+    describe('showAdditionalHelp:', () => {
+      let helperEl: any;
+      beforeEach(() => {
+        helperEl = {
+          openHelperPopover: jasmine.createSpy('openHelperPopover'),
+          closeHelperPopover: jasmine.createSpy('closeHelperPopover'),
+          helperIsVisible: jasmine.createSpy('helperIsVisible').and.returnValue(false)
+        };
       });
 
-      it('should set tabindex to 0 when checkbox-group disabled is false', () => {
-        component.disabled = false;
-        changeDetector.detectChanges();
+      it('should call closeHelperPopover and return early when helperIsVisible is true', () => {
+        (component as any).label = '';
+        component.additionalHelpTooltip = undefined;
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(true);
+        component.helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue({});
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+        spyOn(component.additionalHelp, 'emit');
 
-        expect(nativeElement.querySelector('label.po-checkbox-group-label[tabindex="0"]')).toBeTruthy();
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(component.helperEl.helperIsVisible).toHaveBeenCalled();
+        expect(component.helperEl.closeHelperPopover).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.openHelperPopover).not.toHaveBeenCalled();
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
       });
 
-      it('should set tabindex to -1 when option disabled is true', () => {
-        component.options = [{ label: 'teste', value: 'teste', disabled: true }];
-        changeDetector.detectChanges();
+      it('should emit additionalHelp and return early when isAdditionalHelpEventTriggered is true', () => {
+        (component as any).label = '';
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(false);
+        component.helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue({});
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        spyOn(component.additionalHelp, 'emit');
 
-        expect(nativeElement.querySelector('label.po-checkbox-group-label[tabindex="-1"]')).toBeTruthy();
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(component.additionalHelp.emit).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.openHelperPopover).toHaveBeenCalled();
+        expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
       });
 
-      it('should set tabindex to 0 when option disabled not exists', () => {
-        component.options = [{ label: 'teste', value: 'teste' }];
-        changeDetector.detectChanges();
+      it('should call helper.eventOnClick and return early when helper has eventOnClick function', () => {
+        (component as any).label = '';
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(true);
+        component.helperEl = helperEl;
+        const helperMock = { eventOnClick: jasmine.createSpy('eventOnClick') };
+        spyOn(component as any, 'poHelperComponent').and.returnValue(helperMock);
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+        spyOn(component.additionalHelp, 'emit');
 
-        expect(nativeElement.querySelector('label.po-checkbox-group-label[tabindex="0"]')).toBeTruthy();
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(helperMock.eventOnClick).toHaveBeenCalledTimes(1);
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+        expect(component.helperEl.helperIsVisible).not.toHaveBeenCalled();
+        expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect(component.helperEl.openHelperPopover).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
       });
 
-      it('should set `po-clickable` class if `disabled` and `options.disabled` are false.', () => {
-        component.options = [
-          { value: '1', label: '1' },
-          { value: '2', label: '2', disabled: true }
-        ];
-        component.disabled = false;
+      it('should enter the block via additionalHelpTooltip when helper is falsy and isHelpEvt is false, then open popover', () => {
+        (component as any).label = '';
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(false);
+        component.helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue(undefined);
+        component.additionalHelpTooltip = 'any text';
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+        spyOn(component.additionalHelp, 'emit');
 
-        changeDetector.detectChanges();
+        const result = component.showAdditionalHelp();
 
-        expect(nativeElement.querySelectorAll('label.po-checkbox-group-label.po-clickable')[0]).toBeTruthy();
-        expect(nativeElement.querySelectorAll('label.po-checkbox-group-label.po-clickable')[1]).toBeFalsy();
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(component.helperEl.helperIsVisible).toHaveBeenCalled();
+        expect(component.helperEl.openHelperPopover).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
       });
 
-      it('shouldn`t set `po-clickable` class if `disabled` is true.', () => {
-        component.options = [
-          { value: '1', label: '1' },
-          { value: '2', label: '2' }
-        ];
-        component.disabled = true;
+      it('should enter the block via isHelpEvt when helper and tooltip are falsy, emit and then open popover', () => {
+        (component as any).label = '';
+        component.displayAdditionalHelp = false;
+        helperEl.helperIsVisible.and.returnValue(false);
+        component.helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue(undefined);
+        component.additionalHelpTooltip = undefined;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        spyOn(component.additionalHelp, 'emit');
 
-        changeDetector.detectChanges();
+        const result = component.showAdditionalHelp();
 
-        expect(nativeElement.querySelectorAll('label.po-checkbox-group-label.po-clickable')[0]).toBeFalsy();
-        expect(nativeElement.querySelectorAll('label.po-checkbox-group-label.po-clickable')[1]).toBeFalsy();
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(component.additionalHelp.emit).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.openHelperPopover).toHaveBeenCalledTimes(1);
+        expect(component.helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+        expect(component.displayAdditionalHelp).toBeTrue();
       });
 
-      it(`should show optional if the field isn't 'required', has 'label' and 'p-optional' is true.`, () => {
-        component.required = false;
-        component.optional = true;
-        component.label = 'label';
+      it('should toggle `displayAdditionalHelp` from false to true', () => {
+        component.displayAdditionalHelp = false;
 
-        changeDetector.detectChanges();
+        const result = component.showAdditionalHelp();
 
-        expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeTruthy();
+        expect(result).toBeTrue();
+        expect(component.displayAdditionalHelp).toBeTrue();
       });
 
-      it(`shouldn't show optional if the field is 'required', has 'label' and 'p-optional' is true.`, () => {
-        component.required = true;
-        component.optional = true;
-        component.label = 'label';
+      it('should toggle `displayAdditionalHelp` from true to false', () => {
+        component.displayAdditionalHelp = true;
 
-        changeDetector.detectChanges();
+        const result = component.showAdditionalHelp();
 
-        expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
+        expect(result).toBeFalse();
+        expect(component.displayAdditionalHelp).toBeFalse();
       });
+    });
+  });
 
-      it(`shouldn't show optional if the field isn't 'required', has 'label' but 'p-optional' is false.`, () => {
-        component.required = true;
-        component.optional = false;
-        component.label = 'label';
+  describe('Templates:', () => {
+    it('shouldn`t set `po-clickable` class if `disabled` is true.', () => {
+      component.options = [
+        { value: '1', label: '1' },
+        { value: '2', label: '2' }
+      ];
+      component.disabled = true;
 
-        changeDetector.detectChanges();
+      changeDetector.detectChanges();
 
-        expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-      });
+      expect(nativeElement.querySelectorAll('label.po-checkbox-group-label.po-clickable')[0]).toBeFalsy();
+      expect(nativeElement.querySelectorAll('label.po-checkbox-group-label.po-clickable')[1]).toBeFalsy();
     });
   });
 });

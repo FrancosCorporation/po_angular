@@ -1,13 +1,19 @@
-import { Component, ViewChild } from '@angular/core';
-import { FormControl } from '@angular/forms';
+import { Component, ViewChild, inject } from '@angular/core';
+import { UntypedFormControl } from '@angular/forms';
 
 import { PoDatepickerRange, PoModalAction, PoModalComponent, PoNotificationService } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-datepicker-range-vacations',
-  templateUrl: './sample-po-datepicker-range-vacations.component.html'
+  templateUrl: './sample-po-datepicker-range-vacations.component.html',
+  standalone: false
 })
 export class SamplePoDatepickerRangeVacationsComponent {
+  private poNotification = inject(PoNotificationService);
+
+  @ViewChild('formVacationSuggestion', { static: true }) formVacationSuggestion: UntypedFormControl;
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+
   datepickerRange: PoDatepickerRange;
   quantityOfDays: number = undefined;
   reason: string;
@@ -36,11 +42,6 @@ export class SamplePoDatepickerRangeVacationsComponent {
       this.datepickerRange.end
     );
   }
-
-  @ViewChild('formVacationSuggestion', { static: true }) formVacationSuggestion: FormControl;
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
-
-  constructor(private poNotification: PoNotificationService) {}
 
   calculateQuantityOfVacationDays() {
     const start = new Date(this.datepickerRange.start);

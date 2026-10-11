@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, inject } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { PoBreadcrumb } from '@po-ui/ng-components';
@@ -9,15 +9,25 @@ import { PoModalAction, PoModalComponent } from '@po-ui/ng-components';
 import { PoNotificationService } from '@po-ui/ng-components';
 import { PoPageAction, PoPageFilter } from '@po-ui/ng-components';
 import { PoTableColumn } from '@po-ui/ng-components';
+import { PoPageListComponent } from '@po-ui/ng-components';
 
 import { SamplePoPageListHiringProcessesService } from './sample-po-page-list-hiring-processes.service';
 
 @Component({
   selector: 'sample-po-page-list-hiring-processes',
   templateUrl: './sample-po-page-list-hiring-processes.component.html',
-  providers: [SamplePoPageListHiringProcessesService]
+  providers: [SamplePoPageListHiringProcessesService],
+  standalone: false
 })
 export class SamplePoPageListHiringProcessesComponent implements OnInit {
+  private sampleHiringProcessesService = inject(SamplePoPageListHiringProcessesService);
+  private poNotification = inject(PoNotificationService);
+  private poDialog = inject(PoDialogService);
+  private router = inject(Router);
+
+  @ViewChild('advancedFilterModal', { static: true }) advancedFilterModal: PoModalComponent;
+  @ViewChild('poPageList', { static: true }) poPageList: PoPageListComponent;
+
   disclaimerGroup;
   hiringProcesses: Array<object>;
   hiringProcessesColumns: Array<PoTableColumn>;
@@ -39,6 +49,7 @@ export class SamplePoPageListHiringProcessesComponent implements OnInit {
 
   public readonly advancedFilterPrimaryAction: PoModalAction = {
     action: () => {
+      this.poPageList.clearInputSearch();
       this.advancedFilterModal.close();
       const filters = [...this.jobDescription, ...this.status];
       this.filterAction(filters);
@@ -54,20 +65,12 @@ export class SamplePoPageListHiringProcessesComponent implements OnInit {
 
   private disclaimers = [];
 
-  @ViewChild('advancedFilterModal', { static: true }) advancedFilterModal: PoModalComponent;
-
-  constructor(
-    private sampleHiringProcessesService: SamplePoPageListHiringProcessesService,
-    private poNotification: PoNotificationService,
-    private poDialog: PoDialogService,
-    private router: Router
-  ) {}
-
   ngOnInit() {
     this.disclaimerGroup = {
       title: 'Filters',
       disclaimers: [],
-      change: this.onChangeDisclaimer.bind(this)
+      change: this.onChangeDisclaimer.bind(this),
+      remove: this.onClearDisclaimer.bind(this)
     };
 
     this.hiringProcesses = this.sampleHiringProcessesService.getItems();
@@ -116,9 +119,9 @@ export class SamplePoPageListHiringProcessesComponent implements OnInit {
   }
 
   hiringProcessesFilter(filters) {
-    this.hiringProcessesFiltered = this.hiringProcesses.filter(item => {
-      return Object.keys(item).some(key => !(item[key] instanceof Object) && this.includeFilter(item[key], filters));
-    });
+    this.hiringProcessesFiltered = this.hiringProcesses.filter(item =>
+      Object.keys(item).some(key => !(item[key] instanceof Object) && this.includeFilter(item[key], filters))
+    );
   }
 
   includeFilter(item, filters) {
@@ -130,8 +133,17 @@ export class SamplePoPageListHiringProcessesComponent implements OnInit {
     this.filter();
   }
 
+  onClearDisclaimer(disclaimers) {
+    if (disclaimers.removedDisclaimer.property === 'search') {
+      this.poPageList.clearInputSearch();
+    }
+    this.disclaimers = [];
+    this.filter();
+  }
+
   populateDisclaimers(filters: Array<any>) {
-    this.disclaimers = filters.map(value => ({ value }));
+    const property = filters.length > 1 ? 'advanced' : 'search';
+    this.disclaimers = filters.map(value => ({ value, property }));
 
     if (this.disclaimers && this.disclaimers.length > 0) {
       this.disclaimerGroup.disclaimers = [...this.disclaimers];

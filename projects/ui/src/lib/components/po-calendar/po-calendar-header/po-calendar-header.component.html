@@ -1,0 +1,28 @@
+<div class="po-calendar-header">
+  @if (headerTemplate) {
+    <ng-container [ngTemplateOutlet]="headerTemplate" [ngTemplateOutletContext]="{ $implicit: templateContext }">
+    </ng-container>
+  }
+
+  @if (previous?.observers && !hidePrevious) {
+    <po-button
+      p-kind="tertiary"
+      (click)="previous.emit()"
+      (keydown.enter)="previous.emit(); $event.preventDefault()"
+      [p-aria-label]="previousMonthLabel"
+      p-icon="ICON_ARROW_LEFT"
+      [p-size]="size"
+    ></po-button>
+  }
+
+  @if (next?.observers.length && !hideNext) {
+    <po-button
+      p-kind="tertiary"
+      (click)="next.emit()"
+      (keydown.enter)="next.emit(); $event.preventDefault()"
+      [p-aria-label]="nextMonthLabel"
+      p-icon="ICON_ARROW_RIGHT"
+      [p-size]="size"
+    ></po-button>
+  }
+</div>

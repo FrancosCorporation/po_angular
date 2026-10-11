@@ -1,9 +1,8 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { Directive, EventEmitter, HostBinding, HostListener, Input, Output } from '@angular/core';
 import { NgForm } from '@angular/forms';
-
-import { convertToBoolean } from '../../../utils/util';
-
-import { PoDynamicFormField } from './po-dynamic-form-field.interface';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn } from '../../../utils/util';
+import { PoDynamicFormField } from './interfaces/po-dynamic-form-field.interface';
 
 /**
  *
@@ -15,8 +14,6 @@ import { PoDynamicFormField } from './po-dynamic-form-field.interface';
  */
 @Directive()
 export class PoDynamicFormBaseComponent {
-  private _groupForm?: boolean = false;
-
   /**
    * @optional
    *
@@ -53,7 +50,7 @@ export class PoDynamicFormBaseComponent {
    * o `po-textarea`, caso o valor da propriedade `rows` seja menor que 3 o componente criado será o `po-input`.
    * - Caso seja informada a propriedade `secret` o componente criado será o `po-password`.
    * - Caso o *type* informado seja *string* o componente criado será o `po-input`.
-   *
+   * > Ao alterar o valor das `properties`, visibilidade e/ou agrupamentos via container, os `fields` que utilizam serviço podem refazer as chamadas para as API's.
    * @default `[]`
    */
   @Input('p-fields') fields: Array<PoDynamicFormField>;
@@ -123,30 +120,6 @@ export class PoDynamicFormBaseComponent {
   @Output('p-form') formOutput: EventEmitter<NgForm> = new EventEmitter<NgForm>();
 
   /**
-   * @optional
-   *
-   * @description
-   * Ao informar esta propriedade, o componente passará a utilizar o formulário pai para criar os `FormControl`
-   * e com isso é possível recuperar o valor do formulário e suas validações a partir do formulário pai.
-   *
-   * ```html
-   * <form #parentForm="ngForm">
-   *
-   *   <po-dynamic-form p-group-form [p-fields]="fields"></po-dynamic-form>
-   *
-   *  <po-button p-label="Adicionar" [p-disabled]="parentForm.invalid"></po-button>
-   * </form>
-   * ```
-   */
-  @Input('p-group-form') set groupForm(value: boolean) {
-    this._groupForm = <any>value === '' ? true : convertToBoolean(value);
-  }
-
-  get groupForm(): boolean {
-    return this._groupForm;
-  }
-
-  /**
    * Função ou serviço que será executado na inicialização do componente.
    *
    * A propriedade aceita os seguintes tipos:
@@ -188,11 +161,8 @@ export class PoDynamicFormBaseComponent {
    * - `function`: Método que será executado.
    *
    * Ao ser executado, irá receber como parâmetro um objeto com o nome da propriedade
-   * alterada e o novo valor, conforme a interface `PoDynamicFormFieldChanged`:
+   * alterada e os valores atualizados do formulario, conforme a interface `PoDynamicFormFieldChanged`
    *
-   * ```
-   * { property: 'property name', value: 'new value' }
-   * ```
    *
    * O retorno desta função deve ser do tipo [PoDynamicFormValidation](documentation/po-dynamic-form#po-dynamic-form-validation),
    * onde o usuário poderá determinar as novas atualizações dos campos.
@@ -230,4 +200,87 @@ export class PoDynamicFormBaseComponent {
    * Lista que define os campos que irão disparar o validate do form.
    */
   @Input('p-validate-fields') validateFields?: Array<string>;
+
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _groupForm?: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   * Ao informar esta propriedade, o componente passará a utilizar o formulário pai para criar os `FormControl`
+   * e com isso é possível recuperar o valor do formulário e suas validações a partir do formulário pai.
+   *
+   * ```html
+   * <form #parentForm="ngForm">
+   *
+   *   <po-dynamic-form p-group-form [p-fields]="fields"></po-dynamic-form>
+   *
+   *  <po-button p-label="Adicionar" [p-disabled]="parentForm.invalid"></po-button>
+   * </form>
+   * ```
+   */
+  @Input('p-group-form') set groupForm(value: boolean) {
+    this._groupForm = <any>value === '' ? true : convertToBoolean(value);
+  }
+
+  get groupForm(): boolean {
+    return this._groupForm;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Ao informar esta propriedade, o componente passará a emitir o valor a cada caractere digitado.
+   *
+   * Pode ser aplicado nos seguintes componentes:
+   * - po-input
+   * - po-number
+   * - po-decimal
+   * - po-textarea
+   * - po-password
+   *
+   * Deve informar os campos que deseja receber as emissões na propriedade `p-validate-fields`.
+   *
+   *
+   */
+  @Input({ alias: 'p-validate-on-input', transform: convertToBoolean }) validateOnInput: boolean = false;
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialComponentsSize, PoFieldSize);
+    this._componentsSize = size;
+  }
 }

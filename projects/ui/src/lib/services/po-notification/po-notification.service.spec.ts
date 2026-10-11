@@ -4,7 +4,7 @@ import { configureTestSuite } from './../../util-test/util-expect.spec';
 
 import { PoComponentInjectorService } from './../po-component-injector/po-component-injector.service';
 import { PoNotificationService } from './po-notification.service';
-import { PoToasterOrientation } from './po-toaster/po-toaster-orientation.enum';
+import { PoToasterOrientation } from '../../components/po-toaster';
 
 describe('PoNotificationService:', () => {
   let notificationService: PoNotificationService;
@@ -20,6 +20,10 @@ describe('PoNotificationService:', () => {
     jasmine.clock().install();
 
     notificationService = TestBed.inject(PoNotificationService);
+    notificationService.stackTop = [];
+    notificationService.stackTop.length = 0;
+    notificationService.stackBottom = [];
+    notificationService.stackBottom.length = 0;
   });
 
   afterEach(() => {
@@ -35,7 +39,7 @@ describe('PoNotificationService:', () => {
 
     expect(notificationService.stackTop.length === 1).toBeTruthy();
 
-    tick(10001);
+    tick(10301);
 
     expect(notificationService.stackTop.length === 0).toBeTruthy();
   }));
@@ -49,7 +53,7 @@ describe('PoNotificationService:', () => {
 
     expect(notificationService.stackBottom.length === 1).toBeTruthy();
 
-    tick(3001);
+    tick(3301);
 
     expect(notificationService.stackBottom.length === 0).toBeTruthy();
   }));
@@ -64,7 +68,7 @@ describe('PoNotificationService:', () => {
 
       expect(notificationService.stackTop.length === 1).toBeTruthy();
 
-      tick(3001);
+      tick(3301);
 
       expect(notificationService.stackTop.length === 0).toBeTruthy();
     }));
@@ -84,7 +88,7 @@ describe('PoNotificationService:', () => {
 
       expect(notificationService.stackTop.length === 2).toBeTruthy();
 
-      tick(3100);
+      tick(3601);
 
       expect(notificationService.stackTop.length === 0).toBeTruthy();
     }));
@@ -99,5 +103,36 @@ describe('PoNotificationService:', () => {
       notificationService['observableOnClose'](fakeRef);
       expect(spy).toHaveBeenCalled();
     });
+
+    it('should destroy toaster when `stackTop` is more than 5', fakeAsync(() => {
+      for (let i = 0; i < 6; i++) {
+        notificationService.success({
+          message: '',
+          orientation: PoToasterOrientation.Top,
+          action: () => {
+            alert('');
+          },
+          actionLabel: 'close'
+        });
+      }
+      tick(301);
+      expect(notificationService.stackTop.length).toBe(5);
+    }));
+
+    it('should destroy toaster when `stackBottom` is more than 5', fakeAsync(() => {
+      for (let i = 0; i < 6; i++) {
+        notificationService.success({
+          message: '',
+          orientation: PoToasterOrientation.Bottom,
+          action: () => {
+            alert('');
+          },
+          actionLabel: 'close'
+        });
+      }
+
+      tick(301);
+      expect(notificationService.stackBottom.length).toBe(5);
+    }));
   });
 });

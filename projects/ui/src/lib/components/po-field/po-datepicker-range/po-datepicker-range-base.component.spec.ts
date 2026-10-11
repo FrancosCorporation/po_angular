@@ -1,15 +1,17 @@
 import { Directive } from '@angular/core';
-import { FormControl } from '@angular/forms';
+import { FormControl, UntypedFormControl, Validators } from '@angular/forms';
 
-import { expectPropertiesValues } from '../../../util-test/util-expect.spec';
-import * as UtilsFunctions from '../../../utils/util';
-import * as ValidatorsFunctions from '../validators';
 import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
+import { expectPropertiesValues } from '../../../util-test/util-expect.spec';
+import { PoValidators as ValidatorsFunctions } from '../validators';
 
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { Subject } from 'rxjs';
+import { PoLanguageService, PoThemeA11yEnum } from '../../../services';
 import { PoDatepickerRange } from './interfaces/po-datepicker-range.interface';
 import { PoDatepickerRangeBaseComponent } from './po-datepicker-range-base.component';
 import { poDatepickerRangeLiteralsDefault } from './po-datepicker-range.literals';
-import { PoLanguageService } from '../../../services';
+import { mapInputSizeToLoadingIcon } from '../../../utils/util';
 
 describe('PoDatepickerRangeBaseComponent:', () => {
   @Directive()
@@ -33,46 +35,116 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     validateDateRange: () => {},
     validateDate: () => {}
   };
+  const changeDetector: any = { detectChanges: () => {}, markForCheck: () => {} };
+  const fakeSubscription = <any>{ unsubscribe: () => {} };
+  let component: PoDatepickerRangeComponent;
 
-  const component = new PoDatepickerRangeComponent(mockedService, new PoLanguageService());
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({}).compileComponents();
 
-  it('should be created', () => {
-    expect(component instanceof PoDatepickerRangeBaseComponent).toBeTruthy();
+    component = TestBed.runInInjectionContext(
+      () => new PoDatepickerRangeComponent(mockedService, changeDetector, TestBed.inject(PoLanguageService))
+    );
   });
 
   describe('Properties:', () => {
-    it('p-no-autocomplete: should update property with valid values with valid values.', () => {
-      const invalidValues = [undefined, null, 0, 'false', 'string'];
-      expectPropertiesValues(component, 'noAutocomplete', invalidValues, false);
+    it('p-compact-label: should have default value as false', () => {
+      expect(component.compactLabel()).toBe(false);
     });
 
-    it('p-no-autocomplete: should update property with valid values with valid values.', () => {
-      const validValues = [true, 'true', 1, ' '];
-      expectPropertiesValues(component, 'noAutocomplete', validValues, true);
+    it('p-no-autocomplete: should update property with false when set with invalid values.', () => {
+      component.noAutocomplete = false;
+      expect(component.noAutocomplete).toBeFalse();
+    });
+
+    it('p-no-autocomplete: should update property with true when set with valid values.', () => {
+      component.noAutocomplete = true;
+      expect(component.noAutocomplete).toBeTrue();
     });
 
     it('clean: should update with true value.', () => {
-      const booleanValidTrueValues = [true, 'true', 1, ''];
-
-      expectPropertiesValues(component, 'clean', booleanValidTrueValues, true);
+      component.clean = true;
+      expect(component.clean).toBeTrue();
     });
 
     it('clean: should update with false value.', () => {
-      const booleanInvalidValues = [undefined, null, 2, 'string', 0, NaN, false];
+      component.clean = false;
+      expect(component.clean).toBeFalse();
+    });
 
-      expectPropertiesValues(component, 'clean', booleanInvalidValues, false);
+    it('max-date: should be update property p-max-date using string', () => {
+      component.maxDate = new Date(2021, 7, 1).toISOString();
+
+      expect(component['_maxDate'].getDate()).toBe(1);
+      expect(component['_maxDate'].getMonth()).toBe(7);
+      expect(component['_maxDate'].getFullYear()).toBe(2021);
+    });
+
+    it('max-date: should be update property p-max-date using Date', () => {
+      component.maxDate = new Date(2021, 7, 1);
+
+      expect(component['_maxDate'].getDate()).toBe(1);
+      expect(component['_maxDate'].getMonth()).toBe(7);
+      expect(component['_maxDate'].getFullYear()).toBe(2021);
+    });
+
+    it('min-date: should be update property p-min-date using string', () => {
+      component.minDate = new Date(2021, 7, 1).toISOString();
+
+      expect(component['_minDate'].getDate()).toBe(1);
+      expect(component['_minDate'].getMonth()).toBe(7);
+      expect(component['_minDate'].getFullYear()).toBe(2021);
+    });
+
+    it('min-date: should be update property p-min-date using Date', () => {
+      component.minDate = new Date(2021, 7, 1);
+
+      expect(component['_minDate'].getDate()).toBe(1);
+      expect(component['_minDate'].getMonth()).toBe(7);
+      expect(component['_minDate'].getFullYear()).toBe(2021);
+    });
+
+    it('should be update property p-locale', () => {
+      expectPropertiesValues(component, 'locale', ['pt', 'x'], 'pt');
+      expectPropertiesValues(component, 'locale', 'en', 'en');
+      expectPropertiesValues(component, 'locale', 'es', 'es');
+      expectPropertiesValues(component, 'locale', 'ru', 'ru');
+    });
+
+    it('should be update property p-locale with the default value ', () => {
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
+      expectPropertiesValues(component, 'locale', '', 'pt');
+    });
+
+    it('placeholder: should duplicate string to both start and end', () => {
+      component.placeholder = 'placeholder string';
+      expect(component.placeholder).toEqual({ start: 'placeholder string', end: 'placeholder string' });
+    });
+
+    it('placeholder: should respect object values for start and end', () => {
+      const value: PoDatepickerRange = { start: '01/01/2020', end: '31/12/2020' };
+      component.placeholder = value;
+      expect(component.placeholder).toEqual(value);
+    });
+
+    it('placeholder: should reset to empty values when set to invalid', () => {
+      component.placeholder = null;
+      expect(component.placeholder).toEqual({ start: '', end: '' });
+    });
+
+    it('placeholder: should reset to empty object', () => {
+      component.placeholder = {} as any;
+      expect(component.placeholder).toEqual({ start: '', end: '' });
     });
 
     it('disabled: should update with true value.', () => {
-      const booleanValidTrueValues = [true, 'true', 1, ''];
-
-      expectPropertiesValues(component, 'disabled', booleanValidTrueValues, true);
+      component.disabled = true;
+      expect(component.disabled).toBeTrue();
     });
 
     it('disabled: should update with false value.', () => {
-      const booleanInvalidValues = [undefined, null, 2, 'string', 0, NaN, false];
-
-      expectPropertiesValues(component, 'disabled', booleanInvalidValues, false);
+      component.disabled = false;
+      expect(component.disabled).toBeFalse();
     });
 
     it('disabled: should call `validateModel` with `dateRange`.', () => {
@@ -102,7 +174,7 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     });
 
     it('literals: should return literals default if `_literals` is undefined', () => {
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component['_literals'] = undefined;
 
@@ -110,7 +182,7 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     });
 
     it('literals: should be in portuguese if browser is setted with an unsupported language', () => {
-      component['language'] = 'zw';
+      Object.defineProperty(component, 'language', { value: 'zw', configurable: true });
 
       component.literals = {};
 
@@ -118,7 +190,7 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     });
 
     it('literals: should be in portuguese if browser is setted with `pt`', () => {
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component.literals = {};
 
@@ -126,7 +198,7 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     });
 
     it('literals: should be in english if browser is setted with `en`', () => {
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       component.literals = {};
 
@@ -134,7 +206,7 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     });
 
     it('literals: should accept custom literals', () => {
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       const customLiterals = Object.assign({}, poDatepickerRangeLiteralsDefault[poLocaleDefault]);
 
@@ -146,7 +218,7 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     });
 
     it('literals: should be in spanish if browser is setted with `es`', () => {
-      component['language'] = 'es';
+      Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
       component.literals = {};
 
@@ -154,7 +226,7 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     });
 
     it('literals: should be in russian if browser is setted with `ru`', () => {
-      component['language'] = 'ru';
+      Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
 
       component.literals = {};
 
@@ -164,21 +236,47 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     it('literals: should update property with default literals if is setted with invalid values', () => {
       const invalidValues = [null, undefined, false, true, '', 'literals', 0, 10, [], [1, 2], () => {}];
 
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       expectPropertiesValues(component, 'literals', invalidValues, poDatepickerRangeLiteralsDefault[poLocaleDefault]);
     });
 
-    it('readonly: should update with true value.', () => {
-      const booleanValidTrueValues = [true, 'true', 1, ''];
+    it('should convert value to boolean and call markForCheck', () => {
+      component['changeDetector'] = {
+        markForCheck: jasmine.createSpy('markForCheck')
+      } as any;
 
-      expectPropertiesValues(component, 'readonly', booleanValidTrueValues, true);
+      component.loading = true;
+
+      expect(component['_loading']).toBeTrue();
+      expect(component['changeDetector'].markForCheck).toHaveBeenCalled();
+    });
+
+    it('should set loading to false when value is falsy', () => {
+      component['changeDetector'] = {
+        markForCheck: jasmine.createSpy('markForCheck')
+      } as any;
+
+      component.loading = false;
+
+      expect(component['_loading']).toBeFalse();
+      expect(component['changeDetector'].markForCheck).toHaveBeenCalled();
+    });
+
+    it('should return the value from mapInputSizeToLoadingIcon', () => {
+      const result = component.mapSizeToIcon('md');
+
+      expect(result).toBe(mapInputSizeToLoadingIcon('md'));
+    });
+
+    it('readonly: should update with true value.', () => {
+      component.readonly = true;
+      expect(component.readonly).toBeTrue();
     });
 
     it('readonly: should update with false value.', () => {
-      const booleanInvalidValues = [undefined, null, 2, 'string', 0, NaN, false];
-
-      expectPropertiesValues(component, 'readonly', booleanInvalidValues, false);
+      component.readonly = false;
+      expect(component.readonly).toBeFalse();
     });
 
     it('readonly: should call `validateModel`.', () => {
@@ -190,15 +288,13 @@ describe('PoDatepickerRangeBaseComponent:', () => {
     });
 
     it('required: should update with true value.', () => {
-      const booleanValidTrueValues = [true, 'true', 1, ''];
-
-      expectPropertiesValues(component, 'required', booleanValidTrueValues, true);
+      component.required = true;
+      expect(component.required).toBeTrue();
     });
 
     it('required: should update with false value.', () => {
-      const booleanInvalidValues = [undefined, null, 2, 'string', 0, NaN, false];
-
-      expectPropertiesValues(component, 'required', booleanInvalidValues, false);
+      component.required = false;
+      expect(component.required).toBeFalse();
     });
 
     it('required: should call `validateModel`.', () => {
@@ -226,9 +322,121 @@ describe('PoDatepickerRangeBaseComponent:', () => {
       expect(component.updateScreenByModel).toHaveBeenCalledWith(start);
       expect(component['updateModel']).toHaveBeenCalledWith(start);
     });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
+    describe('rangePresets Input:', () => {
+      it('should set _rangePresets as array when value is an array', () => {
+        const presets = ['today', 'yesterday'];
+
+        component.rangePresets = presets;
+
+        expect((component as any)._rangePresets).toEqual(presets);
+      });
+
+      it('should set _rangePresets as true when value is empty string', () => {
+        component.rangePresets = '';
+
+        expect((component as any)._rangePresets).toBeTrue();
+      });
+
+      it('should set _rangePresets as true when value is boolean true', () => {
+        component.rangePresets = true;
+
+        expect((component as any)._rangePresets).toBeTrue();
+      });
+
+      it('should set _rangePresets as true when value is string "true"', () => {
+        component.rangePresets = 'true';
+
+        expect((component as any)._rangePresets).toBeTrue();
+      });
+
+      it('should set _rangePresets as false for any other value', () => {
+        component.rangePresets = false;
+
+        expect((component as any)._rangePresets).toBeFalse();
+
+        component.rangePresets = 'false';
+
+        expect((component as any)._rangePresets).toBeFalse();
+
+        component.rangePresets = null;
+
+        expect((component as any)._rangePresets).toBeFalse();
+      });
+    });
   });
 
   describe('Methods:', () => {
+    it('ngOnDestroy: should unsubscribe `subscription` on destroy', () => {
+      component['subscription'] = fakeSubscription;
+
+      spyOn(component['subscription'], <any>'unsubscribe');
+
+      component.ngOnDestroy();
+
+      expect(component['subscription'].unsubscribe).toHaveBeenCalled();
+    });
+
     it('registerOnChange: should set `onChangeModel` with value of the `func`.', () => {
       const func = () => {};
 
@@ -269,6 +477,7 @@ describe('PoDatepickerRangeBaseComponent:', () => {
 
         spyOn(component, <any>'convertPatternDateFormat');
         spyOn(component, <any>'requiredDateRangeFailed');
+        spyOn(component, <any>'verifyValidDate');
         spyOn(component, <any>'dateRangeFormatFailed');
         spyOn(component, <any>'dateRangeFailed');
 
@@ -288,7 +497,7 @@ describe('PoDatepickerRangeBaseComponent:', () => {
         spyOn(component, <any>'dateRangeFormatFailed');
         spyOn(component, <any>'dateRangeFailed');
 
-        const validate = component.validate(new FormControl([]));
+        const validate = component.validate(new UntypedFormControl([]));
 
         expect(component['requiredDateRangeFailed']).toHaveBeenCalled();
         expect(component.errorMessage).toEqual('');
@@ -296,21 +505,27 @@ describe('PoDatepickerRangeBaseComponent:', () => {
       });
 
       it('setDisabledState: should set `component.disabled` with boolean parameter', () => {
+        component['changeDetector'] = { markForCheck: () => {} } as any;
         const expectedValue = true;
+        const markForCheck = spyOn(component['changeDetector'], 'markForCheck');
+
         component.setDisabledState(expectedValue);
+
         expect(component.disabled).toBe(expectedValue);
+        expect(markForCheck).toHaveBeenCalled();
       });
 
-      it(`should call 'dateRangeObjectFailed', set 'errorMessage' as 'literals.invalidFormat'
+      it(`should call 'dateRangeFormatFailed', set 'errorMessage' as 'literals.invalidFormat'
         and return 'invalidDateRangeError'.`, () => {
         component.literals = poDatepickerRangeLiteralsDefault.pt;
 
         spyOn(component, <any>'dateRangeFormatFailed').and.returnValue(true);
         spyOn(component, <any>'dateRangeObjectFailed').and.returnValue(false);
+        spyOn(component, <any>'verifyValidDate').and.returnValue(true);
         spyOn(component, <any>'requiredDateRangeFailed');
         spyOn(component, <any>'dateRangeFailed');
 
-        const validate = component.validate(new FormControl([]));
+        const validate = component.validate(new UntypedFormControl([]));
 
         expect(component['dateRangeFormatFailed']).toHaveBeenCalled();
         expect(component.errorMessage).toEqual(component.literals.invalidFormat);
@@ -321,11 +536,13 @@ describe('PoDatepickerRangeBaseComponent:', () => {
         and return 'invalidDateRangeError'.`, () => {
         component.literals = poDatepickerRangeLiteralsDefault.pt;
 
+        spyOn(component, <any>'dateRangeFormatFailed').and.returnValue(false);
         spyOn(component, <any>'dateRangeObjectFailed').and.returnValue(true);
+        spyOn(component, <any>'verifyValidDate').and.returnValue(true);
         spyOn(component, <any>'requiredDateRangeFailed');
         spyOn(component, <any>'dateRangeFailed');
 
-        const validate = component.validate(new FormControl([]));
+        const validate = component.validate(new UntypedFormControl([]));
 
         expect(component['dateRangeObjectFailed']).toHaveBeenCalled();
         expect(component.errorMessage).toEqual(component.literals.invalidFormat);
@@ -338,10 +555,11 @@ describe('PoDatepickerRangeBaseComponent:', () => {
 
         spyOn(component, <any>'dateRangeObjectFailed').and.returnValue(false);
         spyOn(component, <any>'dateRangeFailed').and.returnValue(true);
+        spyOn(component, <any>'verifyValidDate').and.returnValue(true);
         spyOn(component, <any>'requiredDateRangeFailed');
         spyOn(component, <any>'dateRangeFormatFailed');
 
-        const validate = component.validate(new FormControl([]));
+        const validate = component.validate(new UntypedFormControl([]));
 
         expect(component['dateRangeFailed']).toHaveBeenCalled();
         expect(component.errorMessage).toEqual(component.literals.startDateGreaterThanEndDate);
@@ -354,15 +572,99 @@ describe('PoDatepickerRangeBaseComponent:', () => {
         const returnNull = null;
 
         spyOn(component, <any>'requiredDateRangeFailed').and.returnValue(spyOnReturns);
+        spyOn(component, <any>'verifyValidDate').and.returnValue(true);
         spyOn(component, <any>'dateRangeFormatFailed').and.returnValue(spyOnReturns);
         spyOn(component, <any>'dateRangeFailed').and.returnValue(spyOnReturns);
 
-        const validate = component.validate(new FormControl(undefined));
+        const validate = component.validate(new UntypedFormControl(undefined));
 
         expect(component['requiredDateRangeFailed']).toHaveBeenCalled();
         expect(component['dateRangeFormatFailed']).toHaveBeenCalled();
         expect(component['dateRangeFailed']).toHaveBeenCalled();
         expect(validate).toEqual(returnNull);
+      });
+
+      it(`should call 'validateDateInRange' if contain startDate and set 'errorMessage' with 'dateOutOfPeriod'`, () => {
+        component.literals = poDatepickerRangeLiteralsDefault.pt;
+
+        spyOn(component, <any>'requiredDateRangeFailed').and.returnValue(false);
+        spyOn(component, <any>'verifyValidDate').and.returnValue(true);
+        spyOn(component, <any>'dateRangeObjectFailed').and.returnValue(false);
+        spyOn(component, <any>'dateRangeFormatFailed').and.returnValue(false);
+        spyOn(component, <any>'dateRangeFailed').and.returnValue(false);
+        spyOn(component, <any>'validateDateInRange').and.returnValue(false);
+
+        const value = { value: { start: '2021-10-14', end: '' } };
+
+        component.validate(<any>value);
+        const validate = component.validate(<any>value);
+
+        expect(component.errorMessage).toEqual(component.literals.dateOutOfPeriod);
+        expect(component['validateDateInRange']).toHaveBeenCalled();
+        expect(validate).toEqual(invalidDateRangeError);
+      });
+
+      it(`should call 'validateDateInRange' if contain endDate and set 'errorMessage' with 'dateOutOfPeriod'`, () => {
+        component.literals = poDatepickerRangeLiteralsDefault.pt;
+
+        spyOn(component, <any>'requiredDateRangeFailed').and.returnValue(false);
+        spyOn(component, <any>'verifyValidDate').and.returnValue(true);
+        spyOn(component, <any>'dateRangeObjectFailed').and.returnValue(false);
+        spyOn(component, <any>'dateRangeFormatFailed').and.returnValue(false);
+        spyOn(component, <any>'dateRangeFailed').and.returnValue(false);
+        spyOn(component, <any>'validateDateInRange').and.returnValue(false);
+
+        const value = { value: { start: '', end: '2021-10-14' } };
+
+        component.validate(<any>value);
+        const validate = component.validate(<any>value);
+
+        expect(component.errorMessage).toEqual(component.literals.dateOutOfPeriod);
+        expect(component['validateDateInRange']).toHaveBeenCalled();
+        expect(validate).toEqual(invalidDateRangeError);
+      });
+
+      it('should call markForCheck when status is INVALID', fakeAsync(() => {
+        spyOn(component, <any>'requiredDateRangeFailed').and.returnValue(false);
+        spyOn(component, <any>'verifyValidDate').and.returnValue(true);
+        spyOn(component, <any>'dateRangeObjectFailed').and.returnValue(false);
+        spyOn(component, <any>'dateRangeFormatFailed').and.returnValue(false);
+        spyOn(component, <any>'dateRangeFailed').and.returnValue(false);
+        spyOn(component, <any>'validateDateInRange').and.returnValue(false);
+
+        component['changeDetector'] = { markForCheck: () => {} } as any;
+        component['hasValidatorRequired'] = true;
+        component.fieldErrorMessage = 'Erro inválido';
+        const controlMock = {
+          statusChanges: new Subject<string>()
+        } as any;
+
+        spyOn(component['changeDetector'], 'markForCheck');
+
+        component.validate(controlMock);
+
+        controlMock.statusChanges.next('INVALID');
+        tick();
+
+        expect(component['changeDetector'].markForCheck).toHaveBeenCalled();
+      }));
+
+      it('should set hasValidatorRequired to true if fieldErrorMessage is valid and control has required validator', () => {
+        spyOn(component, <any>'requiredDateRangeFailed').and.returnValue(false);
+        spyOn(component, <any>'verifyValidDate').and.returnValue(true);
+        spyOn(component, <any>'dateRangeObjectFailed').and.returnValue(false);
+        spyOn(component, <any>'dateRangeFormatFailed').and.returnValue(false);
+        spyOn(component, <any>'dateRangeFailed').and.returnValue(false);
+        spyOn(component, <any>'validateDateInRange').and.returnValue(false);
+
+        component['hasValidatorRequired'] = false;
+        component.fieldErrorMessage = 'Field Invalid';
+
+        const controlMock = new FormControl('', Validators.required);
+
+        component.validate(controlMock);
+
+        expect(component['hasValidatorRequired']).toBeTrue();
       });
     });
 
@@ -642,7 +944,8 @@ describe('PoDatepickerRangeBaseComponent:', () => {
 
     it('updateModel: should call `onChangeModel` with `value` if `onChangeModel` is valid.', () => {
       const fakeThis = {
-        onChangeModel: arg => {}
+        onChangeModel: arg => {},
+        controlChangeModelEmitter: arg => {}
       };
       const value: any = 'value';
 
@@ -655,7 +958,8 @@ describe('PoDatepickerRangeBaseComponent:', () => {
 
     it('updateModel: should call `onChangeModel` with `value` object if `onChangeModel` is valid.', () => {
       const fakeThis = {
-        onChangeModel: arg => {}
+        onChangeModel: arg => {},
+        controlChangeModelEmitter: arg => {}
       };
       const value: any = { key: 'value' };
 
@@ -699,6 +1003,185 @@ describe('PoDatepickerRangeBaseComponent:', () => {
       const date = '2018-10-25';
 
       expect(component['convertPatternDateFormat'](date)).toBe(date);
+    });
+
+    it(`should call 'verifyValidDate with startDate valid and return true`, () => {
+      const date = '2021-10-04';
+
+      expect(component['verifyValidDate'](date, '')).toBeTruthy();
+    });
+    it(`should call 'verifyValidDate with startDate invalid and return false`, () => {
+      const date = '2021-02-29';
+
+      expect(component['verifyValidDate'](date, '')).toBeFalsy();
+    });
+    it(`should call 'verifyValidDate with endDate valid and return true`, () => {
+      const date = '2021-10-04';
+
+      expect(component['verifyValidDate']('', date)).toBeTruthy();
+    });
+    it(`should call 'verifyValidDate with endDate invalid and return false`, () => {
+      const date = '2021-02-29';
+
+      expect(component['verifyValidDate']('', date)).toBeFalsy();
+    });
+    it(`should call 'verifyValidDate with startDate e endDate valid and return true`, () => {
+      const startDate = '2021-02-27';
+      const endDate = '2021-02-28';
+
+      expect(component['verifyValidDate'](startDate, endDate)).toBeTruthy();
+    });
+    it(`should call 'verifyValidDate with startDate e endDate invalid and return false`, () => {
+      const startDate = '2021-02-29';
+      const endDate = '2021-03-32';
+
+      expect(component['verifyValidDate'](startDate, endDate)).toBeFalsy();
+    });
+    it('should call dateIsValid with a date that is with a month that is 31 days', () => {
+      const date = '2021-03-10';
+
+      expect(component['dateIsValid'](date)).toBeTruthy();
+    });
+    it('should call dateIsValid with a date that is with a month that is 30 days', () => {
+      const date = '2021-09-10';
+
+      expect(component['dateIsValid'](date)).toBeTruthy();
+    });
+    it('should call dateIsValid with a date with leap year date', () => {
+      const date = '2020-02-29';
+      expect(component['dateIsValid'](date)).toBeTruthy();
+    });
+    it('should call dateIsValid with a date without a leap year date', () => {
+      const date = '2021-02-28';
+
+      expect(component['dateIsValid'](date)).toBeTruthy();
+    });
+
+    it('should call dateIsValid with a invalid date that is with a month that is 31 days', () => {
+      const date = '2021-03-32';
+
+      expect(component['dateIsValid'](date)).toBeFalsy();
+    });
+    it('should call dateIsValid with a invalid date that is with a month that is 30 days', () => {
+      const date = '2021-09-31';
+
+      expect(component['dateIsValid'](date)).toBeFalsy();
+    });
+    it('should call dateIsValid with a invalid date with leap year date', () => {
+      const date = '2020-02-30';
+
+      expect(component['dateIsValid'](date)).toBeFalsy();
+    });
+
+    it(`should call 'verifyValidDate', set 'errorMessage' as 'literals.invalidFormat'`, () => {
+      component.literals = poDatepickerRangeLiteralsDefault.pt;
+
+      spyOn(component, <any>'dateRangeObjectFailed').and.returnValue(false);
+      spyOn(component, <any>'dateRangeFailed').and.returnValue(false);
+      spyOn(component, <any>'verifyValidDate').and.returnValue(false);
+      spyOn(component, <any>'requiredDateRangeFailed');
+      spyOn(component, <any>'dateRangeFormatFailed');
+
+      const value = { value: { start: '2021-02-29', end: '' } };
+
+      component.validate(<any>value);
+
+      expect(component['verifyValidDate']).toHaveBeenCalled();
+      expect(component.errorMessage).toEqual(component.literals.invalidDate);
+    });
+
+    it('validateDateInRange: should return false if `date` is out of range', () => {
+      const date = '2021-09-13';
+      component.minDate = new Date(2021, 9, 14);
+      component.maxDate = new Date(2021, 11, 14);
+
+      expect(component['validateDateInRange'](date)).toBeFalsy();
+    });
+
+    it('validateDateInRange: should return true if `date` is inside of range', () => {
+      const date = '2021-10-15';
+      component.minDate = new Date(2021, 9, 14);
+      component.maxDate = new Date(2021, 11, 14);
+
+      expect(component['validateDateInRange'](date)).toBeTruthy();
+    });
+  });
+
+  describe('p-change-model:', () => {
+    // Feature: p-change-model-fields, Property 1: Emission on new value
+    it('should emit changeModel when writeValue receives a new range value (Property 1)', () => {
+      const newRange = { start: '2023-01-10', end: '2023-01-20' };
+      component.modelLastUpdate = undefined;
+
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(newRange);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith({ start: '2023-01-10', end: '2023-01-20' });
+      expect(component.modelLastUpdate).toEqual({ start: '2023-01-10', end: '2023-01-20' });
+    });
+
+    // Feature: p-change-model-fields, Property 4: Deep equality for complex values
+    it('should NOT emit changeModel when writeValue receives same range content with different reference (Property 4)', () => {
+      component.modelLastUpdate = { start: '2023-01-10', end: '2023-01-20' };
+
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue({ start: '2023-01-10', end: '2023-01-20' });
+
+      expect(component.changeModel.emit).not.toHaveBeenCalled();
+    });
+
+    // Feature: p-change-model-fields, Property 5: User interaction triggers emission
+    it('should emit changeModel on user interaction via updateModel (Property 5)', () => {
+      component.modelLastUpdate = { start: '', end: '' };
+      component.registerOnChange(() => {});
+
+      spyOn(component.changeModel, 'emit');
+
+      const newRange = { start: '2023-03-01', end: '2023-03-15' };
+      component['updateModel'](newRange);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith({ start: '2023-03-01', end: '2023-03-15' });
+      expect(component.modelLastUpdate).toEqual({ start: '2023-03-01', end: '2023-03-15' });
+    });
+
+    // Feature: p-change-model-fields, Property 6: WriteValue does not emit p-change
+    it('should NOT emit change event on writeValue (Property 6)', () => {
+      const newRange = { start: '2023-02-01', end: '2023-02-28' };
+      component.modelLastUpdate = undefined;
+
+      spyOn(component.onChange, 'emit');
+
+      component.writeValue(newRange);
+
+      expect(component.onChange.emit).not.toHaveBeenCalled();
+    });
+
+    it('should store modelLastUpdate as object copy when value is an object', () => {
+      component.modelLastUpdate = undefined;
+
+      const range = { start: '2023-05-01', end: '2023-05-31' };
+      component.controlChangeModelEmitter(range);
+
+      expect(component.modelLastUpdate).toEqual(range);
+      expect(component.modelLastUpdate).not.toBe(range);
+    });
+
+    it('should store modelLastUpdate as primitive when value is not an object', () => {
+      component.modelLastUpdate = undefined;
+
+      component.controlChangeModelEmitter(null);
+
+      expect(component.modelLastUpdate).toBeNull();
+    });
+
+    it('should store modelLastUpdate as primitive when value is undefined', () => {
+      component.modelLastUpdate = { start: '2023-01-01', end: '2023-01-31' };
+
+      component.controlChangeModelEmitter(undefined);
+
+      expect(component.modelLastUpdate).toBeUndefined();
     });
   });
 });

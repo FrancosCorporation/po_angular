@@ -1,12 +1,13 @@
-import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, HostBinding, HostListener, Input, OnInit, Output, inject } from '@angular/core';
 
-import { PoSelectOption, PoLanguageService, PoLanguage, poLanguageDefault } from '@po-ui/ng-components';
+import { PoLanguage, poLanguageDefault, PoLanguageService, PoSelectOption } from '@po-ui/ng-components';
 
-import { convertToBoolean, isTypeof } from './../../utils/util';
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn } from './../../utils/util';
 
 @Component({
   selector: 'po-page-background',
-  templateUrl: './po-page-background.component.html'
+  templateUrl: './po-page-background.component.html',
+  standalone: false
 })
 
 /**
@@ -18,28 +19,10 @@ import { convertToBoolean, isTypeof } from './../../utils/util';
  * de `po-page-login` e demais templates de login.
  */
 export class PoPageBackgroundComponent implements OnInit {
-  private _logo?: string;
-  private _secondaryLogo?: string;
-  private _showSelectLanguage?: boolean = false;
-  private _languagesList: Array<PoLanguage>;
-  private _selectLanguageOptions: Array<PoSelectOption>;
-
-  selectedLanguageOption: string;
+  poLanguageService = inject(PoLanguageService);
 
   /** Insere uma imagem de destaque ao lado direito do container. */
   @Input('p-background') background?: string;
-
-  /** Lista de idiomas para o combo box */
-  @Input('p-languages') set languagesList(value: Array<PoLanguage>) {
-    this._languagesList = value;
-  }
-
-  get languagesList(): Array<PoLanguage> {
-    if (this._languagesList?.length) {
-      return this._languagesList;
-    }
-    return poLanguageDefault;
-  }
 
   /** Idioma inicial selecionado no combo */
   @Input('p-initial-language') initialSelectLanguage?: string;
@@ -49,38 +32,6 @@ export class PoPageBackgroundComponent implements OnInit {
 
   /** Texto de destaque sobreposto à imagem de destaque. Essa opção é utilizada em conjunto com o atributo `p-background`. */
   @Input('p-highlight-info') highlightInfo?: string;
-
-  /** Caminho para a logomarca localizada na parte superior. */
-  @Input('p-logo') set logo(value: any) {
-    this._logo = isTypeof(value, 'string') && value.trim() ? value : undefined;
-  }
-
-  get logo() {
-    return this._logo;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Caminho para a logomarca localizada no rodapé.
-   */
-  @Input('p-secondary-logo') set secondaryLogo(value: any) {
-    this._secondaryLogo = isTypeof(value, 'string') && value.trim() ? value : undefined;
-  }
-
-  get secondaryLogo() {
-    return this._secondaryLogo;
-  }
-
-  /** Define se o seletor de idiomas deve ser exibido. */
-  @Input('p-show-select-language') set showSelectLanguage(showSelectLanguage: boolean) {
-    this._showSelectLanguage = convertToBoolean(showSelectLanguage);
-  }
-  get showSelectLanguage() {
-    return this._showSelectLanguage;
-  }
 
   /**
    * @optional
@@ -92,14 +43,77 @@ export class PoPageBackgroundComponent implements OnInit {
    */
   @Output('p-selected-language') selectedLanguage: EventEmitter<string> = new EventEmitter<string>();
 
-  constructor(public poLanguageService: PoLanguageService) {}
+  selectedLanguageOption: string;
+
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _showSelectLanguage?: boolean = false;
+  private _languagesList: Array<PoLanguage>;
+  private _selectLanguageOptions: Array<PoSelectOption>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
+  }
+
+  /** Lista de idiomas para o combo box */
+  @Input('p-languages') set languagesList(value: Array<PoLanguage>) {
+    this._languagesList = value;
+    this.setLanguageOptions();
+  }
+
+  get languagesList(): Array<PoLanguage> {
+    if (this._languagesList?.length) {
+      return this._languagesList;
+    }
+    return poLanguageDefault;
+  }
+
+  /** Caminho para a logomarca localizada na parte superior. */
+  @Input('p-logo') logo?: string;
+
+  /** Texto alternativo para a logomarca. */
+  @Input('p-logo-alt') logoAlt?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Caminho para a logomarca localizada no rodapé.
+   */
+  @Input('p-secondary-logo') secondaryLogo: string;
+
+  /** Define se o seletor de idiomas deve ser exibido. */
+  @Input('p-show-select-language') set showSelectLanguage(showSelectLanguage: boolean) {
+    this._showSelectLanguage = convertToBoolean(showSelectLanguage);
+  }
+  get showSelectLanguage() {
+    return this._showSelectLanguage;
+  }
 
   ngOnInit() {
     this.selectedLanguageOption = this.initialSelectLanguage || this.poLanguageService.getShortLanguage();
-    this._selectLanguageOptions = this.languagesList.map<PoSelectOption>(language => ({
-      label: language.description,
-      value: language.language
-    }));
   }
 
   onChangeLanguage() {
@@ -108,5 +122,21 @@ export class PoPageBackgroundComponent implements OnInit {
 
   get selectLanguageOptions(): Array<PoSelectOption> {
     return this._selectLanguageOptions;
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private setLanguageOptions() {
+    this._selectLanguageOptions = this.languagesList.map<PoSelectOption>(language => ({
+      label: language.description,
+      value: language.language
+    }));
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
   }
 }

@@ -5,8 +5,8 @@ import { PoDirectivesModule } from './directives/directives.module';
 import { PoGuardsModule } from './guards/guards.module';
 import { PoInterceptorsModule } from './interceptors/interceptors.module';
 import { PoPipesModule } from './pipes/pipes.module';
-import { PoServicesModule } from './services/services.module';
 import { PoNotificationService } from './services/po-notification/po-notification.service';
+import { PoServicesModule } from './services/services.module';
 
 @NgModule({
   declarations: [],

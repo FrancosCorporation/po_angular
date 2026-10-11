@@ -9,7 +9,9 @@ import { sortValues } from '../../utils/util';
  *
  * Serviço responsável por gerenciar o tratamento dos formatos de data e hora.
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoDateService {
   private readonly dateRegex = new RegExp(
     '^(?:[0-9])\\d{1}(?:[0-9])\\d{1}-' + '(?:0[1-9]|1[0-2])-' + '(?:0[1-9]|[12]\\d|3[01])$'
@@ -31,7 +33,7 @@ export class PoDateService {
    * @param minDate Definir `true` caso seja `minDate`.
    * @param maxDate Definir `true` caso seja `maxDate`.
    */
-  convertIsoToDate(dateString: string, minDate: boolean, maxDate: boolean): Date {
+  convertIsoToDate(dateString: string, minDate?: boolean, maxDate?: boolean): Date {
     if (dateString) {
       const { year, month, day } = this.getDateFromIso(dateString);
 
@@ -126,6 +128,7 @@ export class PoDateService {
 
   /**
    * Retorna `true` caso o período seja válido, para isso a primeira data deve ser maior que a segunda data.
+   *
    * @param dateA primeira data
    * @param dateB segunda data
    */

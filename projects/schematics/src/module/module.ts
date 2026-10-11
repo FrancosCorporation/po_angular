@@ -1,19 +1,24 @@
-import { addImportToModule, addDeclarationToModule, addExportToModule } from '@schematics/angular/utility/ast-utils';
-import { getAppModulePath } from '@schematics/angular/utility/ng-ast-utils';
-import { InsertChange, Change } from '@schematics/angular/utility/change';
 import { SchematicsException, Tree } from '@angular-devkit/schematics';
+import { addDeclarationToModule, addExportToModule, addImportToModule } from '@schematics/angular/utility/ast-utils';
+import { Change, InsertChange } from '@schematics/angular/utility/change';
+import { getAppModulePath, isStandaloneApp } from '@schematics/angular/utility/ng-ast-utils';
 
 import * as ts from 'typescript';
 
-import { getProjectMainFile, getProjectFromWorkspace, getWorkspaceConfigGracefully } from '../project';
 import { WorkspaceSchema } from '@schematics/angular/utility/workspace-models';
+import { getProjectFromWorkspace, getProjectMainFile, getWorkspaceConfigGracefully } from '../project';
 
 export function addModuleImportToRootModule(options: any, moduleName: string, modulePath: string) {
   return (host: Tree) => {
     const workspace = getWorkspaceConfigGracefully(host) ?? ({} as WorkspaceSchema);
-    const project = getProjectFromWorkspace(workspace, options.project);
-    const appModulePath = getAppModulePath(host, getProjectMainFile(project));
+    const project: any = getProjectFromWorkspace(workspace, options.project);
+    const browserEntryPoint = getProjectMainFile(project);
 
+    if (isStandaloneApp(host, browserEntryPoint)) {
+      return host;
+    }
+
+    const appModulePath = getAppModulePath(host, browserEntryPoint);
     if (!hasNgModuleImport(host, appModulePath, moduleName)) {
       // not add the module if the project already use
       addModuleImportToModule(host, appModulePath, moduleName, modulePath);

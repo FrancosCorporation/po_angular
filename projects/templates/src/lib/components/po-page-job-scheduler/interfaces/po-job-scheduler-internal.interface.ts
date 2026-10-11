@@ -1,5 +1,13 @@
 export interface PoJobSchedulerInternal {
+  [property: string | number]: any;
+
   dayOfMonth?: number;
+
+  frequency?: object;
+
+  rangeLimitHour?: string;
+
+  rangeLimitDay?: number;
 
   daysOfWeek?: Array<string>;
 

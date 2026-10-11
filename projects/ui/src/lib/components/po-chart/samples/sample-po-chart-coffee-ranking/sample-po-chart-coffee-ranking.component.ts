@@ -1,18 +1,24 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
-import { PoChartType, PoChartOptions, PoChartSerie, PoDialogService } from '@po-ui/ng-components';
+import { PoChartType, PoChartOptions, PoChartSerie, PoDialogService, PoChartLabelFormat } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-chart-coffee-ranking',
-  templateUrl: './sample-po-chart-coffee-ranking.component.html'
+  templateUrl: './sample-po-chart-coffee-ranking.component.html',
+  providers: [PoDialogService],
+  standalone: false
 })
 export class SamplePoChartCoffeeRankingComponent {
+  private poAlert = inject(PoDialogService);
+
   participationByCountryInWorldExportsType: PoChartType = PoChartType.Line;
   evolutionOfCoffeeAndSomeCompetitorsType: PoChartType = PoChartType.Column;
   coffeConsumingChartType: PoChartType = PoChartType.Donut;
   consumptionPerCapitaType: PoChartType = PoChartType.Bar;
 
   categories: Array<string> = ['2010', '2011', '2012', '2013', '2014', '2015'];
+
+  chartAreaCategories: Array<string> = ['Jan-18', 'Jul-18', 'Jan-19', 'Jul-19', 'Jan-20', 'Jul-20', 'Jan-21'];
 
   categoriesColumn: Array<string> = ['coffee', 'chocolate', 'tea'];
 
@@ -28,8 +34,18 @@ export class SamplePoChartCoffeeRankingComponent {
     'Sodas',
     'Beer 0% A.',
     'Wheat Beer',
-    'Milk Shakes',
-    'Icetea'
+    'Milk Shakes'
+  ];
+
+  chartAreaSeries: Array<PoChartSerie> = [
+    { label: 'Starbucks', data: [550, 497, 532, 550, 530, 565, 572], type: PoChartType.Area },
+    { label: 'Green Mntn Coffee Roaster', data: [420, 511, 493, 525, 522, 510, 567], type: PoChartType.Area },
+    { label: 'Dunkin Brands Group', data: [312, 542, 497, 610, 542, 661, 674], type: PoChartType.Area },
+    {
+      label: 'Coffee Arabica Price',
+      data: [550, 612, 525, 373, 342, 297, 282],
+      type: PoChartType.Line
+    }
   ];
 
   coffeeConsumption: Array<PoChartSerie> = [
@@ -37,7 +53,17 @@ export class SamplePoChartCoffeeRankingComponent {
     { label: 'Norway', data: 7.2, tooltip: 'Norway (Europe)' },
     { label: 'Netherlands', data: 6.7, tooltip: 'Netherlands (Europe)' },
     { label: 'Slovenia', data: 6.1, tooltip: 'Slovenia (Europe)' },
-    { label: 'Austria', data: 5.5, tooltip: 'Austria (Europe)' }
+    { label: 'Austria', data: 5.5, tooltip: 'Austria (Europe)' },
+    { label: 'Germany', data: 5.2, tooltip: 'Germany (Europe)' },
+    { label: 'Denmark', data: 5.1, tooltip: 'Denmark (Europe)' },
+    { label: 'Sweden', data: 4.9, tooltip: 'Sweden (Europe)' },
+    { label: 'Switzerland', data: 4.8, tooltip: 'Switzerland (Europe)' },
+    { label: 'Belgium', data: 4.6, tooltip: 'Belgium (Europe)' },
+    { label: 'Canada', data: 4.5, tooltip: 'Canada (North America)' },
+    { label: 'Brazil', data: 4.3, tooltip: 'Brazil (South America)' },
+    { label: 'Italy', data: 4.2, tooltip: 'Italy (Europe)' },
+    { label: 'France', data: 4.1, tooltip: 'France (Europe)' },
+    { label: 'USA', data: 4.0, tooltip: 'USA (North America)' }
   ];
 
   consumptionPerCapita: Array<PoChartSerie> = [
@@ -46,22 +72,36 @@ export class SamplePoChartCoffeeRankingComponent {
   ];
 
   participationByCountryInWorldExports: Array<PoChartSerie> = [
-    { label: 'Brazil', data: [35, 32, 25, 29, 33, 33] },
-    { label: 'Vietnam', data: [15, 17, 23, 19, 22, 18] },
-    { label: 'Colombia', data: [8, 7, 6, 9, 10, 11] },
+    {
+      label: 'Brazil',
+      data: [35, 32, 25, 29, 33, 33],
+      color: 'color-10',
+      tooltip: params =>
+        `País: ${params.seriesName}<br><b>Ano:</b> ${params.name}<br><b>Exportações:</b> ${params.value}%`
+    },
+    {
+      label: 'Vietnam',
+      data: [15, 17, 23, 19, 22, 18],
+      tooltip: 'Exportações de <b>{seriesName}</b><br><i>Ano:</i> {name}<br>Participação: {value}%'
+    },
+    {
+      label: 'Colombia',
+      data: [8, 7, 6, 9, 10, 11],
+      tooltip: 'País: {seriesName}\nAno: {name}\nParticipação: {value}%'
+    },
     { label: 'India', data: [5, 6, 5, 4, 5, 5] },
     { label: 'Indonesia', data: [7, 6, 10, 10, 4, 6] }
   ];
 
   evolutionOfCoffeeAndSomeCompetitors: Array<PoChartSerie> = [
     { label: '2014', data: [91, 40, 42], type: PoChartType.Column },
-    { label: '2017', data: [93, 52, 39], type: PoChartType.Column },
-    { label: '2020', data: [95, 46, 31], type: PoChartType.Column },
-    { label: 'Coffee consumption in Brazil', data: [34, 27, 79], type: PoChartType.Line }
+    { label: '2017', data: [93, 52, 18], type: PoChartType.Column },
+    { label: '2020', data: [95, 21, -17], type: PoChartType.Column },
+    { label: 'Coffee consumption in Brazil', data: [34, 27, 79], type: PoChartType.Line, color: 'color-10' }
   ];
 
   coffeeProduction: Array<PoChartSerie> = [
-    { label: 'Brazil', data: 2796, tooltip: 'Brazil (South America)' },
+    { label: 'Brazil', data: 1796, tooltip: 'Brazil (South America)', color: 'color-10' },
     { label: 'Vietnam', data: 1076, tooltip: 'Vietnam (Asia)' },
     { label: 'Colombia', data: 688, tooltip: 'Colombia (South America)' },
     { label: 'Indonesia', data: 682, tooltip: 'Indonesia (Asia/Oceania)' },
@@ -81,30 +121,51 @@ export class SamplePoChartCoffeeRankingComponent {
     { position: '10', company: 'Coffee Beanery', location: 'Flushing, Michigan, US', foundation: '1976' }
   ];
 
+  coffeeProductionOptions: PoChartOptions = {
+    roseType: true,
+    borderRadius: 8
+  };
+
+  coffeeConsumptionOptions: PoChartOptions = {
+    legendType: 'scroll'
+  };
+
   consumptionPerCapitaOptions: PoChartOptions = {
     axis: {
       maxRange: 100,
-      gridLines: 2
-    }
+      gridLines: 2,
+      labelType: PoChartLabelFormat.Number,
+      rotateLegend: 45
+    },
+    legendVerticalPosition: 'top'
+  };
+
+  chartAreaOptions: PoChartOptions = {
+    axis: {
+      maxRange: 700,
+      gridLines: 8
+    },
+    fillPoints: true
   };
 
   options: PoChartOptions = {
     axis: {
       minRange: 0,
       maxRange: 40,
-      gridLines: 5
-    }
+      gridLines: 5,
+      labelType: PoChartLabelFormat.Number
+    },
+    dataZoom: true
   };
 
   optionsColumn: PoChartOptions = {
     axis: {
-      minRange: 0,
+      minRange: -20,
       maxRange: 100,
-      gridLines: 5
+      gridLines: 7,
+      showXAxis: true
     }
   };
-
-  constructor(private poAlert: PoDialogService) {}
 
   searchMore(event: any) {
     window.open(`http://google.com/search?q=coffee+producing+${event.label}`, '_blank');

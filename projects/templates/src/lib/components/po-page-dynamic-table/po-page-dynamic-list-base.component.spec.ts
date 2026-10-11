@@ -1,10 +1,17 @@
+import { TestBed } from '@angular/core/testing';
+
 import { PoPageDynamicListBaseComponent } from './po-page-dynamic-list-base.component';
 
 import { expectPropertiesValues } from '../../util-test/util-expect.spec';
 
 describe('PoPageDynamicListBaseComponent:', () => {
-  const component = new PoPageDynamicListBaseComponent();
+  let component: PoPageDynamicListBaseComponent;
   const cityOptions = [{ label: 'São Paulo', value: 'sp' }];
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({}).compileComponents();
+    component = TestBed.runInInjectionContext(() => new PoPageDynamicListBaseComponent());
+  });
 
   it('should be created', () => {
     expect(component).toBeTruthy();
@@ -87,6 +94,15 @@ describe('PoPageDynamicListBaseComponent:', () => {
       expect(component.columns).toEqual(columns);
       expect(component.columns).not.toBe(columns);
     });
+
+    it('changeFixedColumns: should be an output signal with alias `p-change-fixed-columns`', () => {
+      spyOn(component.changeFixedColumns, 'emit');
+      const fakeColumns = ['name', 'age'];
+
+      component.changeFixedColumns.emit(fakeColumns);
+
+      expect(component.changeFixedColumns.emit).toHaveBeenCalledWith(fakeColumns);
+    });
   });
 
   describe('Methods:', () => {
@@ -108,6 +124,51 @@ describe('PoPageDynamicListBaseComponent:', () => {
           { property: 'name', label: 'Name', filter: true, visible: true, gridColumns: 6 },
           { property: 'genre', label: 'Genre', filter: true, gridColumns: 6, visible: true, duplicate: true },
           { property: 'city', label: 'City', filter: true, duplicate: true, visible: true, gridColumns: 12 }
+        ];
+
+        component['setFieldsProperties'](fields);
+
+        expect(component.filters).toEqual(filtersResult);
+      });
+
+      it('should set `filters` with visible equal false to items that have the `fixed` and `initValue` properties', () => {
+        fields = [
+          { property: 'id', key: true },
+          { property: 'name', label: 'Name', filter: true, visible: true, gridColumns: 6 },
+          { property: 'genre', label: 'Genre', filter: true, gridColumns: 6, duplicate: true, fixed: true },
+          { property: 'birthdate', label: 'Birthdate', type: 'date', gridColumns: 6 },
+          {
+            property: 'city',
+            label: 'City',
+            filter: true,
+            duplicate: true,
+            gridColumns: 12,
+            fixed: true,
+            initValue: 'Joinville'
+          }
+        ];
+
+        const filtersResult = [
+          { property: 'name', label: 'Name', filter: true, visible: true, gridColumns: 6 },
+          {
+            property: 'genre',
+            label: 'Genre',
+            filter: true,
+            gridColumns: 6,
+            visible: true,
+            duplicate: true,
+            fixed: true
+          },
+          {
+            property: 'city',
+            label: 'City',
+            filter: true,
+            duplicate: true,
+            visible: false,
+            gridColumns: 12,
+            fixed: true,
+            initValue: 'Joinville'
+          }
         ];
 
         component['setFieldsProperties'](fields);
@@ -180,6 +241,80 @@ describe('PoPageDynamicListBaseComponent:', () => {
 
         expect(component.duplicates).toEqual(duplicatesResult);
       });
+    });
+  });
+  describe('setColumns:', () => {
+    it('should correctly sort columns by order, placing undefined or invalid orders at the end', () => {
+      const unorderedColumns = [
+        { property: 'name', order: 3 },
+        { property: 'birthdate', order: 1 },
+        { property: 'address' }, // Sem 'order', deve ser colocado no final
+        { property: 'city', order: 2 },
+        { property: 'country', order: -1 } // 'order' inválido, deve ser tratado como se estivesse sem 'order'
+      ];
+
+      const orderedColumns = [
+        { property: 'birthdate', order: 1 },
+        { property: 'city', order: 2 },
+        { property: 'name', order: 3 },
+        { property: 'address' }, // Mantém a posição original entre os sem 'order'
+        { property: 'country', order: -1 } // Mantém a posição original entre os sem 'order'
+      ];
+
+      // Aqui estamos testando o comportamento indiretamente através do setter `columns`
+      component.columns = unorderedColumns;
+
+      expect(component.columns).toEqual(orderedColumns);
+    });
+    it('should correctly handle columns with duplicate order values by maintaining their original relative order', () => {
+      const duplicateOrderColumns = [
+        { property: 'name', order: 2 },
+        { property: 'birthdate', order: 1 },
+        { property: 'city', order: 2 }, // Duplicado 'order' com 'name'
+        { property: 'country', order: 1 } // Duplicado 'order' com 'birthdate'
+      ];
+
+      const expectedOrderWithDuplicates = [
+        { property: 'birthdate', order: 1 },
+        { property: 'country', order: 1 }, // Mantém ordem relativa original para valores de 'order' duplicados
+        { property: 'name', order: 2 },
+        { property: 'city', order: 2 } // Mantém ordem relativa original para valores de 'order' duplicados
+      ];
+
+      component.columns = duplicateOrderColumns;
+
+      expect(component.columns).toEqual(expectedOrderWithDuplicates);
+    });
+    it('should ignore non-integer order properties and treat them as having no order', () => {
+      const mixedOrderColumns = [
+        { property: 'name', order: '3' }, // 'order' como string
+        { property: 'birthdate', order: 1 },
+        { property: 'city', order: 'two' }, // 'order' inválido como string
+        { property: 'address', order: null } // 'order' como null
+      ];
+
+      const expectedOrder = [
+        { property: 'birthdate', order: 1 },
+        { property: 'name', order: '3' }, // Mantido como sem 'order'
+        { property: 'city', order: 'two' }, // Mantido como sem 'order'
+        { property: 'address', order: null } // Mantido como sem 'order'
+      ];
+
+      component.columns = mixedOrderColumns;
+
+      expect(component.columns).toEqual(expectedOrder);
+    });
+    it('should maintain the original order of columns without an order property at the end', () => {
+      const columnsWithoutOrder = [
+        { property: 'name' },
+        { property: 'birthdate' },
+        { property: 'city' },
+        { property: 'country' }
+      ];
+
+      component.columns = columnsWithoutOrder;
+
+      expect(component.columns).toEqual(columnsWithoutOrder);
     });
   });
 });

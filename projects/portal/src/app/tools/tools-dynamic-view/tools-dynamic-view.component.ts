@@ -17,7 +17,8 @@ import {
 @Component({
   selector: 'app-tools-dynamic-view',
   templateUrl: 'tools-dynamic-view.component.html',
-  styleUrls: ['tools-dynamic-view.component.css']
+  styleUrls: ['tools-dynamic-view.component.css'],
+  standalone: false
 })
 export class ToolsDynamicViewComponent {
   @ViewChild('generatorForm') generatorForm: NgForm;
@@ -128,7 +129,7 @@ export class ToolsDynamicViewComponent {
   };
 
   readonly pageActions: Array<PoPageAction> = [
-    { label: 'Importar JSON', icon: 'po-icon-upload', action: () => this.importJsonModal.open() },
+    { label: 'Importar JSON', icon: 'ICON_UPLOAD', action: () => this.importJsonModal.open() },
     { label: 'Visualizar JSON', disabled: () => !this.fields.length, action: () => this.viewJsonModal.open() },
     { label: 'Dynamic Form', url: '/tools/dynamic-form' }
   ];
@@ -136,9 +137,7 @@ export class ToolsDynamicViewComponent {
   constructor(private poNotification: PoNotificationService) {}
 
   openValueForm() {
-    this.valueFields = this.fields.map(field => {
-      return { property: field.property, gridColumns: 6 };
-    });
+    this.valueFields = this.fields.map(field => ({ property: field.property, gridColumns: 6 }));
 
     this.valueForms.open();
   }
@@ -164,7 +163,7 @@ export class ToolsDynamicViewComponent {
         }
       }
 
-      // tslint:disable-next-line:no-self-assignment
+      // eslint-disable-next-line no-self-assign
       this.fields = [...this.fields];
     }
   }
@@ -193,7 +192,7 @@ export class ToolsDynamicViewComponent {
 
     this.addPropertyInValue(newField.property);
 
-    // tslint:disable-next-line:no-self-assignment
+    // eslint-disable-next-line no-self-assign
     this.fields = [...this.fields];
     this.resetForm();
   }

@@ -1,11 +1,11 @@
-import { ElementRef, EventEmitter, Input, Directive, Output } from '@angular/core';
+import { ElementRef, EventEmitter, Input, Output, input, Component } from '@angular/core';
 
 import { convertToBoolean } from '../../utils/util';
 import { PO_CONTROL_POSITIONS } from './../../services/po-control-position/po-control-position.constants';
 
 const PO_POPOVER_DEFAULT_POSITION = 'right';
 const PO_POPOVER_DEFAULT_TRIGGER = 'click';
-const PO_POPOVER_TRIGGERS = ['click', 'hover'];
+const PO_POPOVER_TRIGGERS = ['click', 'hover', 'function'];
 
 /**
  * @description
@@ -26,10 +26,106 @@ const PO_POPOVER_TRIGGERS = ['click', 'hover'];
  * Os eventos permitidos são: `click` e `hover`.
  *
  */
-@Directive()
+@Component({
+  selector: 'po-popover-base',
+  template: '',
+  standalone: false
+})
 export class PoPopoverBaseComponent {
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define que o popover será inserido no body da página em vez do elemento definido em `p-target`. Essa opção pode
+   * ser necessária em cenários com containers que possuem scroll ou overflow escondido, garantindo o posicionamento
+   * correto do conteúdo próximo ao elemento.
+   *
+   * @default `false`
+   */
+
+  @Input({ alias: 'p-append-in-body', transform: convertToBoolean }) appendBox: boolean = false;
+
+  // Indica se o elemento filho será alinhado nos cantos do elemento pai.
+  @Input('p-corner-aligned') cornerAligned = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o espaçamento (em pixels) entre o componente alvo (`p-target`) e o `po-popover`.
+   * Útil para componentes com targets pequenos (como ícones) onde o espaçamento padrão é
+   * proporcionalmente muito grande e cria desalinhamento visual.
+   *
+   * @default `8`
+   */
+  @Input('p-offset') offset: number = 8;
+
+  /**
+   * @description
+   *
+   * ElementRef do componente de origem responsável por abrir o popover.
+   * Para utilizar o po-popover deve-se colocar uma variável no componente que vai disparar o evento
+   * de abertura, exemplo:
+   *
+   * ```
+   * <po-button
+   *   p-label="Open Popover">
+   * </po-button>
+   *
+   * <po-popover
+   *   [p-target]="poButton"
+   *   [p-title]="PO Popover">
+   * </po-popover>
+   * ```
+   *
+   * Também deve-se criar um ViewChild para cada popover, passando como referência o elemento do
+   * HTML que irá disparar o evento. Exemplo:
+   *
+   * ```
+   * @ViewChild(PoButtonComponent, {read: ElementRef}) poButton: PoButtonComponent;
+   * ```
+   *
+   * Pode-se tambem informar diretamente o HTMLElement, para não ter que utilizar o ViewChild.
+   * Para utilizar o po-popover deve-se colocar uma variável no componente que vai disparar o evento
+   * de abertura, exemplo:
+   *
+   * ```
+   * <button #target>
+   *   Abrir popover
+   * </button>
+   *
+   * <po-popover
+   *     [p-target]="target"
+   *     p-trigger="click" >
+   * </po-popover>
+   * ```
+   *
+   *
+   *
+   */
+  @Input('p-target') target: ElementRef | HTMLElement;
+
+  /** Título do popover. */
+  @Input('p-title') title?: string;
+
+  // Define o width do popover.
+  @Input('p-width') width?: number;
+
+  /** Evento disparado ao fechar o popover. */
+  @Output('p-close') closePopover = new EventEmitter<any>();
+
+  /** Evento disparado ao abrir o popover. */
+  @Output('p-open') openPopover = new EventEmitter<any>();
+
   // Controla se o popover fica oculto ou visível, por padrão é oculto.
   isHidden: boolean = true;
+
+  protected clickoutListener: () => void;
+  protected mouseEnterListener: () => void;
+  protected mouseLeaveListener: () => void;
+  protected resizeListener: () => void;
 
   private _hideArrow: boolean = false;
   private _position?: string = PO_POPOVER_DEFAULT_POSITION;
@@ -89,59 +185,12 @@ export class PoPopoverBaseComponent {
   /**
    * @description
    *
-   * ElementRef do componente de origem responsável por abrir o popover.
-   * Para utilizar o po-popover deve-se colocar uma variável no componente que vai disparar o evento
-   * de abertura, exemplo:
-   *
-   * ```
-   * <po-button
-   *   p-label="Open Popover">
-   * </po-button>
-   *
-   * <po-popover
-   *   [p-target]="poButton"
-   *   [p-title]="PO Popover">
-   * </po-popover>
-   * ```
-   *
-   * Também deve-se criar um ViewChild para cada popover, passando como referência o elemento do
-   * HTML que irá disparar o evento. Exemplo:
-   *
-   * ```
-   * @ViewChild(PoButtonComponent, {read: ElementRef}) poButton: PoButtonComponent;
-   * ```
-   *
-   * Pode-se tambem informar diretamente o HTMLElement, para não ter que utilizar o ViewChild.
-   * Para utilizar o po-popover deve-se colocar uma variável no componente que vai disparar o evento
-   * de abertura, exemplo:
-   *
-   * ```
-   * <button #target>
-   *   Abrir popover
-   * </button>
-   *
-   * <po-popover
-   *     [p-target]="target"
-   *     p-trigger="click" >
-   * </po-popover>
-   * ```
-   *
-   *
-   *
-   */
-  @Input('p-target') target: ElementRef | HTMLElement;
-
-  /** Título do popover. */
-  @Input('p-title') title?: string;
-
-  /**
-   * @description
-   *
    * Define o evento que abrirá o po-popover.
    *
    * Valores válidos:
    *  - `click`: Abre ao clicar no componente alvo.
    *  - `hover`: Abre ao passar o mouse sobre o componente alvo.
+   *  - `function`: Abre através de funções públicas do componente.
    *
    * @default click
    * @optional
@@ -154,11 +203,14 @@ export class PoPopoverBaseComponent {
     return this._trigger;
   }
 
-  /** Evento disparado ao fechar o popover. */
-  @Output('p-close') closePopover = new EventEmitter<any>();
-
-  protected clickoutListener: () => void;
-  protected mouseEnterListener: () => void;
-  protected mouseLeaveListener: () => void;
-  protected resizeListener: () => void;
+  /**
+   * @optional
+   *
+   * @description
+   * Permite a inclusão de classes CSS customizadas ao componente.
+   *
+   * Exemplo: `p-custom-classes="minha-classe-1 minha-classe-2"`.
+   *
+   */
+  customClasses = input<string>(undefined, { alias: 'p-custom-classes' });
 }

@@ -1,19 +1,73 @@
-<div class="po-page-header">
-  <!-- Breadcrumb -->
-  <div class="po-page-header-breadcrumb" *ngIf="breadcrumb && breadcrumb.items.length">
-    <po-breadcrumb
-      [p-favorite-service]="breadcrumb.favorite"
-      [p-items]="breadcrumb.items"
-      [p-params-service]="breadcrumb.params"
-    >
-    </po-breadcrumb>
+<div
+  class="po-page-header"
+  [class.po-page-header-secondary]="type === 'secondary'"
+  [class.po-page-header-tertiary]="type === 'tertiary'"
+>
+  <!-- Breadcrumb - only shown for primary -->
+  @if (type === 'primary' && breadcrumb && breadcrumb.items.length) {
+    <div class="po-page-header-breadcrumb">
+      <po-breadcrumb
+        [p-favorite-service]="breadcrumb.favorite"
+        [p-items]="breadcrumb.items"
+        [p-params-service]="breadcrumb.params"
+        [p-size]="size"
+      >
+      </po-breadcrumb>
+    </div>
+  }
+
+  <div class="po-page-header-container">
+    <!-- Back navigation button - only for secondary, projected from parent -->
+    <ng-content select="[po-page-header-navigation]"></ng-content>
+
+    <!-- Titulo e SubTitulo-->
+    @if (title) {
+      <div class="po-page-header-title-container">
+        @if (title) {
+          @if (type === 'secondary' || type === 'tertiary') {
+            <h3 class="po-page-header-title">
+              {{ title }}
+            </h3>
+          } @else {
+            <h2 class="po-page-header-title">
+              {{ title }}
+            </h2>
+          }
+        }
+        @if (title && subtitle) {
+          <div class="po-page-header-subtitle">
+            <span class="po-page-header-subtitle-text">
+              @for (fragment of subtitleFragments; track $index) {
+                <span
+                  [class.po-text-bold]="fragment.bold"
+                  [class.po-text-italic]="fragment.italic"
+                  [class.po-text-underline]="fragment.underline"
+                  >{{ fragment.text }}</span
+                >
+              }
+            </span>
+            @if (customAction()) {
+              <po-helper [p-custom-action]="customAction()" [p-size]="size"></po-helper>
+            } @else if (helper()) {
+              <po-helper [p-helper]="helper()" [p-size]="size"></po-helper>
+            }
+          </div>
+        }
+        @if (title && !subtitle) {
+          @if (customAction()) {
+            <div class="po-page-header-subtitle">
+              <po-helper [p-custom-action]="customAction()" [p-size]="size"></po-helper>
+            </div>
+          } @else if (helper()) {
+            <div class="po-page-header-subtitle">
+              <po-helper [p-helper]="helper()" [p-size]="size"></po-helper>
+            </div>
+          }
+        }
+      </div>
+    }
+
+    <!-- Operações -->
+    <ng-content></ng-content>
   </div>
-
-  <!-- Titulo -->
-  <h1 class="po-page-header-title" *ngIf="title">
-    {{ title }}
-  </h1>
-
-  <!-- Operações -->
-  <ng-content></ng-content>
 </div>

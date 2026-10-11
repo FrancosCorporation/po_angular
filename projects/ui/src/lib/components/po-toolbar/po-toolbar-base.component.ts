@@ -1,4 +1,4 @@
-import { Input, Directive } from '@angular/core';
+import { Input, Directive, TemplateRef } from '@angular/core';
 
 import { convertToInt } from '../../utils/util';
 
@@ -12,8 +12,6 @@ import { PoToolbarProfile } from './po-toolbar-profile/po-toolbar-profile.interf
  */
 @Directive()
 export class PoToolbarBaseComponent {
-  private _notificationNumber?: number;
-
   /**
    * @optional
    *
@@ -28,13 +26,31 @@ export class PoToolbarBaseComponent {
    *
    * @description
    *
-   * Define um [ícone](/guides/icons) para a propriedade `p-actions`.
+   * Define um [ícone](https://po-ui.io/icons) para a propriedade `p-actions`.
+   *
+   * É possível usar qualquer um dos ícones da [Biblioteca de ícones](https://po-ui.io/icons). conforme exemplo abaixo:
+   * ```
+   * <po-toolbar p-actions-icon="an an-user" [p-actions]="actions"></po-toolbar>
+   * ```
+   * Também é possível utilizar outras fontes de ícones, por exemplo a biblioteca *Font Awesome*, da seguinte forma:
+   * ```
+   * <po-toolbar p-actions-icon="far fa-comment-alt" [p-actions]="actions"></po-toolbar>
+   * ```
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * ```
+   * <po-toolbar [p-actions-icon]="template" [p-actions]="actions"></po-toolbar>
+   *
+   * <ng-template #template>
+   *  <ion-icon style="font-size: inherit" name="heart"></ion-icon>
+   * </ng-template>
+   * ```
+   * > Para o ícone enquadrar corretamente, deve-se utilizar `font-size: inherit` caso o ícone utilizado não aplique-o.
    *
    * > Caso não haja ações definidas em `p-actions`, o ícone não será exibido.
    *
-   * @default `po-icon-more`
+   * @default `an-dots-three`
    */
-  @Input('p-actions-icon') actionsIcon?: string;
+  @Input('p-actions-icon') actionsIcon?: string | TemplateRef<void>;
 
   /** Define o objeto que será o cabeçalho da lista de ações com as informações do perfil. */
   @Input('p-profile') profile?: PoToolbarProfile;
@@ -56,6 +72,8 @@ export class PoToolbarBaseComponent {
    * Lista de ações da notificação.
    */
   @Input('p-notification-actions') notificationActions?: Array<PoToolbarAction>;
+
+  private _notificationNumber?: number;
 
   /**
    * @optional

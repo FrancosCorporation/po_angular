@@ -2,6 +2,8 @@ import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgModule } from '@angular/core';
 import { RouterModule } from '@angular/router';
+import { ScrollingModule } from '@angular/cdk/scrolling';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import { PoButtonModule } from './../po-button/po-button.module';
 import { PoCheckboxGroupModule } from '../po-field/po-checkbox-group/po-checkbox-group.module';
@@ -10,8 +12,14 @@ import { PoLoadingModule } from '../po-loading/po-loading.module';
 import { PoModalModule } from '../po-modal/po-modal.module';
 import { PoPopoverModule } from '../po-popover/po-popover.module';
 import { PoPopupModule } from './../po-popup/po-popup.module';
+import { PoTagModule } from '../po-tag/po-tag.module';
 import { PoTimeModule } from '../../pipes/po-time/index';
 import { PoTooltipModule } from '../../directives/po-tooltip/index';
+import { PoIconModule } from './../po-icon/po-icon.module';
+import { PoCheckboxModule } from './../po-field/po-checkbox/po-checkbox.module';
+import { PoRadioModule } from './../po-field/po-radio/po-radio.module';
+import { PoLinkModule } from '../po-link/po-link.module';
+import { PoPageSlideModule } from './../po-page/po-page-slide/po-page-slide.module';
 
 import { PoTableColumnIconComponent } from './po-table-column-icon/po-table-column-icon.component';
 import { PoTableColumnLabelComponent } from './po-table-column-label/po-table-column-label.component';
@@ -26,6 +34,11 @@ import { PoTableSubtitleCircleComponent } from './po-table-subtitle-circle/po-ta
 import { PoTableSubtitleFooterComponent } from './po-table-subtitle-footer/po-table-subtitle-footer.component';
 import { PoTableCellTemplateDirective } from './po-table-cell-template/po-table-cell-template.directive';
 import { PoTableColumnTemplateDirective } from './po-table-column-template/po-table-column-template.directive';
+import { PoTableListManagerComponent } from './po-table-list-manager/po-table-list-manager.component';
+import { PoSwitchModule } from './../po-field/po-switch/po-switch.module';
+import { PoTableColumnFrozenDirective } from './po-table-column-frozen/po-table-column-frozen.directive';
+import { PoSearchAiModule } from '../po-field/po-search-ai/po-search-ai.module';
+import { PoSearchModule } from '../po-search/po-search.module';
 
 /**
  * @description
@@ -35,6 +48,8 @@ import { PoTableColumnTemplateDirective } from './po-table-column-template/po-ta
   imports: [
     CommonModule,
     FormsModule,
+    ScrollingModule,
+    DragDropModule,
     RouterModule,
     PoButtonModule,
     PoCheckboxGroupModule,
@@ -43,8 +58,17 @@ import { PoTableColumnTemplateDirective } from './po-table-column-template/po-ta
     PoModalModule,
     PoPopoverModule,
     PoPopupModule,
+    PoTagModule,
     PoTimeModule,
-    PoTooltipModule
+    PoTooltipModule,
+    PoIconModule,
+    PoCheckboxModule,
+    PoRadioModule,
+    PoLinkModule,
+    PoPageSlideModule,
+    PoSearchAiModule,
+    PoSwitchModule,
+    PoSearchModule
   ],
   declarations: [
     PoTableComponent,
@@ -52,6 +76,7 @@ import { PoTableColumnTemplateDirective } from './po-table-column-template/po-ta
     PoTableColumnLabelComponent,
     PoTableColumnLinkComponent,
     PoTableColumnManagerComponent,
+    PoTableListManagerComponent,
     PoTableDetailComponent,
     PoTableIconComponent,
     PoTableRowTemplateDirective,
@@ -59,7 +84,8 @@ import { PoTableColumnTemplateDirective } from './po-table-column-template/po-ta
     PoTableSubtitleCircleComponent,
     PoTableSubtitleFooterComponent,
     PoTableCellTemplateDirective,
-    PoTableColumnTemplateDirective
+    PoTableColumnTemplateDirective,
+    PoTableColumnFrozenDirective
   ],
   exports: [
     PoTableComponent,

@@ -1,13 +1,19 @@
-import { Component, ViewChild } from '@angular/core';
-import { FormControl } from '@angular/forms';
+import { Component, ViewChild, inject } from '@angular/core';
+import { UntypedFormControl } from '@angular/forms';
 
 import { PoDialogService, PoNotificationService, PoSelectOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-datepicker-airfare',
-  templateUrl: './sample-po-datepicker-airfare.component.html'
+  templateUrl: './sample-po-datepicker-airfare.component.html',
+  standalone: false
 })
 export class SamplePoDatepickerAirfareComponent {
+  private poDialog = inject(PoDialogService);
+  private poNotification = inject(PoNotificationService);
+
+  @ViewChild('formAirfare', { static: true }) formAirfare: UntypedFormControl;
+
   accompany: number = 0;
   destination: string;
   endDate: string = <any>new Date();
@@ -33,10 +39,6 @@ export class SamplePoDatepickerAirfareComponent {
     { value: 'Business', label: 'Business' },
     { value: 'First', label: 'First' }
   ];
-
-  @ViewChild('formAirfare', { static: true }) formAirfare: FormControl;
-
-  constructor(private poDialog: PoDialogService, private poNotification: PoNotificationService) {}
 
   apply() {
     const message = `Would you like to confirm the ticket from ${this.origin} to ${

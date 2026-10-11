@@ -1,27 +1,59 @@
-<po-field-container [p-help]="help" [p-label]="label" [p-optional]="!required && optional">
+@let poHelper = setHelper(label, additionalHelpTooltip);
+<po-field-container
+  [p-disabled]="isDisabled"
+  [p-label]="label"
+  [p-optional]="optional"
+  [p-required]="required"
+  [p-show-required]="showRequired"
+  [p-helper]="label ? poHelper.helperSettings : undefined"
+  [p-show-helper]="label ? displayAdditionalHelp : undefined"
+  [p-size]="size"
+  [p-text-wrap]="labelTextWrap()"
+  [p-compact-label]="compactLabel()"
+>
   <div class="po-field-container-content">
     <po-rich-text-body
       #richTextBody
       [p-height]="height"
+      [p-label]="label"
       [p-model-value]="value"
       [p-placeholder]="placeholder"
       [p-readonly]="readonly"
+      [p-disabled]="isDisabled"
+      [p-loading]="loading"
+      [p-size]="size"
       (p-change)="onChangeValue($event)"
-      (p-commands)="richTextToolbar.setButtonsStates($event)"
-      (p-selected-link)="richTextToolbar.selectedLink($event)"
-      (p-shortcut-command)="richTextToolbar.shortcutTrigger()"
+      (p-commands)="richTextToolbar?.setButtonsStates($event)"
+      (p-selected-link)="richTextToolbar?.selectedLink($event)"
+      (p-shortcut-command)="richTextToolbar?.shortcutTrigger()"
       (p-value)="updateValue($event)"
+      (p-blur)="onBlur()"
+      (p-keydown)="onKeyDown($event)"
     >
     </po-rich-text-body>
-
-    <po-rich-text-toolbar
-      #richTextToolbar
-      [p-readonly]="readonly"
-      (p-link-editing)="richTextBody.linkEditing($event)"
-      (p-command)="richTextBody.executeCommand($event)"
-    >
-    </po-rich-text-toolbar>
+    @if (!isAllActionsHidden()) {
+      <po-rich-text-toolbar
+        #richTextToolbar
+        [p-readonly]="readonly || isDisabled"
+        [p-disabled]="isDisabled"
+        [p-hide-toolbar-actions]="toolbarActions"
+        [p-size]="size"
+        (p-link-editing)="richTextBody.linkEditing($event)"
+        (p-command)="richTextBody.executeCommand($event)"
+      >
+      </po-rich-text-toolbar>
+    }
   </div>
-
-  <po-field-container-bottom [p-error-pattern]="errorMsg"></po-field-container-bottom>
+  @if (!readonly) {
+    <po-field-container-bottom
+      [p-append-in-body]="appendBox"
+      [p-help]="help"
+      [p-disabled]="isDisabled"
+      [p-error-limit]="errorLimit"
+      [p-error-pattern]="errorMsg"
+      [p-size]="size"
+      [p-helper]="!label ? poHelper.helperSettings : undefined"
+      [p-show-helper]="!label ? displayAdditionalHelp : undefined"
+    ></po-field-container-bottom>
+  }
 </po-field-container>

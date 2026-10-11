@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 
 import { forkJoin, Observable, of, Subject, Subscription, timer } from 'rxjs';
 import { expand, map, mergeMap, reduce } from 'rxjs/operators';
-import { validateParameter, validateArray } from '../../utils/utils';
+import { PoUtils } from '../../utils/utils';
 
 import { PoDataMessage, PoEntity } from '../../models';
 import { PoEventSourcingService } from '../po-event-sourcing/po-event-sourcing.service';
@@ -24,26 +24,28 @@ import { PoSyncSchema } from './interfaces/po-sync-schema.interface';
  * armazenadas *offline* vindas do servidor. Nele ocorre toda a preparação dos modelos de dados retornados por
  * cada consulta.
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoSyncService {
+  models: Array<PoEntity> = [];
+
   private config: PoSyncConfig;
   private emitter: any;
   private eventSub: Observable<any>;
-  private finishSyncSubject: Subject<null> = new Subject<null>();
+  private readonly finishSyncSubject: Subject<null> = new Subject<null>();
   private isSyncEnabled: boolean = true;
   private schemas: Array<PoSyncSchema>;
   private subscription: Subscription;
   private syncing: boolean = false;
   private timer: Observable<number>;
 
-  models: Array<PoEntity> = [];
-
   constructor(
-    private poEventSourcingService: PoEventSourcingService,
-    private poHttpClient: PoHttpClientService,
-    private poNetworkService: PoNetworkService,
-    private poSchemaDefinitionService: PoSchemaDefinitionService,
-    private poSchemaService: PoSchemaService
+    private readonly poEventSourcingService: PoEventSourcingService,
+    private readonly poHttpClient: PoHttpClientService,
+    private readonly poNetworkService: PoNetworkService,
+    private readonly poSchemaDefinitionService: PoSchemaDefinitionService,
+    private readonly poSchemaService: PoSchemaService
   ) {}
 
   /**
@@ -131,7 +133,7 @@ export class PoSyncService {
    * @returns {Promise<number>} Promessa com o identificador da requisição HTTP criada.
    */
   insertHttpCommand(requestData: PoHttpRequestData, customRequestId?: string): Promise<number> {
-    validateParameter({ requestData });
+    PoUtils.validateParameter({ requestData });
 
     return this.poEventSourcingService.httpCommand(requestData, customRequestId);
   }
@@ -177,7 +179,7 @@ export class PoSyncService {
    * @returns {Promise<any>} Promessa que é resolvida quando a aplicação estiver preparada para a utilização do `po-sync`.
    */
   prepare(schemas: Array<PoSyncSchema>, config?: PoSyncConfig): Promise<any> {
-    validateArray({ schemas });
+    PoUtils.validateArray({ schemas });
 
     const defaultSyncConfig: PoSyncConfig = {
       type: this.poNetworkService.getConnectionStatus().type,
@@ -288,7 +290,7 @@ export class PoSyncService {
 
   private finishSync(): void {
     this.syncing = false;
-    this.finishSyncSubject.next();
+    this.finishSyncSubject.next(null);
   }
 
   private getOnePage(schema: PoSyncSchema, page: number = 1): Observable<any> {

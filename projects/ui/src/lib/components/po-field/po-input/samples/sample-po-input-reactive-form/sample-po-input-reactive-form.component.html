@@ -1,10 +1,10 @@
 <form [formGroup]="reactiveForm">
   <div class="po-row">
-    <po-input class="po-md-12" formControlName="name" p-clean p-icon="po-icon-user" p-label="Customer name"> </po-input>
+    <po-input class="po-md-12" formControlName="name" p-clean p-icon="an an-user" p-label="Customer name"> </po-input>
   </div>
 
   <div class="po-row">
-    <po-input class="po-lg-9" formControlName="address" p-clean p-icon="po-icon-pin" p-label="Address"> </po-input>
+    <po-input class="po-lg-9" formControlName="address" p-clean p-icon="an an-map-pin" p-label="Address"> </po-input>
 
     <po-number class="po-lg-3" formControlName="number" p-label="Number" p-clean> </po-number>
   </div>
@@ -25,7 +25,7 @@
     <po-info class="po-md-12" p-label="Name" [p-value]="reactiveForm.controls.name.value"> </po-info>
   </div>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-info class="po-md-6" p-label="Address" [p-value]="reactiveForm.controls.address.value"> </po-info>
@@ -33,7 +33,7 @@
     <po-info class="po-md-6" p-label="Number" [p-value]="reactiveForm.controls.number.value"> </po-info>
   </div>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-info class="po-md-6" p-label="Email" [p-value]="reactiveForm.controls.email.value"> </po-info>

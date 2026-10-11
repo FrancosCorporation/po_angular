@@ -1,4 +1,13 @@
-import { ChangeDetectorRef, Component, ElementRef, Input, OnDestroy, Renderer2, ViewChild } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  Input,
+  OnDestroy,
+  Renderer2,
+  ViewChild,
+  inject
+} from '@angular/core';
 
 import { PoGridRowActions } from './po-grid-row-actions.interface';
 
@@ -33,9 +42,28 @@ import { PoGridRowActions } from './po-grid-row-actions.interface';
  */
 @Component({
   selector: 'po-grid',
-  templateUrl: './po-grid.component.html'
+  templateUrl: './po-grid.component.html',
+  standalone: false
 })
 export class PoGridComponent implements OnDestroy {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+  private readonly elRef = inject(ElementRef);
+
+  @ViewChild('table', { static: true }) tableElement: ElementRef;
+  @ViewChild('wrapper', { static: true }) tableWrapper: ElementRef;
+
+  /**
+   * @description
+   *
+   * Ações disparadas quando uma linha do grid é manipulada.
+   */
+  @Input('p-row-actions') rowActions: PoGridRowActions = {};
+
+  /**
+   * Lista com os dados que serão exibidos no grid.
+   */
+  @Input('p-data') data: Array<any> = [];
+
   lastCell: string = '0-0';
   lastRow: number = 0;
   lastColumn: number = 0;
@@ -50,20 +78,10 @@ export class PoGridComponent implements OnDestroy {
   widporeeze = 0;
   widthActions = 0;
 
-  private resizeListener: () => void;
+  private readonly resizeListener: () => void;
   private timeoutResize;
 
-  @ViewChild('table', { static: true }) tableElement: ElementRef;
-  @ViewChild('wrapper', { static: true }) tableWrapper: ElementRef;
-
   private _columns = [];
-
-  /**
-   * @description
-   *
-   * Ações disparadas quando uma linha do grid é manipulada.
-   */
-  @Input('p-row-actions') rowActions: PoGridRowActions = {};
 
   /**
    * Colunas exibidas no grid.
@@ -85,12 +103,9 @@ export class PoGridComponent implements OnDestroy {
     return this._columns.filter(column => column.freeze !== true && column.action !== true);
   }
 
-  /**
-   * Lista com os dados que serão exibidos no grid.
-   */
-  @Input('p-data') data: Array<any> = [];
+  constructor() {
+    const renderer = inject(Renderer2);
 
-  constructor(private changeDetectorRef: ChangeDetectorRef, private elRef: ElementRef, renderer: Renderer2) {
     this.debounceResize();
 
     this.resizeListener = renderer.listen('window', 'resize', (event: any) => {
@@ -102,15 +117,6 @@ export class PoGridComponent implements OnDestroy {
     if (this.resizeListener) {
       this.resizeListener();
     }
-  }
-
-  private debounceResize() {
-    clearTimeout(this.timeoutResize);
-
-    this.timeoutResize = setTimeout(() => {
-      const widthTableWrapper = this.tableWrapper.nativeElement.offsetWidth;
-      this.width = `${widthTableWrapper - (this.widporeeze + 8) - this.widthActions}px`;
-    }, 100);
   }
 
   get freezeColumns() {
@@ -347,6 +353,15 @@ export class PoGridComponent implements OnDestroy {
       this.currencyColumn = col;
       nextCell.focus();
     }
+  }
+
+  private debounceResize() {
+    clearTimeout(this.timeoutResize);
+
+    this.timeoutResize = setTimeout(() => {
+      const widthTableWrapper = this.tableWrapper.nativeElement.offsetWidth;
+      this.width = `${widthTableWrapper - (this.widporeeze + 8) - this.widthActions}px`;
+    }, 100);
   }
 
   private getEventPath(event) {

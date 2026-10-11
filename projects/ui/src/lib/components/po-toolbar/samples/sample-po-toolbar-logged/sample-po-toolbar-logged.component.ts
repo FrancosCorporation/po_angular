@@ -1,21 +1,25 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
 import { PoDialogService, PoNotificationService, PoToolbarAction, PoToolbarProfile } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-toolbar-logged',
   templateUrl: './sample-po-toolbar-logged.component.html',
-  providers: [PoNotificationService]
+  providers: [PoNotificationService],
+  standalone: false
 })
 export class SamplePoToolbarLoggedComponent {
+  private poDialog = inject(PoDialogService);
+  private poNotification = inject(PoNotificationService);
+
   notificationActions: Array<PoToolbarAction> = [
     {
-      icon: 'po-icon-news',
+      icon: 'an an-newspaper',
       label: 'PO news, stay tuned!',
       type: 'danger',
       action: item => this.onClickNotification(item)
     },
-    { icon: 'po-icon-message', label: 'New message', type: 'danger', action: item => this.openDialog(item) }
+    { icon: 'an an-chat', label: 'New message', type: 'danger', action: item => this.openDialog(item) }
   ];
 
   profile: PoToolbarProfile = {
@@ -25,10 +29,10 @@ export class SamplePoToolbarLoggedComponent {
   };
 
   profileActions: Array<PoToolbarAction> = [
-    { icon: 'po-icon-user', label: 'User data', action: item => this.showAction(item) },
-    { icon: 'po-icon-company', label: 'Company data', action: item => this.showAction(item) },
-    { icon: 'po-icon-settings', label: 'Settings', action: item => this.showAction(item) },
-    { icon: 'po-icon-exit', label: 'Exit', type: 'danger', separator: true, action: item => this.showAction(item) }
+    { icon: 'an an-user', label: 'User data', action: item => this.showAction(item) },
+    { icon: 'an an-building-apartment', label: 'Company data', action: item => this.showAction(item) },
+    { icon: 'an an-gear', label: 'Settings', action: item => this.showAction(item) },
+    { icon: 'an an-sign-out', label: 'Exit', type: 'danger', separator: true, action: item => this.showAction(item) }
   ];
 
   actions: Array<PoToolbarAction> = [
@@ -38,8 +42,6 @@ export class SamplePoToolbarLoggedComponent {
   ];
 
   title: string = 'PO Toolbar Logged';
-
-  constructor(private poDialog: PoDialogService, private poNotification: PoNotificationService) {}
 
   getNotificationNumber() {
     return this.notificationActions.filter(not => not.type === 'danger').length;
@@ -54,7 +56,7 @@ export class SamplePoToolbarLoggedComponent {
   openDialog(item: PoToolbarAction) {
     this.poDialog.alert({
       title: 'Welcome',
-      message: `Hello Mr. Dev! Congratulations, you are a TOTVER!`,
+      message: `Hello Mr. Dev! Congratulations, you are a TOTVS!`,
       ok: undefined
     });
 

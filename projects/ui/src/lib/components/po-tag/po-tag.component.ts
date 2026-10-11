@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { PoLanguageService } from './../../services/po-language/po-language.service';
 
-import { PoTagBaseComponent } from './po-tag-base.component';
 import { PoTagIcon } from './enums/po-tag-icon.enum';
-import { PoTagItem } from './interfaces/po-tag-item.interface';
 import { PoTagType } from './enums/po-tag-type.enum';
+import { PoTagBaseComponent } from './po-tag-base.component';
+import { getTextColorFromBackgroundColor } from '../../utils/util';
 
 const poTagTypeDefault = 'po-tag-' + PoTagType.Info;
 
@@ -20,20 +21,39 @@ const poTagTypeDefault = 'po-tag-' + PoTagType.Info;
  * <example name="po-tag-labs" title="PO Tag Labs">
  *  <file name="sample-po-tag-labs/sample-po-tag-labs.component.html"> </file>
  *  <file name="sample-po-tag-labs/sample-po-tag-labs.component.ts"> </file>
+ *  <file name="sample-po-tag-labs/sample-po-tag-labs.component.css"> </file>
  * </example>
  *
  * <example name="po-tag-bank-account" title="PO Tag - Bank Account">
  *  <file name="sample-po-tag-bank-account/sample-po-tag-bank-account.component.html"> </file>
  *  <file name="sample-po-tag-bank-account/sample-po-tag-bank-account.component.ts"> </file>
  * </example>
+ *
+ * <example name="po-tag-caption-tag-colors" title="PO Tag - Caption Tag Colors">
+ *  <file name="sample-po-tag-caption-tag-colors/sample-po-tag-caption-tag-colors.component.html"> </file>
+ *  <file name="sample-po-tag-caption-tag-colors/sample-po-tag-caption-tag-colors.component.ts"> </file>
+ * </example>
  */
 @Component({
   selector: 'po-tag',
   templateUrl: './po-tag.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
 export class PoTagComponent extends PoTagBaseComponent implements OnInit {
+  private readonly el = inject(ElementRef);
+
+  @ViewChild('tagContainer', { static: true }) tagContainer: ElementRef;
+  @ViewChild('tagClose', { static: true }) tagClose: ElementRef;
+  @ViewChild('poTag', { static: true }) poTag: ElementRef;
+
   isClickable: boolean;
+
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
+    super(languageService);
+  }
 
   ngOnInit() {
     this.isClickable = this.click.observers.length > 0;
@@ -55,34 +75,92 @@ export class PoTagComponent extends PoTagBaseComponent implements OnInit {
     }
   }
 
-  get iconTypeString() {
-    return typeof this.icon === 'string';
+  get isCaptionTag(): boolean {
+    return this.tagColor?.startsWith('po-caption-tag-');
   }
 
   get tagColor() {
-    if (this.type) {
-      return this.inverse ? `po-tag-${this.type}-inverse` : `po-tag-${this.type}`;
+    if (this.type && !this.removable) {
+      return `po-tag-${this.type}`;
     }
 
-    if (this.color) {
-      return this.inverse ? `po-text-${this.color}` : `po-${this.color}`;
+    if (this.color && !this.removable) {
+      return `po-${this.color}`;
     }
 
-    return this.inverse ? `${poTagTypeDefault}-inverse` : poTagTypeDefault;
+    if (!this.customColor && !this.removable) {
+      return poTagTypeDefault;
+    }
   }
 
   get tagOrientation() {
     return this.orientation === this.poTagOrientation.Horizontal;
   }
 
-  onClick() {
-    const submittedTagItem: PoTagItem = { value: this.value, type: this.type };
-    this.click.emit(submittedTagItem);
+  onClick(event = 'click') {
+    if (!this.removable && !this.disabled) {
+      const submittedTagItem = { value: this.value, type: this.type, event: event };
+      this.click.emit(submittedTagItem);
+      if (this.poTag && this.poTag.nativeElement) {
+        this.poTag.nativeElement.focus();
+      }
+    }
+  }
+
+  onClose(event = 'click') {
+    if (!this.disabled) {
+      this.onRemove();
+      this.remove.emit(event);
+    }
   }
 
   onKeyPressed(event) {
     event.preventDefault();
     event.stopPropagation();
-    this.onClick();
+    this.onClick('enter');
+  }
+
+  styleTag() {
+    // Ajusta a cor do texto com base na cor de fundo computada do elemento
+    requestAnimationFrame(this.applyTextColorByContrast);
+
+    if (!this.tagColor && !this.removable) {
+      return { 'background-color': this.customColor };
+    } else {
+      return {};
+    }
+  }
+
+  private readonly applyTextColorByContrast = () => {
+    const computedStyle = getComputedStyle(this.poTag.nativeElement);
+
+    if (this.tagColor?.startsWith('po-caption-tag-')) {
+      const captionIndex = this.tagColor.replace('po-caption-tag-', '');
+      this.poTag.nativeElement.style.color = `var(--color-caption-tag-text-${captionIndex})`;
+    } else if (
+      (!this.tagColor || this.tagColor?.startsWith('po-color-')) &&
+      !this.removable &&
+      !this.textColor &&
+      computedStyle?.backgroundColor
+    ) {
+      const textColor = getTextColorFromBackgroundColor(computedStyle.backgroundColor);
+      this.poTag.nativeElement.style.color = textColor;
+    } else {
+      this.poTag.nativeElement.style.color = '';
+    }
+  };
+
+  getWidthTag() {
+    return this.tagContainer.nativeElement.offsetWidth > 155;
+  }
+
+  setAriaLabel() {
+    return this.label ? this.label + ' ' + this.literals.remove : this.value + ' ' + this.literals.remove;
+  }
+
+  private onRemove() {
+    if (!this.disabled) {
+      this.el.nativeElement.remove();
+    }
   }
 }

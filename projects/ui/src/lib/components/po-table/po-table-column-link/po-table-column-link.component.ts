@@ -12,7 +12,8 @@ import { isExternalLink } from '../../../utils/util';
 @Component({
   selector: 'po-table-column-link',
   templateUrl: './po-table-column-link.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
 export class PoTableColumnLinkComponent {
   @Input('p-action') action: Function;
@@ -21,23 +22,17 @@ export class PoTableColumnLinkComponent {
 
   @Input('p-link') link: string;
 
+  @Input('p-open-new-tab') openNewTab: boolean = false;
+
   @Input('p-row') row;
 
   @Input('p-value') value: string;
 
   get type() {
-    if (this.disabled) {
-      return 'disabled';
-    }
-
     if (this.action) {
       return 'action';
     }
 
-    if (isExternalLink(this.link)) {
-      return 'externalLink';
-    }
-
-    return 'internalLink';
+    return isExternalLink(this.link) ? 'externalLink' : 'internalLink';
   }
 }

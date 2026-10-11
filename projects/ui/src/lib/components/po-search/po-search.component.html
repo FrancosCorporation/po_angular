@@ -1,0 +1,149 @@
+<div
+  class="po-search"
+  [class.po-search-disabled]="disabled"
+  [class.po-search-loading]="loading && type !== 'locate'"
+  [class.po-search-filter-locate]="type === 'locate'"
+  [attr.p-search-type]="type === 'locate'"
+  [attr.p-size]="size"
+>
+  @if (filterSelect && type !== 'locate') {
+    <div class="po-search-select">
+      <po-dropdown
+        [p-label]="searchFilterSelectLabel"
+        [p-disabled]="isDisabled"
+        [p-actions]="searchFilterSelectActions"
+        [p-size]="size"
+      >
+      </po-dropdown>
+    </div>
+  }
+
+  @if (type === 'action' || type === 'locate' || type === 'execute') {
+    <div class="po-search-icon">
+      <po-icon [p-icon]="icon ? icon : 'ICON_SEARCH'"></po-icon>
+    </div>
+  }
+
+  <input
+    #poSearchInput
+    class="po-search-input"
+    type="text"
+    [attr.id]="id || null"
+    [autocomplete]="autocomplete"
+    [attr.name]="name"
+    [ariaLabel]="ariaLabel"
+    [class.po-search-input-clean]="!!poSearchInput.value && !disabled && type !== 'locate'"
+    [class.po-search-input-trigger]="type === 'trigger'"
+    [style.padding-right.px]="dynamicPaddingRight"
+    [disabled]="isDisabled"
+    [placeholder]="literals.search"
+    (input)="onInputHandler($event.target.value)"
+    (keyup.enter)="onEnterKey($event)"
+    (keydown)="onKeyDown($event)"
+    (blur)="onBlur()"
+    (focus)="onFocus()"
+  />
+
+  <div class="po-search-buttons">
+    @if (type === 'locate' && poSearchInput.value && !disabled) {
+      <span
+        #locateCounter
+        class="po-search-locate-counter"
+        id="summary"
+        [attr.aria-label]="
+          literals.result +
+          ' ' +
+          (locateSummary?.currentIndex ?? 0) +
+          ' ' +
+          literals.of +
+          ' ' +
+          (locateSummary?.total ?? 0)
+        "
+      >
+        {{ locateSummary?.currentIndex ?? 0 }}/{{ locateSummary?.total ?? 0 }}
+      </span>
+    }
+
+    <div [id]="idSearchButtonClean">
+      @if (loading && type !== 'locate') {
+        <div class="po-search-button po-search-button-loading">
+          <po-loading-icon [p-size]="mapSizeToIcon(size)"></po-loading-icon>
+        </div>
+      } @else if (!!poSearchInput.value) {
+        <button
+          class="po-search-button po-search-button-clean"
+          type="button"
+          [ariaLabel]="literals.clean"
+          (click)="clearSearch()"
+          (keydown.enter)="clearSearch()"
+          (keydown)="onCleanKeydown($event)"
+        >
+          <po-clean class="po-icon-input" [p-size]="size"></po-clean>
+        </button>
+      }
+    </div>
+
+    @if (type === 'trigger') {
+      <button
+        class="po-search-button po-search-button-trigger"
+        type="button"
+        [ariaLabel]="literals.search"
+        [disabled]="isDisabled"
+        (click)="onSearchChange(poSearchInput.value, true, true)"
+        (keydown.enter)="onSearchChange(poSearchInput.value, true, true)"
+      >
+        <po-icon [p-icon]="icon ? icon : 'ICON_SEARCH'"> </po-icon>
+      </button>
+    }
+
+    @if (showSearchLocateControls) {
+      <div class="po-search-locate-controls">
+        <div class="po-search-divider"></div>
+        <button
+          name="btnArrowUp"
+          class="po-search-button"
+          [ariaLabel]="literals.next"
+          [disabled]="disabled || !locateSummary?.total"
+          (click)="locateNext.emit()"
+        >
+          <po-icon p-icon="ICON_ARROW_DOWN"> </po-icon>
+        </button>
+
+        <button
+          name="btnArrowDown"
+          class="po-search-button"
+          [ariaLabel]="literals.previous"
+          [disabled]="disabled || !locateSummary?.total"
+          (click)="locatePrevious.emit()"
+        >
+          <po-icon p-icon="ICON_ARROW_UP"> </po-icon>
+        </button>
+      </div>
+    }
+  </div>
+</div>
+
+@if (type !== 'locate') {
+  <div #poListboxContainerElement class="po-search-listbox-container" [hidden]="!listboxOpen">
+    <po-listbox
+      #poListbox
+      #poListboxElement
+      p-type="option"
+      [p-items]="listboxFilteredItems"
+      (p-selectcombo-item)="onListboxClick($event, $event.event)"
+      [p-visible]="listboxOpen"
+      [p-filter-mode]="filterType"
+      [p-should-mark-letter]="shouldMarkLetters"
+      [p-filtering]="isFiltering"
+      [p-search-value]="getInputValue()"
+      [p-size]="size"
+      (p-close)="onCloseListbox()"
+      [p-literals]="literals"
+      [p-separator]="showSeparator"
+      [p-keys-label]="keysLabel"
+      [p-footer-action-listbox]="showFooterActionListbox"
+      (p-footer-action-listbox-event)="handlerFooterActionListbox()"
+      [p-placeholder-listbox]="placeholderListbox"
+    ></po-listbox>
+  </div>
+}

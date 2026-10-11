@@ -4,7 +4,8 @@ import { PoTreeViewItem } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-tree-view-folder-structure',
-  templateUrl: 'sample-po-tree-view-folder-structure.component.html'
+  templateUrl: 'sample-po-tree-view-folder-structure.component.html',
+  standalone: false
 })
 export class SamplePoTreeViewFolderStructureComponent {
   readonly items: Array<PoTreeViewItem> = [
@@ -52,7 +53,7 @@ export class SamplePoTreeViewFolderStructureComponent {
         { label: 'tsconfig.app.json', value: 129 },
         { label: 'tsconfig.json', value: 130 },
         { label: 'tsconfig.spec.json', value: 131 },
-        { label: 'tslint.json', value: 132 }
+        { label: 'eslint.json', value: 132 }
       ]
     }
   ];

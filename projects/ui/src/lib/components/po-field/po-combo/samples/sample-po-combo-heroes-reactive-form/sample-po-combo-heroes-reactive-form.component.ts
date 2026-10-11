@@ -1,18 +1,20 @@
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { Component, OnInit, inject } from '@angular/core';
+import { UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 
 import { Observable } from 'rxjs';
 
 @Component({
   selector: 'sample-po-combo-heroes-reactive-form',
-  templateUrl: './sample-po-combo-heroes-reactive-form.component.html'
+  templateUrl: './sample-po-combo-heroes-reactive-form.component.html',
+  standalone: false
 })
 export class SamplePoComboHeroesReactiveFormComponent implements OnInit {
-  form: FormGroup;
-  hero$: Observable<any>;
+  private http = inject(HttpClient);
+  private formBuilder = inject(UntypedFormBuilder);
 
-  constructor(private http: HttpClient, private formBuilder: FormBuilder) {}
+  form: UntypedFormGroup;
+  hero$: Observable<any>;
 
   ngOnInit() {
     this.form = this.formBuilder.group({
@@ -35,6 +37,6 @@ export class SamplePoComboHeroesReactiveFormComponent implements OnInit {
   }
 
   private getHero(heroName: string) {
-    return this.http.get(`https://po-sample-api.herokuapp.com/v1/heroes/${heroName}`);
+    return this.http.get(`https://po-sample-api.onrender.com/v1/heroes/${heroName}`);
   }
 }

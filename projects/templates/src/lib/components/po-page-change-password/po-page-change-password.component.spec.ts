@@ -1,11 +1,11 @@
 import { ComponentFixture, fakeAsync, TestBed, tick, waitForAsync } from '@angular/core/testing';
-import { EventEmitter, NO_ERRORS_SCHEMA } from '@angular/core';
+import { EventEmitter, NO_ERRORS_SCHEMA, provideNgReflectAttributes } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHandler } from '@angular/common/http';
 import { RouterTestingModule } from '@angular/router/testing';
 import { PoModule } from '@po-ui/ng-components';
 
-import * as utilsFunctions from './../../utils/util';
+import { PoUtils as utilsFunctions } from './../../utils/util';
 import { getObservable } from './../../util-test/util-expect.spec';
 import { of } from 'rxjs';
 
@@ -21,15 +21,13 @@ describe('PoPageChangePasswordComponent:', () => {
   let nativeElement: any;
   const fakeSubscription = <any>{ unsubscribe: () => {} };
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [FormsModule, RouterTestingModule.withRoutes([]), PoModule, PoPageBackgroundModule],
-        declarations: [PoPageChangePasswordComponent],
-        providers: [HttpClient, HttpHandler, PoPageChangePasswordService]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      imports: [FormsModule, RouterTestingModule.withRoutes([]), PoModule, PoPageBackgroundModule],
+      declarations: [PoPageChangePasswordComponent],
+      providers: [HttpClient, HttpHandler, PoPageChangePasswordService, provideNgReflectAttributes()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoPageChangePasswordComponent);
@@ -64,7 +62,7 @@ describe('PoPageChangePasswordComponent:', () => {
     });
 
     it('ngOnDestroy: should unsubscribe `newPasswordSubscription` on destroy', () => {
-      component['newPasswordSubscription'] = fakeSubscription;
+      Object.defineProperty(component, 'newPasswordSubscription', { value: fakeSubscription, configurable: true });
 
       spyOn(component['newPasswordSubscription'], <any>'unsubscribe');
 
@@ -661,8 +659,8 @@ describe('PoPageChangePasswordComponent:', () => {
       component.requirements = requirements;
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('.po-icon-ok.po-page-change-password-required-ok')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-icon-minus po-page-change-password-required-minus')).toBeFalsy();
+      expect(nativeElement.querySelector('.an-check.po-page-change-password-required-ok')).toBeTruthy();
+      expect(nativeElement.querySelector('.an-minus po-page-change-password-required-minus')).toBeFalsy();
     });
 
     it('should add a `po-icon-minus` for a requirement with false status', () => {
@@ -670,8 +668,8 @@ describe('PoPageChangePasswordComponent:', () => {
       component.requirements = requirements;
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('.po-icon-minus.po-page-change-password-required-minus')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-icon-ok.po-page-change-password-required-ok')).toBeFalsy();
+      expect(nativeElement.querySelector('.an-minus.po-page-change-password-required-minus')).toBeTruthy();
+      expect(nativeElement.querySelector('.an-check.po-page-change-password-required-ok')).toBeFalsy();
     });
 
     it('should add requirement text', () => {

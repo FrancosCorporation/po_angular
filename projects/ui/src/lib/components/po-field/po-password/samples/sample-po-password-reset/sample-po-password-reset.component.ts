@@ -1,21 +1,22 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
 import { PoDialogService } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-password-reset',
   templateUrl: './sample-po-password-reset.component.html',
-  providers: [PoDialogService]
+  providers: [PoDialogService],
+  standalone: false
 })
 export class SamplePoPasswordResetComponent {
+  private poAlert = inject(PoDialogService);
+
   confirmNewPassword: string;
   currentPassword: string;
   errorPattern: string;
   help: string = 'Initial password = 123456';
   newPassword: string;
   password: string = '123456';
-
-  constructor(private poAlert: PoDialogService) {}
 
   setPassword() {
     if (this.confirmNewPassword === this.newPassword) {

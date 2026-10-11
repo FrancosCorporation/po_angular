@@ -1,45 +1,81 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { Component, EventEmitter, HostBinding, HostListener, Input, Output, TemplateRef, input } from '@angular/core';
 
-import { convertToBoolean } from '../../utils/util';
-import { InputBoolean } from '../../decorators';
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn } from '../../utils/util';
 
-const PO_BUTTON_TYPES = ['default', 'primary', 'danger', 'link'];
-const PO_BUTTON_TYPE_DEFAULT = 'default';
-
+import { PoButtonKind } from './enums/po-button-kind.enum';
+import { PoButtonSize } from './enums/po-button-size.enum';
+import { PoButtonType } from './enums/po-button-type.enum';
 /**
  * @description
  *
  * O `po-button` permite que o usuário execute ações predefinidas pelo desenvolvedor.
  *
- * Através dos tipos, é possível identificar a importância de cada ação, sendo ela primária (`primary`) ou até mesmo uma
- * ação irreversível (`danger`), como a exclusão de um registro.
+ * Através dos tipos, é possível identificar a importância de cada ação.
  *
  * #### Boas práticas
  *
  * - Evite `labels` extensos que quebram o layout do `po-button`, use `labels` diretos, curtos e intuitivos.
  * - Utilize apenas um `po-button` configurado como `primary` por página.
- * - Para ações irreversíveis use sempre o tipo `danger`.
+ * - Para ações irreversíveis use sempre a propriedade `p-danger`.
+ *
+ * #### Acessibilidade tratada no componente
+ *
+ * Algumas diretrizes de acessibilidade já são tratadas no componente, internamente, e não podem ser alteradas pelo proprietário do conteúdo. São elas:
+ *
+ * - Quando em foco, o botão é ativado usando as teclas de Espaço e Enter do teclado. [W3C WAI-ARIA 3.5 Button - Keyboard Interaction](https://www.w3.org/WAI/ARIA/apg/#keyboard-interaction-3)
+ * - A área do foco precisar ter uma espessura de pelo menos 2 pixels CSS e o foco não pode ficar escondido por outros elementos da tela. [WCAG 2.4.12: Focus Appearance](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance-enhanced)
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                              | Descrição                                             | Valor Padrão                                      |
+ * |------------------------------------------|-------------------------------------------------------|---------------------------------------------------|
+ * | `--font-family`                          | Família tipográfica usada                             | `var(--font-family-theme)`                        |
+ * | `--font-size`                            | Tamanho da fonte                                      | `var(--font-size-default)`                        |
+ * | `--font-weight`                          | Peso da fonte                                         | `var(--font-weight-bold)`                         |
+ * | `--line-height`                          | Tamanho da label                                      | `var(--line-height-none)`                         |
+ * | `--border-radius`                        | Contém o valor do raio dos cantos do elemento&nbsp;   | `var(--border-radius-md)`                         |
+ * | `--border-width`                         | Contém o valor da largura dos cantos do elemento&nbsp;| `var(--border-width-md)`                          |
+ * | `--padding`                              | Preenchimento                                         | `0 1em`                                           |                                                                        | ---                                             |
+ * | **Danger**                               |                                                       |                                                   |
+ * | `--text-color-danger`                    | Cor do texto no estado danger                         | `var(--color-neutral-light-00)`                   |
+ * | `--color-button-danger`                  | Cor do botão no estado danger                         | `var(--color-feedback-negative-dark)`             |
+ * | `--color-danger-hover`                   | Cor de hover no estado danger                         | `var(--color-feedback-negative-darker)`           |
+ * | `--color-danger-pressed`                 | Cor pressionada no estado danger                      | `var(--color-feedback-negative-darkest)`          |
+ * | `--background-danger-hover`              | Cor de background de hover no estado danger           | `var(--color-feedback-negative-lighter)`          |
+ * | `--border-color-danger-hover`            | Cor da borda de hover no estado danger                | `var(--color-feedback-negative-darkest)`          |
+ * | `--background-danger-pressed`            | Cor de background pressionado no estado danger        | `var(--color-feedback-negative-light)`            |
+ * | `--background-color-button-danger`&nbsp; | Cor de background do botão no estado danger           | `var(--color-transparent)`                        |
+ * | **Default Values**                       |                                                       |                                                   |
+ * | `--text-color`                           | Cor do texto                                          | `var(--color-neutral-light-00)`                   |
+ * | `--color`                                | Cor principal do botão                                | `var(--color-action-default)`                     |
+ * | `--background-color`                     | Cor de background                                     | `var(--color-transparent)`                        |
+ * | `--border-color`                         | Cor da borda                                          | `var(--color-transparent)`                        |
+ * | `--shadow`                               | Contém o valor da sombra do elemento                  | `var(--shadow-none)`                              |
+ * | **Hover**                                |                                                       |                                                   |
+ * | `--color-hover`                          | Cor principal no estado hover                         | `var(--color-action-hover)`                       |
+ * | `--background-hover`                     | Cor de background no estado hover                     | `var(--color-brand-01-lighter)`                   |
+ * | `--border-color-hover`                   | Cor da borda no estado hover                          | `var(--color-brand-01-darkest)`                   |
+ * | **Focused**                              |                                                       |                                                   |
+ * | `--outline-color-focused`                | Cor do outline do estado de focus                     | `var(--color-action-focus)`                       |
+ * | **Pressed**                              |                                                       |                                                   |
+ * | `--color-pressed`                        | Cor principal no estado de pressionado                | `var(--color-action-pressed)`                     |
+ * | `--background-pressed`                   | Cor de background no estado de pressionado&nbsp;      | `var(--color-brand-01-light)`                     |
+ * | **Disabled**                             |                                                       |                                                   |
+ * | `--text-color-disabled`                  | Cor do texto no estado disabled                       | `var(--color-neutral-dark-70)`                    |
+ * | `--color-disabled`                       | Cor principal no estado disabled                      | `var(--color-action-disabled)`                    |
+ * | `--background-color-disabled`            | Cor de background no estado disabled                  | `var(--color-transparent)`                        |
+ *
  */
-@Directive()
+@Component({
+  selector: 'po-button-base',
+  template: '',
+  standalone: false
+})
 export class PoButtonBaseComponent {
-  private _disabled?: boolean = false;
-  private _loading?: boolean = false;
-  private _small?: boolean = false;
-  private _type?: string = 'default';
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Aplica foco no elemento ao ser iniciado.
-   * > Caso mais de um elemento seja configurado com essa propriedade,
-   * o último elemento declarado com ela terá o foco.
-   *
-   * @default `false`
-   */
-  @Input('p-auto-focus') @InputBoolean() autoFocus: boolean = false;
-
   /**
    * @optional
    *
@@ -47,7 +83,58 @@ export class PoButtonBaseComponent {
    *
    * Label do botão.
    */
-  @Input('p-label') label?: string;
+  readonly label = input<string>(undefined, { alias: 'p-label' });
+
+  /**
+   * @optional
+   *
+   * @description
+   * Ícone exibido ao lado esquerdo do label do botão.
+   *
+   * É possível usar qualquer um dos ícones da [Biblioteca de ícones](https://po-ui.io/icons), conforme exemplo:
+   * ```
+   * <po-button p-icon="an an-user" p-label="PO button"></po-button>
+   * ```
+   * Também é possível utilizar outras fontes de ícones, por exemplo a biblioteca *Font Awesome*, desde que a biblioteca
+   * esteja carregada no projeto:
+   * ```
+   * <po-button p-icon="fa fa-podcast" p-label="PO button"></po-button>
+   * ```
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * ```
+   * <po-button [p-icon]="template" p-label="button template ionic"></po-button>
+   *
+   * <ng-template #template>
+   *  <ion-icon style="font-size: inherit" name="heart"></ion-icon>
+   * </ng-template>
+   * ```
+   * > Para o ícone enquadrar corretamente, deve-se utilizar `font-size: inherit` caso o ícone utilizado não aplique-o.
+   */
+  readonly icon = input<string | TemplateRef<void>>(undefined, { alias: 'p-icon' });
+
+  /**
+   * @optional
+   *
+   * @description
+   * Define o tipo do botão.
+   *
+   * @default `PoButtonType.Button`
+   */
+  readonly type = input<PoButtonType>(PoButtonType.Button, { alias: 'p-type' });
+
+  // Evento disparado ao sair do campo.
+  @Output('p-blur') blur: EventEmitter<any> = new EventEmitter();
+
+  /** Ação que será executada quando o usuário clicar sobre o `po-button`. */
+  @Output('p-click') click = new EventEmitter<null>();
+
+  private _danger?: boolean = false;
+  private _disabled?: boolean = false;
+  private _loading?: boolean = false;
+  private _kind?: string = PoButtonKind.secondary;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+  protected hasSize?: boolean = false;
 
   /**
    * @optional
@@ -69,48 +156,45 @@ export class PoButtonBaseComponent {
   }
 
   /**
-   * Ícone exibido ao lado esquerdo do label do botão.
+   * @optional
    *
-   * É possível usar qualquer uma dos ícones da [Biblioteca de ícones](/guides/icons).
+   * @description
+   *
+   * Deve ser usado em ações irreversíveis que o usuário precisa ter cuidado ao executá-la, como a exclusão de um registro.
+   *
+   * > A propriedade `p-kind="tertiary"` será inativada ao utilizar esta propriedade.
    */
-  @Input('p-icon') icon?: string;
+
+  @HostBinding('attr.p-danger')
+  @Input({ alias: 'p-danger', transform: convertToBoolean })
+  set danger(value: boolean) {
+    this._danger = this.kind !== PoButtonKind.tertiary ? value : false;
+  }
+
+  get danger(): boolean {
+    return this._danger;
+  }
 
   /**
    * @optional
    *
    * @description
    *
-   * Deixa o botão menor.
+   * Define o estilo visual do componente conforme valores especificados no enum `PoButtonKind`:
+   *  - `primary`: destaca o botão, sendo recomendado para ações principais.
+   *  - `secondary`: estilo padrão, ideal para ações secundárias.
+   *  - `tertiary`: exibe o botão sem preenchimento no fundo, indicado para ações opcionais.
    *
-   * @default `false`
+   * @default `secondary`
    */
-  @Input('p-small') set small(value: boolean) {
-    this._small = <any>value === '' ? true : convertToBoolean(value);
-  }
-  get small(): boolean {
-    return this._small;
+  @HostBinding('attr.p-kind')
+  @Input('p-kind')
+  set kind(value: string) {
+    this._kind = PoButtonKind[value] ? PoButtonKind[value] : PoButtonKind.secondary;
   }
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Define o estilo do `po-button`.
-   *
-   * Valore válidos:
-   *  - `default`: estilo padrão do `po-button`.
-   *  - `primary`: deixa o `po-button` com destaque, deve ser usado para ações primárias.
-   *  - `danger`: deve ser usado para ações que o usuário precisa ter cuidado ao executa-lá.
-   *  - `link`: o `po-button` recebe o estilo de um link.
-   *
-   * @default `default`
-   */
-  @Input('p-type') set type(value: string) {
-    this._type = PO_BUTTON_TYPES.includes(value) ? value : PO_BUTTON_TYPE_DEFAULT;
-  }
-  get type(): string {
-    return this._type;
+  get kind(): string {
+    return this._kind;
   }
 
   /**
@@ -129,6 +213,65 @@ export class PoButtonBaseComponent {
     return this._disabled;
   }
 
-  /** Ação que será executada quando o usuário clicar sobre o `po-button`. */
-  @Output('p-click') click = new EventEmitter<null>();
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define um `aria-label` para o `po-button`.
+   *
+   * Caso esta propriedade não seja informada será considerada a label do botão.
+   *
+   * > Em caso de botões com apenas ícone a atribuição de valor à esta propriedade é muito importante para acessibilidade.
+   */
+  readonly ariaLabel = input<string>(undefined, { alias: 'p-aria-label' });
+
+  @Input('p-aria-expanded') ariaExpanded?: boolean = null;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o `tabindex` do elemento `<button>` nativo interno.
+   *
+   * Use `[tabindex]="-1"` para remover o botão da ordem de foco do teclado.
+   */
+  @Input('p-tabindex') tabindex?: number | string = null;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho do componente:
+   * - `small`: altura de 32px (disponível apenas para acessibilidade AA).
+   * - `medium`: altura de 44px.
+   * - `large`: altura de 56px.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoButtonSize);
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoButtonSize);
+    this._size = size;
+  }
 }

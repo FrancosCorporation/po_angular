@@ -1,10 +1,12 @@
 <po-chart
-  [p-categories]="allCategories"
+  [p-categories]="isTypeRadar ? radarConfig : allCategories"
   [p-height]="height"
+  [p-data-label]="dataLabel"
   [p-options]="options"
   [p-series]="series"
   [p-title]="title"
   [p-type]="type"
+  [p-value-gauge-multiple]="valueGauge"
   (p-series-click)="changeEvent('p-series-click', $event)"
   (p-series-hover)="changeEvent('p-series-hover', $event)"
 >
@@ -19,78 +21,173 @@
 <po-divider class="po-md-12" p-label="Properties"></po-divider>
 
 <form>
-  <po-select class="po-md-4" name="type" [(ngModel)]="type" p-columns="3" p-label="Type" [p-options]="typeOptions">
+  <po-select
+    class="po-md-3"
+    name="type"
+    [(ngModel)]="type"
+    p-columns="3"
+    p-label="Type"
+    [p-disabled]="disabledType"
+    [p-options]="typeOptions"
+    (p-change)="changeType($event)"
+  >
   </po-select>
 
-  <po-number class="po-md-4" name="height" [(ngModel)]="height" p-label="Height"> </po-number>
+  <po-number class="po-md-3" name="height" p-label="Height" [(ngModel)]="height"> </po-number>
 
-  <po-input class="po-md-4" name="title" [(ngModel)]="title" p-label="Title"> </po-input>
+  <po-input class="po-md-3" name="title" p-label="Title" [(ngModel)]="title"> </po-input>
+
+  @if (isTypeGrid()) {
+    <po-checkbox-group
+      class="po-md-3"
+      name="dataLabel"
+      p-label="DataLabel"
+      [p-options]="[{ value: 'fixed', label: 'Fixed' }]"
+      [(ngModel)]="selectedValuesDataLabel"
+      (p-change)="changeDataLabelOptions()"
+    >
+    </po-checkbox-group>
+  }
 </form>
 
+<po-divider class="po-md-12" p-label="Chart series"></po-divider>
+
 <form #chartSeries="ngForm">
-  <po-divider class="po-md-12" p-label="Chart series"></po-divider>
+  <div class="po-row">
+    <po-switch
+      class="po-md-3"
+      name="switch"
+      p-label="Gauge Type"
+      [(ngModel)]="isTypeGauge"
+      (p-change)="changeSwitchGauge($event)"
+    >
+    </po-switch>
+
+    <po-switch
+      class="po-md-3"
+      name="radar"
+      p-label="Radar Type"
+      [(ngModel)]="isTypeRadar"
+      (p-change)="changeSwitchRadar($event)"
+    >
+    </po-switch>
+
+    @if (isTypeGauge) {
+      <po-number
+        class="po-md-4"
+        p-label="Value Gauge"
+        name="valueGauge"
+        [(ngModel)]="valueGauge"
+        (p-change)="changeValueGauge($event)"
+      ></po-number>
+    }
+
+    @if (isTypeRadar) {
+      <po-radio-group
+        class="po-md-3"
+        name="radioShapeOption"
+        p-label="ShapeOption"
+        [p-options]="optionsShapeOption"
+        [(ngModel)]="selectedShapeOption"
+      >
+      </po-radio-group>
+
+      <po-switch name="splitArea" class="po-md-1" p-label="splitArea" [(ngModel)]="selectedSplitArea"> </po-switch>
+
+      <po-switch name="areaStyle" class="po-md-1" p-label="areaStyle" [(ngModel)]="selectedAreaStyle"> </po-switch>
+    }
+  </div>
 
   <div class="po-row">
-    <po-input
-      class="po-md-3"
-      name="label"
-      [(ngModel)]="label"
-      p-label="Label"
-      p-help="Serie label"
-      p-required
-    ></po-input>
+    <po-input class="po-md-4" name="label" p-label="Label" [(ngModel)]="label"></po-input>
 
-    <po-input
-      class="po-md-3"
-      name="data"
-      [(ngModel)]="data"
-      p-label="Data"
-      p-help="Example: [25, 58, 83, 66] or 25"
-      p-required
-    >
-    </po-input>
+    @if (!isTypeGauge) {
+      <po-input class="po-md-4" name="data" p-label="Data" p-help="Example: [25, 58, 83, 66] or 25" [(ngModel)]="data">
+      </po-input>
+    }
 
     <po-select
-      class="po-md-3"
+      class="po-md-4"
       name="serieType"
       [(ngModel)]="serieType"
       p-help="Serie Type"
       p-label="Type"
+      [p-disabled]="disabledType"
       [p-options]="typeOptions"
+      (p-change)="changeType($event)"
     >
     </po-select>
 
-    <po-input class="po-md-3" name="tooltip" [(ngModel)]="tooltip" p-label="Tooltip" p-help="Custom Tooltip">
-    </po-input>
-  </div>
-
-  <div class="po-row">
-    <po-button class="po-md-4" p-label="Add Serie" (p-click)="addData(); chartSeries.reset()"> </po-button>
-  </div>
-</form>
-
-<form>
-  <div class="po-row">
-    <po-divider class="po-md-12"></po-divider>
-
     <po-input
       class="po-md-4"
-      name="categories"
-      [(ngModel)]="categories"
-      p-help='Example: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]'
-      p-label="Categories"
-      (p-blur)="addCategories()"
-    >
-    </po-input>
+      name="tooltip"
+      p-label="Tooltip"
+      p-help="Custom Tooltip"
+      [p-disabled]="disabledTooltip"
+      [(ngModel)]="tooltip"
+    ></po-input>
 
+    <po-input class="po-md-4" name="color" p-label="Color" p-help="Custom Color" [(ngModel)]="color"></po-input>
+
+    @if (type === 'bar' || serieType === 'bar' || type === 'column' || serieType === 'column') {
+      <po-input
+        class="po-md-4"
+        name="stackGroupName"
+        p-label="Stack Group Name"
+        p-help="Custom Group Name"
+        [(ngModel)]="stackGroupName"
+      ></po-input>
+    }
+
+    @if (isTypeGauge) {
+      <po-number class="po-md-4" p-label="From" name="from" [(ngModel)]="fromGauge"></po-number>
+    }
+
+    @if (isTypeGauge) {
+      <po-number class="po-md-4" p-label="To" name="from" [(ngModel)]="toGauge"></po-number>
+    }
+
+    @if (!isTypeRadar) {
+      <div class="po-row">
+        <po-button class="po-md-4" p-label="Add Serie" (p-click)="addData()"> </po-button>
+      </div>
+    }
+  </div>
+</form>
+<div class="po-row">
+  <po-divider class="po-md-12" p-label="Chart categories"></po-divider>
+  <po-input
+    name="categories"
+    [class]="isTypeRadar ? 'po-md-3' : 'po-md-4'"
+    [p-label]="isTypeRadar ? 'Indicators' : 'Categories'"
+    [p-help]="isTypeRadar ? helpRadar : helpGeneric"
+    [(ngModel)]="categories"
+    (p-blur)="addCategories()"
+  >
+  </po-input>
+
+  @if (isTypeRadar) {
+    <po-number name="min" class="po-md-3" p-label="Min" [(ngModel)]="min"> </po-number>
+
+    <po-number name="max" class="po-md-3" p-label="Max" [(ngModel)]="max"> </po-number>
+
+    <po-input name="colorIndicator" class="po-md-3" p-label="Color" [(ngModel)]="colorIndicator"> </po-input>
+
+    <div class="po-row">
+      <po-button class="po-md-4" p-label="Add Serie" (p-click)="addData()" [p-disabled]="isTypeRadar && !categories">
+      </po-button>
+    </div>
+  }
+</div>
+<form>
+  <div class="po-row">
     <po-divider class="po-md-12" p-label="Chart options"></po-divider>
 
     <po-number
       class="po-md-4"
       name="minRange"
-      [(ngModel)]="options.axis.minRange"
-      p-help="Example: 0"
       p-label="minRange"
+      [(ngModel)]="options.axis.minRange"
       (p-blur)="addOptions()"
     >
     </po-number>
@@ -98,9 +195,8 @@
     <po-number
       class="po-md-4"
       name="maxRange"
-      [(ngModel)]="options.axis.maxRange"
-      p-help="Example: 100"
       p-label="maxRange"
+      [(ngModel)]="options.axis.maxRange"
       (p-blur)="addOptions()"
     >
     </po-number>
@@ -108,16 +204,249 @@
     <po-number
       class="po-md-4"
       name="gridLines"
-      [(ngModel)]="options.axis.gridLines"
-      p-help="Example: 6"
       p-label="gridLines"
+      [(ngModel)]="options.axis.gridLines"
       (p-blur)="addOptions()"
     >
     </po-number>
+
+    <po-select
+      class="po-md-4"
+      name="labelType"
+      p-label="labelType"
+      [p-options]="labelTypeOptions"
+      [(ngModel)]="options.axis.labelType"
+      (p-change)="addOptions()"
+    >
+    </po-select>
+
+    <po-number
+      class="po-md-4"
+      name="paddingBottom"
+      p-label="paddingBottom"
+      [(ngModel)]="options.axis.paddingBottom"
+      (p-blur)="addOptions()"
+    >
+    </po-number>
+
+    <po-number
+      class="po-md-4"
+      name="paddingLeft"
+      p-label="paddingLeft"
+      [(ngModel)]="options.axis.paddingLeft"
+      (p-blur)="addOptions()"
+    >
+    </po-number>
+
+    <po-number
+      class="po-md-4"
+      name="paddingRight"
+      p-label="paddingRight"
+      [(ngModel)]="options.axis.paddingRight"
+      (p-blur)="addOptions()"
+    >
+    </po-number>
+
+    <po-number
+      class="po-md-4"
+      name="rotateLegend"
+      p-label="rotateLegend"
+      [(ngModel)]="options.axis.rotateLegend"
+      (p-blur)="addOptions()"
+    >
+    </po-number>
+
+    <po-number
+      class="po-md-4"
+      name="innerRadius"
+      p-label="innerRadius"
+      [(ngModel)]="options.innerRadius"
+      (p-blur)="addOptions()"
+    >
+    </po-number>
+
+    <po-number
+      class="po-md-4"
+      name="borderRadius"
+      p-label="borderRadius"
+      [(ngModel)]="options.borderRadius"
+      (p-blur)="addOptions()"
+    >
+    </po-number>
+
+    <po-input
+      class="po-md-4"
+      name="firstColumnName"
+      p-label="firstColumnName"
+      [(ngModel)]="options.firstColumnName"
+      (p-blur)="addOptions()"
+    >
+    </po-input>
+
+    <po-input
+      class="po-md-4"
+      name="textCenterGraph"
+      p-label="textCenterGraph"
+      [(ngModel)]="options.textCenterGraph"
+      (p-blur)="addOptions()"
+    >
+    </po-input>
+
+    <po-input
+      class="po-md-4"
+      name="descriptionChart"
+      p-label="descriptionChart"
+      [(ngModel)]="options.descriptionChart"
+      (p-blur)="addOptions()"
+    ></po-input>
+
+    <po-input
+      class="po-md-4"
+      name="subtitleGauge"
+      p-label="subtitleGauge"
+      [(ngModel)]="options.subtitleGauge"
+      (p-blur)="addOptions()"
+    >
+    </po-input>
+  </div>
+  <div class="po-row">
+    <po-checkbox-group
+      class="po-md-4"
+      name="headerGroup"
+      p-label="Header"
+      [p-columns]="2"
+      [p-options]="optionsHeader"
+      [(ngModel)]="selectedValuesHeader"
+      (p-change)="changeHeaderOptions()"
+    >
+    </po-checkbox-group>
+
+    <po-checkbox-group
+      class="po-md-4"
+      name="axisGroup"
+      p-label="Axis"
+      [p-columns]="2"
+      [p-options]="optionsAxis"
+      [(ngModel)]="selectedValuesAxis"
+      (p-change)="changeAxisOptions()"
+    >
+    </po-checkbox-group>
+
+    <po-checkbox-group
+      class="po-md-4"
+      name="dataZoomGroup"
+      p-label="DataZoom"
+      [p-columns]="2"
+      [p-options]="optionsDataZoom"
+      [(ngModel)]="selectedValuesDataZoom"
+      (p-change)="changeDataZoomOptions()"
+    >
+    </po-checkbox-group>
+
+    <po-checkbox-group
+      class="po-md-4"
+      name="fillPoints"
+      p-label="FillPoints"
+      [p-columns]="1"
+      [p-options]="[{ value: 'fillPoints', label: 'fillPoints' }]"
+      [(ngModel)]="selectedValuesFillPoints"
+      (p-change)="changeFillPointsOptions()"
+    >
+    </po-checkbox-group>
+
+    <po-checkbox-group
+      class="po-md-4"
+      name="legend"
+      p-label="Legend"
+      [p-options]="[{ label: 'legend', value: 'legend' }]"
+      [(ngModel)]="selectedValuesLegend"
+      (p-change)="changeLegendOptions()"
+    >
+    </po-checkbox-group>
+
+    <po-checkbox-group
+      class="po-md-4"
+      name="roseType"
+      p-label="RoseType"
+      [p-options]="[{ label: 'roseType', value: 'roseType' }]"
+      [(ngModel)]="selectedRoseType"
+      (p-change)="changeRoseTypeOptions()"
+    >
+    </po-checkbox-group>
+
+    <po-checkbox-group
+      class="po-md-4"
+      name="showFromToLegend"
+      p-label="ShowFromToLegend"
+      [p-options]="[{ label: 'showFromToLegend', value: 'showFromToLegend' }]"
+      [(ngModel)]="selectedFromToLegend"
+      (p-change)="changeShowFromToLegend()"
+    >
+    </po-checkbox-group>
+
+    <po-checkbox-group
+      class="po-md-4"
+      name="pointer"
+      p-label="Pointer"
+      [p-options]="[{ label: 'pointer', value: 'pointer' }]"
+      [(ngModel)]="selectedPointer"
+      (p-change)="changePointer()"
+    >
+    </po-checkbox-group>
+
+    <po-checkbox-group
+      class="po-md-4"
+      name="stacked"
+      p-label="Stacked"
+      [p-options]="[{ label: 'stacked', value: 'stacked' }]"
+      [(ngModel)]="selectedStacked"
+      (p-change)="changeStacked()"
+    >
+    </po-checkbox-group>
+
+    <po-radio-group
+      class="po-md-4"
+      name="radioLegendVerticalPosition"
+      p-label="LegendVerticalPosition"
+      [p-options]="optionsLegendVerticalPosition"
+      [(ngModel)]="selectedLegendVerticalPosition"
+      (p-change)="changeLegendVerticalPosition()"
+    >
+    </po-radio-group>
+
+    <po-radio-group
+      class="po-md-4"
+      name="radioLegendPosition"
+      p-label="LegendPosition"
+      [p-options]="optionsLegendPosition"
+      [(ngModel)]="selectedLegendPosition"
+      (p-change)="changeLegendPosition()"
+    >
+    </po-radio-group>
+
+    <po-radio-group
+      class="po-md-4"
+      name="radioLegendType"
+      p-label="LegendType"
+      [p-options]="optionsLegendType"
+      [(ngModel)]="selectedLegendType"
+      (p-change)="changeLegendType()"
+    >
+    </po-radio-group>
+
+    <po-radio-group
+      class="po-md-4"
+      name="radioRendererOption"
+      p-label="RendererOption"
+      [p-options]="optionsRendererOption"
+      [(ngModel)]="selectedRendererOption"
+      (p-change)="changeRendererOption()"
+    >
+    </po-radio-group>
   </div>
 
   <po-divider class="po-md-12"></po-divider>
   <div class="po-row">
-    <po-button class="po-md-3" p-label="Sample Restore" (p-click)="restore()"> </po-button>
+    <po-button class="po-md-4" p-label="Sample Restore" (p-click)="restore()"> </po-button>
   </div>
 </form>

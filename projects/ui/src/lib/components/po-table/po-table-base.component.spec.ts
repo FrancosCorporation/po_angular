@@ -1,34 +1,58 @@
 import { Directive } from '@angular/core';
 
-import * as utilsFunctions from '../../utils/util';
-import { expectPropertiesValues, expectSettersMethod } from '../../util-test/util-expect.spec';
 import { PoDateService } from '../../services/po-date/po-date.service';
-import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { expectPropertiesValues, expectSettersMethod } from '../../util-test/util-expect.spec';
+import { PoUtils as utilsFunctions } from '../../utils/util';
 
-import { PoTableAction } from './interfaces/po-table-action.interface';
-import { PoTableBaseComponent, poTableLiteralsDefault } from './po-table-base.component';
-import { PoTableColumn } from './interfaces/po-table-column.interface';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { Observable, of } from 'rxjs';
+import { PoThemeA11yEnum } from '../../services';
 import { PoTableColumnSortType } from './enums/po-table-column-sort-type.enum';
+import { PoTableAction } from './interfaces/po-table-action.interface';
+import { PoTableColumn } from './interfaces/po-table-column.interface';
+import { PoTableBaseComponent, poTableLiteralsDefault } from './po-table-base.component';
+import { PoTableService } from './services/po-table.service';
 
 @Directive()
 class PoTableComponent extends PoTableBaseComponent {
-  calculateWidthHeaders() {}
+  checkInfiniteScroll() {}
   calculateHeightTableContainer(height) {}
+  changeSizeLoading() {}
+  changeHeaderWidth() {}
+  getDefaultSpacing() {}
+  reapplySort() {}
 }
 
 describe('PoTableBaseComponent:', () => {
-  let dateService: PoDateService;
-  let languageService: PoLanguageService;
   let component: PoTableComponent;
   let actions: Array<PoTableAction>;
   let columns: Array<PoTableColumn>;
   let items;
 
-  beforeEach(() => {
-    dateService = new PoDateService();
-    languageService = new PoLanguageService();
-    component = new PoTableComponent(dateService, languageService);
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [],
+      providers: [
+        PoTableService,
+        PoLanguageService,
+        PoDateService,
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting()
+      ]
+    }).compileComponents();
+
+    component = TestBed.runInInjectionContext(
+      () =>
+        new PoTableComponent(
+          TestBed.inject(PoDateService),
+          TestBed.inject(PoLanguageService),
+          TestBed.inject(PoTableService)
+        )
+    );
 
     actions = [
       {
@@ -88,64 +112,36 @@ describe('PoTableBaseComponent:', () => {
     expectPropertiesValues(component, 'items', invalidValues, []);
   });
 
+  it('should set items with value default when invalid values if contain height', () => {
+    component.height = 400;
+    const invalidValues = [undefined, null, false, 0, 'a'];
+
+    expectPropertiesValues(component, 'items', invalidValues, []);
+  });
+
   it('should set items with values received when valid values', () => {
     expectPropertiesValues(component, 'items', [items], [items]);
     expectPropertiesValues(component, 'items', [], []);
   });
 
-  it('should set selectable and call calculateWidthHeaders', () => {
-    spyOn(component, 'calculateWidthHeaders');
+  it('should set items with values received when valid values if contain height', () => {
+    component.height = 400;
+    expectPropertiesValues(component, 'items', [items], [items]);
+    expectPropertiesValues(component, 'items', [], []);
+  });
+
+  it('should set selectable', () => {
     const validValues = ['', true, 1];
     const invalidValues = [undefined, null, false, 0];
 
     expectPropertiesValues(component, 'selectable', validValues, true);
     expectPropertiesValues(component, 'selectable', invalidValues, false);
-    expect(component.calculateWidthHeaders).toHaveBeenCalled();
   });
 
-  it('should set sort', () => {
-    expectSettersMethod(component, 'setSort', '', 'sort', false);
-    expectSettersMethod(component, 'setSort', 'true', 'sort', true);
-    expectSettersMethod(component, 'setSort', 'false', 'sort', false);
-  });
-
-  it('should set striped', () => {
-    expectSettersMethod(component, 'setStriped', '', 'striped', false);
-    expectSettersMethod(component, 'setStriped', 'true', 'striped', true);
-    expectSettersMethod(component, 'setStriped', 'false', 'striped', false);
-  });
-
-  it('should set showMoreDisabled', () => {
-    expectSettersMethod(component, 'setShowMoreDisabled', '', 'showMoreDisabled', false);
-    expectSettersMethod(component, 'setShowMoreDisabled', 'true', 'showMoreDisabled', true);
-    expectSettersMethod(component, 'setShowMoreDisabled', 'false', 'showMoreDisabled', false);
-  });
-
-  it('should set hideDetail and call calculateWidthHeaders', () => {
-    spyOn(component, 'calculateWidthHeaders');
+  it('should set hideDetail', () => {
     expectSettersMethod(component, 'hideDetail', '', 'hideDetail', true);
     expectSettersMethod(component, 'hideDetail', 'true', 'hideDetail', true);
     expectSettersMethod(component, 'hideDetail', 'false', 'hideDetail', false);
-    expect(component.calculateWidthHeaders).toHaveBeenCalled();
-  });
-
-  it('should set hideSelectAll', () => {
-    expectSettersMethod(component, 'setHideSelectAll', '', 'hideSelectAll', false);
-    expectSettersMethod(component, 'setHideSelectAll', 'true', 'hideSelectAll', true);
-    expectSettersMethod(component, 'setHideSelectAll', 'false', 'hideSelectAll', false);
-  });
-
-  it('should set singleSelect', () => {
-    expectSettersMethod(component, 'setSingleSelect', '', 'singleSelect', true);
-    expectSettersMethod(component, 'setSingleSelect', 'true', 'singleSelect', true);
-    expectSettersMethod(component, 'setSingleSelect', 'false', 'singleSelect', false);
-  });
-
-  it('should update property `p-hide-text-overflow` with valid values', () => {
-    const validValues = [false, true, '', undefined];
-    const expectedValues = [false, true, true, false];
-
-    expectPropertiesValues(component, 'hideTextOverflow', validValues, expectedValues);
   });
 
   it('should call setColumnLink when set columns', () => {
@@ -188,19 +184,14 @@ describe('PoTableBaseComponent:', () => {
     });
   });
 
-  it('should set height and call calculateWidthHeaders', () => {
-    spyOn(component, 'calculateWidthHeaders');
-
+  it('should set height', () => {
     expectSettersMethod(component, 'height', 100, 'height', 100);
-    expect(component.calculateWidthHeaders).toHaveBeenCalled();
   });
 
-  it('should set columns and call calculateWidthHeaders', () => {
-    spyOn(component, 'calculateWidthHeaders');
+  it('should set columns', () => {
     component.columns = [{ property: 'teste', label: 'label' }];
 
     expect(component.columns).toEqual([{ property: 'teste', label: 'label' }]);
-    expect(component.calculateWidthHeaders).toHaveBeenCalled();
   });
 
   it('should set hideSelectAll to true if singleSelect', () => {
@@ -406,6 +397,21 @@ describe('PoTableBaseComponent:', () => {
     expect(component.items).toEqual(sortedItemsDesc);
   });
 
+  it('should sort values descending with item as param', () => {
+    const column = component.columns[1];
+    const sortedItemsDesc = items.slice().sort((a, b) => b.numberData - a.numberData);
+    component['sortArray'](column, false, items);
+    expect(component.filteredItems).toEqual(sortedItemsDesc);
+  });
+
+  it('should sort values descending with item as param and height', () => {
+    const column = component.columns[1];
+    component.height = 600;
+    const sortedItemsDesc = items.slice().sort((a, b) => b.numberData - a.numberData);
+    component['sortArray'](column, false, items);
+    expect(component.filteredItems).toEqual(sortedItemsDesc);
+  });
+
   it('should sort values ascending', () => {
     const column = component.columns[1];
     const sortedItemsAsc = items.slice().sort((a, b) => a.numberData - b.numberData);
@@ -415,10 +421,27 @@ describe('PoTableBaseComponent:', () => {
     expect(component.items).toEqual(sortedItemsAsc);
   });
 
+  it('should sort values if has `p-height`', () => {
+    const column = component.columns[1];
+    const sortedItemsAsc = items.slice().sort((a, b) => a.numberData - b.numberData);
+    component.height = 300;
+    component['sortArray'](column, true);
+
+    expect(component.filteredItems).toEqual(sortedItemsAsc);
+  });
+  it(`should has service and sort set 'sortStore'`, () => {
+    const column = component.columns[1];
+    component.serviceApi = 'https://po-ui.io';
+    component.sort = true;
+
+    component.sortColumn(column);
+    expect(component['sortStore']).toBeDefined();
+  });
+
   it('should call event emitter', () => {
     const newItem = { textDate: 'english text', numberData: 4, dateData: '2020-11-30' };
 
-    spyOn(component.showMore, 'emit').and.callFake(function ({}) {
+    spyOn(component.showMore, 'emit').and.callFake(() => {
       component.items.push(newItem);
       component.showMoreDisabled = true;
     });
@@ -470,6 +493,15 @@ describe('PoTableBaseComponent:', () => {
     expect(component.hasItems).toBeTruthy();
   });
 
+  it('textWrap: should accept input for text wrapping with default value', () => {
+    expect(component.textWrap).toBe(false);
+  });
+
+  it('textWrap: should accept input for text wrapping with value true', () => {
+    component.textWrap = true;
+    expect(component.textWrap).toBe(true);
+  });
+
   describe('Methods:', () => {
     const columnsColors = [
       { label: 'Destination', property: 'destination', type: 'string', color: 'color-07' },
@@ -483,6 +515,22 @@ describe('PoTableBaseComponent:', () => {
     ];
 
     const itemsColors = [{ destination: 'Paris' }, { country: 'Franch' }, { city: 'Lyon' }];
+
+    describe('initializeData:', () => {
+      it('getFilteredItems should be called when `p-service-api` is used', () => {
+        spyOn(component, 'getFilteredItems').and.returnValue(of({ items: [], hasNext: false }));
+        component.hasService = true;
+        component.initializeData();
+        expect(component.getFilteredItems).toHaveBeenCalled();
+      });
+
+      it('getFilteredItems should not be called when `p-service-api` is not used', () => {
+        spyOn(component, 'getFilteredItems').and.returnValue(of({ items: [], hasNext: false }));
+        component.hasService = false;
+        component.initializeData();
+        expect(component.getFilteredItems).not.toHaveBeenCalled();
+      });
+    });
 
     it('ngOnChanges: should call `calculateHeightTableContainer` if height is changed', () => {
       spyOn(component, 'calculateHeightTableContainer');
@@ -503,6 +551,39 @@ describe('PoTableBaseComponent:', () => {
       component.ngOnChanges(changes);
 
       expect(component.calculateHeightTableContainer).not.toHaveBeenCalled();
+    });
+
+    it('ngOnChanges: should call `changeSizeLoading` if height is changed', () => {
+      spyOn(component, 'changeSizeLoading');
+      const height = 400;
+      const changes = <any>{ height };
+      component.height = height;
+
+      component.ngOnChanges(changes);
+
+      expect(component['changeSizeLoading']).toHaveBeenCalled();
+    });
+
+    it('ngOnChanges: should call `changeSizeLoading` if there is items', () => {
+      spyOn(component, 'changeSizeLoading');
+      items = component.items;
+      const changes = <any>{ items };
+      component.items = items;
+
+      component.ngOnChanges(changes);
+
+      expect(component['changeSizeLoading']).toHaveBeenCalled();
+    });
+
+    it('ngOnChanges: should´n call `changeSizeLoading` if there is no items', () => {
+      spyOn(component, 'changeSizeLoading');
+      items = null;
+      const changes = <any>{ items };
+      component.items = null;
+
+      component.ngOnChanges(changes);
+
+      expect(component['changeSizeLoading']).toHaveBeenCalled();
     });
 
     describe('isEverySelected:', () => {
@@ -589,6 +670,48 @@ describe('PoTableBaseComponent:', () => {
       });
     });
 
+    describe('setSelectedList: ', () => {
+      const rows = [
+        {
+          id: 1,
+          name: 'John',
+          $selected: true
+        },
+        {
+          id: 2,
+          name: 'John'
+        },
+        {
+          id: 3,
+          name: 'John'
+        }
+      ];
+
+      it('should call itemsSelected with 1 item in Array', () => {
+        component.items = rows;
+
+        component.setSelectedList();
+
+        expect(component.itemsSelected).toEqual([rows[0]]);
+      });
+
+      it('should call items with 2 items and itemsSelected empty', () => {
+        component.items = [rows[1], rows[2]];
+
+        component.setSelectedList();
+
+        expect(component.itemsSelected).toEqual([]);
+      });
+
+      it('should call items and itemsSelected empty', () => {
+        component.items = [];
+
+        component.setSelectedList();
+
+        expect(component.itemsSelected).toEqual([]);
+      });
+    });
+
     it('unselectOtherRows: should unselect rows that are different from the current row and call selectAllDetails', () => {
       const rows: any = [
         {
@@ -611,6 +734,28 @@ describe('PoTableBaseComponent:', () => {
       expect(otherRow.$selected).toBeFalsy();
     });
 
+    describe('hasSelectableRow:', () => {
+      it('should return false when selectable is false', () => {
+        component.selectable = false;
+
+        expect(component['hasSelectableRow']()).toBeFalsy();
+      });
+
+      it('should return true when selectable and selectableEntireLine is true', () => {
+        component.selectable = true;
+        component.selectableEntireLine = true;
+
+        expect(component['hasSelectableRow']()).toBeTruthy();
+      });
+
+      it('should return false when selectable is true and selectableEntireLine is false', () => {
+        component.selectable = true;
+        component.selectableEntireLine = false;
+
+        expect(component['hasSelectableRow']()).toBeFalsy();
+      });
+    });
+
     it('selectRow: should set $selected `true` at row and call `configAfterSelectRow` and `emitSelectEvents`', () => {
       const row = { id: 1, $selected: false };
 
@@ -622,6 +767,46 @@ describe('PoTableBaseComponent:', () => {
       expect(row.$selected).toBeTruthy();
       expect(component['configAfterSelectRow']).toHaveBeenCalled();
       expect(component['emitSelectEvents']).toHaveBeenCalledWith(row);
+    });
+
+    it('selectRow: should update child items $selected property if row has detail', () => {
+      const childItems = [
+        { id: 2, $selected: false },
+        { id: 3, $selected: false }
+      ];
+      const row = { id: 1, $selected: false, detail: childItems };
+
+      component.selectRow(row);
+
+      expect(row.$selected).toBeTruthy();
+      row.detail.forEach(childItem => {
+        expect(childItem.$selected).toBeTruthy();
+      });
+    });
+
+    it('selectRow: should call setSelectedList after selecting a row', () => {
+      const row = { id: 1, $selected: false };
+
+      spyOn(component, 'setSelectedList');
+
+      component.selectRow(row);
+
+      expect(component.setSelectedList).toHaveBeenCalled();
+    });
+
+    it('selectRow: should update child items $selected property if row has detail and $selected is false', () => {
+      const childItems = [
+        { id: 2, $selected: true },
+        { id: 3, $selected: true }
+      ];
+      const row = { id: 1, $selected: true, detail: childItems };
+
+      component.selectRow(row);
+
+      expect(row.$selected).toBeFalsy();
+      row.detail.forEach(childItem => {
+        expect(childItem.$selected).toBeFalsy();
+      });
     });
 
     it('emitSelectEvents: should emit `selected` if `row.$selected` is `true`', () => {
@@ -652,6 +837,80 @@ describe('PoTableBaseComponent:', () => {
       expect(component['emitSelectAllEvents']).toHaveBeenCalled();
     });
 
+    describe('selectAllRows:', () => {
+      beforeEach(() => {
+        component.hideSelectAll = false;
+        component.selectAll = false;
+        component.items = [
+          { id: 1, $selected: false, detail: [{ id: 4, $selected: false }] },
+          { id: 2, $selected: false, detail: [{ id: 5, $selected: false }] }
+        ];
+      });
+
+      it('should call emitSelectEvents and updateParentRowSelection', () => {
+        const row = { id: 1, $selected: false, detail: [{ id: 4 }] };
+        const parentRow = { id: 2, detail: [row] };
+
+        spyOn(component, <any>'emitSelectEvents');
+        spyOn(component, <any>'updateParentRowSelection');
+
+        component.selectDetailRow({ item: row, parentRow });
+
+        expect(component['emitSelectEvents']).toHaveBeenCalledWith(row);
+        expect(component['updateParentRowSelection']).toHaveBeenCalledWith(parentRow);
+      });
+
+      it('should select all rows when selectAll is false', () => {
+        component.selectAllRows();
+
+        expect(component.selectAll).toBeTrue();
+        component.items.forEach(item => {
+          expect(item.$selected).toBeTrue();
+          item.detail.forEach(childItem => {
+            expect(childItem.$selected).toBeTrue();
+          });
+        });
+      });
+
+      it('should unselect all rows when selectAll is true', () => {
+        component.selectAll = true;
+        component.items.forEach(item => {
+          item.$selected = true;
+          item.detail.forEach(childItem => (childItem.$selected = true));
+        });
+
+        component.selectAllRows();
+
+        expect(component.selectAll).toBeFalse();
+        component.items.forEach(item => {
+          expect(item.$selected).toBeFalse();
+          item.detail.forEach(childItem => {
+            expect(childItem.$selected).toBeFalse();
+          });
+        });
+      });
+
+      it('should not select all rows if hideSelectAll is true', () => {
+        component.hideSelectAll = true;
+
+        component.selectAllRows();
+
+        component.items.forEach(item => {
+          expect(item.$selected).toBeFalse();
+        });
+      });
+
+      it('should emit selectAll events and update selected list', () => {
+        spyOn(component as any, 'emitSelectAllEvents');
+        spyOn(component, 'setSelectedList');
+
+        component.selectAllRows();
+
+        expect((component as any).emitSelectAllEvents).toHaveBeenCalledWith(true, jasmine.any(Array));
+        expect(component.setSelectedList).toHaveBeenCalled();
+      });
+    });
+
     it('emitSelectAllEvents: should emit `allSelected` if `selectAll` is `true`', () => {
       const rows = [{ id: 1, $selected: true }];
       const selectAll = true;
@@ -674,38 +933,34 @@ describe('PoTableBaseComponent:', () => {
       expect(component.allUnselected.emit).toHaveBeenCalledWith(rows);
     });
 
-    it('selectDetailRow: should call `emitSelectEvents`', () => {
-      const row = { id: 1, $selected: false };
+    it('updateParentRowSelection: should set parentRow.$selected to true if all child items are selected', () => {
+      const parentRow: any = {
+        detail: [{ $selected: true }, { $selected: true }, { $selected: true }]
+      };
 
-      spyOn(component, <any>'emitSelectEvents');
+      component.updateParentRowSelection(parentRow);
 
-      component.selectDetailRow(row);
-
-      expect(component['emitSelectEvents']).toHaveBeenCalledWith(row);
+      expect(parentRow.$selected).toBe(true);
     });
 
-    it('getSelectedRows: should return selected rows', () => {
-      const rows = [
-        { id: 1, $selected: true },
-        { id: 2, $selected: false },
-        { id: 3, $selected: false },
-        { id: 4, $selected: true },
-        { id: 5, $selected: false }
-      ];
-      component.items = rows;
-      expect(component.getSelectedRows().length).toBe(2);
+    it('updateParentRowSelection: should set parentRow.$selected to false if all child items are not selected', () => {
+      const parentRow: any = {
+        detail: [{ $selected: false }, { $selected: false }, { $selected: false }]
+      };
+
+      component.updateParentRowSelection(parentRow);
+
+      expect(parentRow.$selected).toBe(false);
     });
 
-    it('getUnselectedRows: should return unselected rows', () => {
-      const rows = [
-        { id: 1, $selected: false },
-        { id: 2, $selected: true },
-        { id: 3, $selected: false },
-        { id: 4, $selected: true },
-        { id: 5, $selected: true }
-      ];
-      component.items = rows;
-      expect(component.getUnselectedRows().length).toBe(2);
+    it('updateParentRowSelection: should set parentRow.$selected to null if some child items are selected and some are not', () => {
+      const parentRow: any = {
+        detail: [{ $selected: true }, { $selected: false }, { $selected: true }]
+      };
+
+      component.updateParentRowSelection(parentRow);
+
+      expect(parentRow.$selected).toBeNull();
     });
 
     describe('getColumnColor:', () => {
@@ -829,6 +1084,25 @@ describe('PoTableBaseComponent:', () => {
       });
     });
 
+    it(`OnShowMore: 'showMore' should call 'getFilteredItems' when has 'p-service-api' url`, () => {
+      spyOn(component, <any>'getFilteredItems').and.returnValue(of({ items: [], hasNext: false }));
+      spyOn(component.showMore, 'emit');
+
+      const column = component.columns[1];
+      component.sortedColumn.property = column;
+      component.serviceApi = 'https://po-ui.io';
+
+      const params = {
+        column: component.sortedColumn.property,
+        type: PoTableColumnSortType.Ascending
+      };
+
+      component.onShowMore();
+
+      expect(component.showMore.emit).toHaveBeenCalledWith(params);
+      expect(component.getFilteredItems).toHaveBeenCalled();
+    });
+
     it(`onShowMore: 'showMore' should emit an object parameter containing 'descending' as value of property 'type'`, () => {
       const column = component.columns[1];
       component.sortedColumn.property = column;
@@ -924,100 +1198,6 @@ describe('PoTableBaseComponent:', () => {
       component.autoCollapse = true;
       component.toggleDetail(component.items[1]);
       expect(component.items[0].$showDetail).toBe(false);
-    });
-
-    it('expand: should set showDetail to true', () => {
-      const currentRow = {
-        id: 1,
-        $selected: true,
-        details: [{ id: 4 }],
-        $showDetail: false
-      };
-
-      component.items = [currentRow];
-
-      component.expand(0);
-
-      expect(component.items[0].$showDetail).toBe(true);
-    });
-
-    it('expand: should keep showDetail to true', () => {
-      const currentRow = {
-        id: 1,
-        $selected: true,
-        details: [{ id: 4 }],
-        $showDetail: true
-      };
-
-      component.items = [currentRow];
-
-      component.expand(0);
-
-      expect(component.items[0].$showDetail).toBe(true);
-    });
-
-    it('expand: shouldn`t emit expanded', () => {
-      const currentRow = {
-        id: 1,
-        $selected: true,
-        details: [{ id: 4 }],
-        $showDetail: false
-      };
-
-      component.items = [currentRow];
-
-      spyOn(component.expanded, 'emit');
-
-      component.expand(0);
-
-      expect(component.expanded.emit).not.toHaveBeenCalled();
-    });
-
-    it('collapse: should set showDetail to false', () => {
-      const currentRow = {
-        id: 1,
-        $selected: true,
-        details: [{ id: 4 }],
-        $showDetail: true
-      };
-
-      component.items = [currentRow];
-
-      component.collapse(0);
-
-      expect(component.items[0].$showDetail).toBe(false);
-    });
-
-    it('collapse: should keep showDetail to false', () => {
-      const currentRow = {
-        id: 1,
-        $selected: true,
-        details: [{ id: 4 }],
-        $showDetail: false
-      };
-
-      component.items = [currentRow];
-
-      component.collapse(0);
-
-      expect(component.items[0].$showDetail).toBe(false);
-    });
-
-    it('collapse: shouldn`t emit collapsed', () => {
-      const currentRow = {
-        id: 1,
-        $selected: true,
-        details: [{ id: 4 }],
-        $showDetail: true
-      };
-
-      component.items = [currentRow];
-
-      spyOn(component.collapsed, 'emit');
-
-      component.collapse(0);
-
-      expect(component.collapsed.emit).not.toHaveBeenCalled();
     });
 
     it('onChangeColumns: should call `setMainColumns`, `setColumnMasterDetail` and `setSubtitleColumns`', () => {
@@ -1177,6 +1357,238 @@ describe('PoTableBaseComponent:', () => {
         expect(component.items).toEqual(sortedItems);
       });
     });
+
+    describe('getOrderParam', () => {
+      it('should be called with descending order', () => {
+        const sortMock = { column: component.columns[1], type: PoTableColumnSortType.Descending };
+
+        const result = component['getOrderParam'](sortMock);
+
+        expect(result).toBe('-numberData');
+      });
+
+      it('should be called with ascendind order', () => {
+        const sortMock = { column: component.columns[1], type: PoTableColumnSortType.Ascending };
+
+        const result = component['getOrderParam'](sortMock);
+
+        expect(result).toBe('numberData');
+      });
+
+      it('should be called without column', () => {
+        const sortMock = { column: undefined, type: undefined };
+
+        const result = component['getOrderParam'](sortMock);
+
+        expect(result).toBeUndefined();
+      });
+    });
+
+    describe('setService', () => {
+      it('should be called with string url and set service url and method is GET', () => {
+        spyOn(component['poTableService'], 'setUrl');
+        const url = 'https://po-ui.io';
+
+        component['setService'](url, 'GET');
+        expect(component['poTableService'].setUrl).toHaveBeenCalledWith(url, 'GET');
+      });
+
+      it("should be called with undefined and don't set url and method is GET", () => {
+        spyOn(component['poTableService'], 'setUrl');
+        const url = undefined;
+
+        component['setService'](url, 'GET');
+
+        expect(component['poTableService'].setUrl).not.toHaveBeenCalled();
+      });
+
+      it("should be called with empty string and don't set url and method is GET", () => {
+        spyOn(component['poTableService'], 'setUrl');
+        const url = '';
+
+        component['setService'](url, 'GET');
+        expect(component.hasService).toBeFalsy();
+        expect(component['poTableService'].setUrl).not.toHaveBeenCalled();
+      });
+
+      it('should be called with string url and set service url and method is DELETE', () => {
+        spyOn(component['poTableService'], 'setUrl');
+        const url = 'https://po-ui.io';
+
+        component['setService'](url, 'DELETE');
+        expect(component['poTableService'].setUrl).toHaveBeenCalledWith(url, 'DELETE');
+      });
+
+      it("should be called with undefined and don't set url and method is DELETE", () => {
+        spyOn(component['poTableService'], 'setUrl');
+        const url = undefined;
+
+        component['setService'](url, 'DELETE');
+
+        expect(component['poTableService'].setUrl).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('getFilteredParams', () => {
+      it('should return object with empty filter', () => {
+        const page = 1;
+        const pageSize = 10;
+        const filter = {};
+        const expectedValue = { page, pageSize };
+
+        component.page = page;
+        component.pageSize = pageSize;
+        component['sort'] = undefined;
+
+        const filteredParams = component['getFilteredParams'](filter);
+
+        expect(filteredParams).toEqual(expectedValue);
+      });
+
+      it('should return object without undefined values', () => {
+        const page = 1;
+        const pageSize = 10;
+        const filter = undefined;
+        const expectedValue = { page, pageSize };
+
+        component.page = page;
+        component.pageSize = pageSize;
+        component['sort'] = undefined;
+
+        const filteredParams = component['getFilteredParams'](filter);
+
+        expect(filteredParams).toEqual(expectedValue);
+      });
+    });
+
+    describe('hideActionFixedColumns:', () => {
+      it('should set hide Fixed', () => {
+        expectSettersMethod(component, 'hideActionFixedColumns', true, 'hideActionFixedColumns', true);
+        expectSettersMethod(component, 'hideActionFixedColumns', false, 'hideActionFixedColumns', false);
+      });
+    });
+
+    describe('removePropertyFixed:', () => {
+      it('should return change fixed to false', () => {
+        const result = component['removePropertyFixed']([{ value: 'test', fixed: true }]);
+
+        expect(result).toEqual([{ value: 'test', fixed: false }]);
+      });
+    });
+
+    describe('getFilteredItems:', () => {
+      beforeEach(() => {
+        items = [
+          { name: 'John Lennon', email: 'john.lennon@mail.com', city: 'Rio de Janeiro' },
+          { name: 'Paul McCartney', email: 'paul.mccartney@mail.com', city: 'São Paulo' },
+          { name: 'Ringo Starr', email: 'ringo.starr@mail.com', city: 'Joinville' },
+          { name: 'George Harrison', email: 'george.harrison@mail.com', city: 'Brasília' }
+        ];
+      });
+
+      it('should call and return an Observable', () => {
+        const page = 1;
+        const pageSize = 10;
+        const filter = {};
+
+        spyOn(component['poTableService'], <any>'getFilteredItems').and.returnValue(of({ items, hasNext: false }));
+
+        component.page = page;
+        component.pageSize = pageSize;
+
+        spyOn(component, <any>'getFilteredParams').and.callThrough();
+
+        const filteredDataObservable = component['getFilteredItems'](filter);
+
+        expect(component['getFilteredParams']).toHaveBeenCalled();
+        expect(filteredDataObservable instanceof Observable);
+      });
+    });
+
+    describe('setTableResponseProperties:', () => {
+      beforeEach(() => {
+        items = [
+          { name: 'John Lennon', email: 'john.lennon@mail.com', city: 'Rio de Janeiro' },
+          { name: 'Paul McCartney', email: 'paul.mccartney@mail.com', city: 'São Paulo' },
+          { name: 'Ringo Starr', email: 'ringo.starr@mail.com', city: 'Joinville' },
+          { name: 'George Harrison', email: 'george.harrison@mail.com', city: 'Brasília' }
+        ];
+      });
+      it(`should be called with data object with items and 'hasNext' 'true'`, () => {
+        const data = {
+          items,
+          hasNext: true
+        };
+
+        component.setTableResponseProperties(data);
+
+        expect(component.items).toEqual(items);
+        expect(component.showMoreDisabled).toBeFalsy();
+        expect(component.loading).toBeFalsy();
+      });
+
+      it(`should be called with data object with items and 'hasNext' 'false'`, () => {
+        const data = {
+          items,
+          hasNext: false
+        };
+
+        component.setTableResponseProperties(data);
+
+        expect(component.items).toEqual(items);
+        expect(component.showMoreDisabled).toBeTruthy();
+        expect(component.loading).toBeFalsy();
+      });
+      it('should be called with data object without items', () => {
+        const data = {
+          items: undefined,
+          hasNext: false
+        };
+
+        component.setTableResponseProperties(data);
+
+        expect(component.items).toEqual([]);
+        expect(component.showMoreDisabled).toBeTruthy();
+        expect(component.loading).toBeFalsy();
+      });
+    });
+
+    describe('ngOnDestroy:', () => {
+      const fakeSubscription = <any>{ unsubscribe: () => {} };
+
+      it(`should unsubscribe 'poTableServiceSubscription'`, () => {
+        spyOn(fakeSubscription, <any>'unsubscribe');
+        component['poTableServiceSubscription'] = fakeSubscription;
+
+        component.ngOnDestroy();
+
+        expect(fakeSubscription.unsubscribe).toHaveBeenCalled();
+      });
+
+      it(`should not unsubscribe if 'poTableServiceSubscription' is falsy.`, () => {
+        component['poTableServiceSubscription'] = fakeSubscription;
+
+        spyOn(fakeSubscription, <any>'unsubscribe');
+
+        component['poTableServiceSubscription'] = undefined;
+        component.ngOnDestroy();
+
+        expect(fakeSubscription.unsubscribe).not.toHaveBeenCalled();
+      });
+    });
+
+    it('getFilteredColumns: should filter and map columns correctly', () => {
+      component.columns = [
+        { label: 'Currency', visible: true },
+        { label: 'Números', property: 'numberData', visible: true },
+        { label: 'Datas', property: 'dateData', visible: true },
+        { label: 'Textos', property: 'textData', visible: false }
+      ];
+
+      component['getFilteredColumns']();
+
+      expect(component.filteredColumns).toEqual(['Currency', 'numberData', 'dateData']);
+    });
   });
 
   describe('Properties:', () => {
@@ -1185,7 +1597,7 @@ describe('PoTableBaseComponent:', () => {
 
     describe('p-literals:', () => {
       it('should be in portuguese if browser is setted with an unsupported language', () => {
-        component['language'] = 'zw';
+        Object.defineProperty(component, 'language', { value: 'zw', configurable: true });
 
         component.literals = {};
 
@@ -1193,7 +1605,7 @@ describe('PoTableBaseComponent:', () => {
       });
 
       it('should be in portuguese if browser is setted with `pt`', () => {
-        component['language'] = 'pt';
+        Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
         component.literals = {};
 
@@ -1201,7 +1613,7 @@ describe('PoTableBaseComponent:', () => {
       });
 
       it('should be in english if browser is setted with `en`', () => {
-        component['language'] = 'en';
+        Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
         component.literals = {};
 
@@ -1209,7 +1621,7 @@ describe('PoTableBaseComponent:', () => {
       });
 
       it('should be in spanish if browser is setted with `es`', () => {
-        component['language'] = 'es';
+        Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
         component.literals = {};
 
@@ -1217,7 +1629,7 @@ describe('PoTableBaseComponent:', () => {
       });
 
       it('should be in russian if browser is setted with `ru`', () => {
-        component['language'] = 'ru';
+        Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
 
         component.literals = {};
 
@@ -1225,7 +1637,7 @@ describe('PoTableBaseComponent:', () => {
       });
 
       it('should accept custom literals', () => {
-        component['language'] = poLocaleDefault;
+        Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
         const customLiterals = Object.assign({}, poTableLiteralsDefault[poLocaleDefault]);
 
@@ -1240,13 +1652,13 @@ describe('PoTableBaseComponent:', () => {
       it('should update property with default literals if is setted with invalid values', () => {
         const invalidValues = [null, undefined, false, true, '', 'literals', 0, 10, [], [1, 2], () => {}];
 
-        component['language'] = poLocaleDefault;
+        Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
         expectPropertiesValues(component, 'literals', invalidValues, poTableLiteralsDefault[poLocaleDefault]);
       });
 
       it('should get literals directly from poTableLiteralsDefault if it not initialized', () => {
-        component['language'] = 'pt';
+        Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
         expect(component.literals).toEqual(poTableLiteralsDefault['pt']);
       });
     });
@@ -1259,22 +1671,76 @@ describe('PoTableBaseComponent:', () => {
       expectPropertiesValues(component, 'loading', booleanInvalidValues, false);
     });
 
-    it('p-loading: should update property `p-loading` with valid values and call `calculateWidthHeaders`', () => {
-      spyOn(component, 'calculateWidthHeaders');
-
+    it('p-loading: should update property `p-loading` with valid values', () => {
       expectPropertiesValues(component, 'loading', booleanValidTrueValues, true);
-
-      expect(component.calculateWidthHeaders).toHaveBeenCalled();
     });
 
-    it('p-columns: should call `setColumnLink` and `calculateWidthHeaders` if has values', () => {
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
+    it('p-columns: should call `setColumnLink` if has values', () => {
       spyOn(component, <any>'setColumnLink');
-      spyOn(component, 'calculateWidthHeaders');
 
       component.columns = [{ label: 'table', property: 'table' }];
 
       expect(component['setColumnLink']).toHaveBeenCalled();
-      expect(component.calculateWidthHeaders).toHaveBeenCalled();
     });
 
     it('p-columns, p-items: should call `getDefaultColumns` with item if doesn`t have columns but has items to set default column', () => {
@@ -1309,6 +1775,55 @@ describe('PoTableBaseComponent:', () => {
       expectPropertiesValues(component, 'container', invalidValues, 'border');
     });
 
+    it('p-param-delete-api: should update property with valid values', () => {
+      const validValue = 'value';
+
+      expectPropertiesValues(component, 'paramDeleteApi', validValue, validValue);
+    });
+
+    it('p-param-delete-api: should update property with `id` if values are invalid', () => {
+      const invalidValues = [undefined, null, true, false, 0, 1, [], {}];
+
+      expectPropertiesValues(component, 'paramDeleteApi', invalidValues, 'id');
+    });
+
+    it('p-param-delete-api: should update property with `id` if values are invalid', () => {
+      const invalidValues = [undefined, null, true, false, 0, 1, [], {}];
+
+      expectPropertiesValues(component, 'paramDeleteApi', invalidValues, 'id');
+    });
+
+    it('p-service-delete: should update property with valid values', () => {
+      expectPropertiesValues(component, 'serviceDeleteApi', 'https://po-ui.io', 'https://po-ui.io');
+    });
+
+    it('visibleActions: should be `false` if doesn`t have action.', () => {
+      component.actions = undefined;
+
+      expect(component.visibleActions).toBeFalsy();
+    });
+
+    it('visibleActions: shouldn`t return action if visible is `false`.', () => {
+      component.actions = [
+        { label: 'PO1', visible: false },
+        { label: 'PO2', visible: true }
+      ];
+
+      expect(component.visibleActions).toEqual([{ label: 'PO2', visible: true }]);
+    });
+
+    it('visibleActions: should return only valid values', () => {
+      component.actions = [{ label: 'PO1' }, undefined, null];
+
+      expect(component.visibleActions).toEqual([{ label: 'PO1' }]);
+    });
+
+    it('visibleActions: should be `true` if has action.', () => {
+      component.actions = actions;
+
+      expect(component.visibleActions).toBeTruthy();
+    });
+
     it('sortType: should return `ascending` if `sortedColumn.ascending` is `true`.', () => {
       component.sortedColumn.ascending = true;
 
@@ -1337,27 +1852,77 @@ describe('PoTableBaseComponent:', () => {
     });
 
     it('p-hide-columns-manager: should update property `p-hide-columns-manager` with valid values.', () => {
-      expectPropertiesValues(component, 'hideColumnsManager', booleanValidTrueValues, true);
+      component.hideColumnsManager = utilsFunctions.convertToBoolean(1);
+
+      expect(component.hideColumnsManager).toBe(true);
     });
 
     it('p-hide-columns-manager: should update property `p-hide-columns-manager` with invalid values.', () => {
-      expectPropertiesValues(component, 'hideColumnsManager', booleanInvalidValues, false);
+      component.hideColumnsManager = utilsFunctions.convertToBoolean(3);
+
+      expect(component.hideColumnsManager).toBe(false);
     });
 
     it('p-loading-show-more: should update property `p-loading-show-more` with valid values.', () => {
-      expectPropertiesValues(component, 'loadingShowMore', booleanValidTrueValues, true);
+      component.loadingShowMore = utilsFunctions.convertToBoolean(1);
+
+      expect(component.loadingShowMore).toBe(true);
     });
 
     it('p-loading-show-more: should update property `p-loading-show-more` with invalid values.', () => {
-      expectPropertiesValues(component, 'loadingShowMore', booleanInvalidValues, false);
+      component.loadingShowMore = utilsFunctions.convertToBoolean('dsamkdsam');
+
+      expect(component.loadingShowMore).toBe(false);
     });
 
     it('p-auto-collapse: should update property `p-auto-collapse` with valid values.', () => {
-      expectPropertiesValues(component, 'autoCollapse', booleanValidTrueValues, true);
+      component.autoCollapse = utilsFunctions.convertToBoolean(1);
+
+      expect(component.autoCollapse).toBe(true);
     });
 
     it('p-auto-collapse: should update property `p-auto-collapse` with invalid values.', () => {
-      expectPropertiesValues(component, 'autoCollapse', booleanInvalidValues, false);
+      component.autoCollapse = utilsFunctions.convertToBoolean(555);
+
+      expect(component.autoCollapse).toBe(false);
+    });
+
+    it('p-infinite-scroll: should update property `p-infinite-scroll` with false.', () => {
+      expectPropertiesValues(component, 'infiniteScroll', booleanInvalidValues, false);
+    });
+
+    it('p-infinite-scroll: should update property `p-infinite-scroll` with true.', () => {
+      component.height = 10;
+      expectPropertiesValues(component, 'infiniteScroll', booleanValidTrueValues, true);
+    });
+
+    it('p-infinite-scroll-distance: should update property `p-infinite-scroll-distance` with valid values .', () => {
+      expectSettersMethod(component, 'infiniteScrollDistance', 50, 'infiniteScrollDistance', 50);
+    });
+
+    it('p-infinite-scroll-distance: should update property `p-infinite-scroll-distance` with negative values .', () => {
+      expectSettersMethod(component, 'infiniteScrollDistance', -50, 'infiniteScrollDistance', 100);
+    });
+
+    it('p-infinite-scroll-distance: should update property `p-infinite-scroll-distance` with values > 100 .', () => {
+      expectSettersMethod(component, 'infiniteScrollDistance', 150, 'infiniteScrollDistance', 100);
+    });
+
+    it('p-virtual-scroll: should default virtualScroll to true when height is defined.', () => {
+      component.height = 300;
+      expect(component.virtualScroll).toBe(true);
+    });
+
+    it('p-virtual-scroll: should allow setting virtualScroll to false when height is defined.', () => {
+      component.height = 300;
+      component.virtualScroll = false;
+      expect(component.virtualScroll).toBe(false);
+    });
+
+    it('p-virtual-scroll: should allow setting virtualScroll to true when height is defined.', () => {
+      component.height = 300;
+      component.virtualScroll = true;
+      expect(component.virtualScroll).toBe(true);
     });
   });
 });

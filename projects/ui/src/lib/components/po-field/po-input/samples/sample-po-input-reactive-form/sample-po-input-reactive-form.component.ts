@@ -1,23 +1,26 @@
-import { Component, ViewChild } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Component, ViewChild, inject } from '@angular/core';
+import { UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 
 import { PoModalAction, PoModalComponent } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-input-reactive-form',
-  templateUrl: './sample-po-input-reactive-form.component.html'
+  templateUrl: './sample-po-input-reactive-form.component.html',
+  standalone: false
 })
 export class SamplePoInputReactiveFormComponent {
-  reactiveForm: FormGroup;
+  private fb = inject(UntypedFormBuilder);
+
+  @ViewChild('reactiveFormData', { static: true }) reactiveFormModal: PoModalComponent;
+
+  reactiveForm: UntypedFormGroup;
 
   public readonly modalPrimaryAction: PoModalAction = {
     action: () => this.reactiveFormModal.close(),
     label: 'Close'
   };
 
-  @ViewChild('reactiveFormData', { static: true }) reactiveFormModal: PoModalComponent;
-
-  constructor(private fb: FormBuilder) {
+  constructor() {
     this.createReactiveForm();
   }
 

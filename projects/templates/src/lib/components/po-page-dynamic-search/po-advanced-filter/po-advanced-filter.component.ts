@@ -1,10 +1,10 @@
-import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { Subscription } from 'rxjs';
 
 import { PoComboOption, PoDynamicFormComponent, PoLanguageService } from '@po-ui/ng-components';
 
+import { PoPageDynamicSearchFilters } from '../interfaces/po-page-dynamic-search-filters.interface';
 import { PoAdvancedFilterBaseComponent } from './po-advanced-filter-base.component';
-import { PoPageDynamicSearchFilters } from '../po-page-dynamic-search-filters.interface';
 
 /**
  * @docsPrivate
@@ -20,14 +20,17 @@ import { PoPageDynamicSearchFilters } from '../po-page-dynamic-search-filters.in
  */
 @Component({
   selector: 'po-advanced-filter',
-  templateUrl: './po-advanced-filter.component.html'
+  templateUrl: './po-advanced-filter.component.html',
+  standalone: false
 })
 export class PoAdvancedFilterComponent extends PoAdvancedFilterBaseComponent implements OnDestroy, OnInit {
-  private subscription = new Subscription();
-
   @ViewChild(PoDynamicFormComponent, { static: true }) poDynamicForm: PoDynamicFormComponent;
 
-  constructor(languageService: PoLanguageService) {
+  private readonly subscription = new Subscription();
+
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     super(languageService);
   }
 

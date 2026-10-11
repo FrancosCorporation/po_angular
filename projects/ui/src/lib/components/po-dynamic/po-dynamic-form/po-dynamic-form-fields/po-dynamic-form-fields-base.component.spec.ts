@@ -1,16 +1,17 @@
-import { TestBed } from '@angular/core/testing';
 import { TitleCasePipe } from '@angular/common';
+import { TestBed } from '@angular/core/testing';
 
-import { expectPropertiesValues, expectArraysSameOrdering } from '../../../../util-test/util-expect.spec';
+import { expectArraysSameOrdering, expectPropertiesValues } from '../../../../util-test/util-expect.spec';
 
-import * as PoDynamicUtil from '../../po-dynamic.util';
-import { PoDynamicFieldType } from '../../po-dynamic-field-type.enum';
+import { PoThemeA11yEnum } from '../../../../services';
+import { ForceBooleanComponentEnum, ForceOptionComponentEnum } from '../../enums/po-dynamic-field-force-component.enum';
+import { PoDynamicFieldType } from '../../enums/po-dynamic-field-type.enum';
+import { PoDynamicUtil } from '../../po-dynamic.util';
+import { PoDynamicFormField } from '../interfaces/po-dynamic-form-field.interface';
 import { PoDynamicFormFieldsBaseComponent } from './po-dynamic-form-fields-base.component';
-import { PoDynamicFormField } from '../po-dynamic-form-field.interface';
 
 describe('PoDynamicFormFieldsBaseComponent:', () => {
   let component: PoDynamicFormFieldsBaseComponent;
-
   let titleCase;
 
   beforeEach(() => {
@@ -62,6 +63,66 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
       const validValues = [['propertyA'], ['propertyB']];
 
       expectPropertiesValues(component, 'validateFields', validValues, validValues);
+    });
+
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
     });
   });
 
@@ -255,6 +316,7 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
       const newField = component['createField'](field);
 
       expect(typeof newField === 'object').toBe(true);
+      expect(newField.maskFormatModel).toBe(false);
       expect(Array.isArray(newField.options)).toBe(true);
       expect(newField.label).toBe(field.label);
 
@@ -262,6 +324,25 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
       expect(spyGetGridColumnsClasses).toHaveBeenCalled();
       expect(spyConvertOptions).toHaveBeenCalled();
       expect(spyHasFocus).toHaveBeenCalled();
+    });
+
+    it(`createField: should set maskFormatModel with true if type is 'time'`, () => {
+      const field = { property: 'propertyName', label: 'labelName', type: 'time' };
+
+      const newField = component['createField'](field);
+
+      expect(newField.label).toBe(field.label);
+      expect(newField.maskFormatModel).toBe(true);
+    });
+
+    it(`createField: should set maskFormatModel and mask`, () => {
+      const field = { property: 'propertyName', label: 'labelName', mask: '99/9999', maskFormatModel: true };
+
+      const newField = component['createField'](field);
+
+      expect(newField.label).toBe(field.label);
+      expect(newField.mask).toBe(field.mask);
+      expect(newField.maskFormatModel).toBe(true);
     });
 
     it(`hasFocus: should return true if 'autoFocus' is equal to 'field.property'`, () => {
@@ -370,8 +451,28 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
         expect(component['isCurrencyType']).toHaveBeenCalled();
       });
 
-      it('should return `input` if type is `decimal` and have a mask', () => {
+      it('should return `input` if type is `currency` and have a mask', () => {
         const expectedValue = 'input';
+        const field = { type: 'currency', property: 'code', mask: '99:99:99' };
+
+        spyOn(component, <any>'isCurrencyType').and.callThrough();
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['isCurrencyType']).toHaveBeenCalled();
+      });
+
+      it('should return `decimal` if type is `decimal` and have a pattern', () => {
+        const expectedValue = 'decimal';
+        const field = { type: 'decimal', property: 'code', pattern: '99:99:99' };
+
+        spyOn(component, <any>'isCurrencyType').and.callThrough();
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['isCurrencyType']).toHaveBeenCalled();
+      });
+
+      it('should return `decimal` if type is `decimal` and have a mask', () => {
+        const expectedValue = 'decimal';
         const field = { type: 'decimal', property: 'code', mask: '99:99:99' };
 
         spyOn(component, <any>'isCurrencyType').and.callThrough();
@@ -380,9 +481,9 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
         expect(component['isCurrencyType']).toHaveBeenCalled();
       });
 
-      it('should return `input` if type is `decimal` and have a pattern', () => {
+      it('should return `input` if type is `currency` and have a pattern', () => {
         const expectedValue = 'input';
-        const field = { type: 'decimal', property: 'code', pattern: '99:99:99' };
+        const field = { type: 'currency', property: 'code', pattern: '99:99:99' };
 
         spyOn(component, <any>'isCurrencyType').and.callThrough();
 
@@ -458,8 +559,18 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
         expect(component['compareTo']).toHaveBeenCalledWith(field.type, PoDynamicFieldType.Date);
       });
 
-      it('should call `compareTo` and return `datepicker` if type is `dateTime`', () => {
-        const expectedValue = 'datepicker';
+      it('should call `compareTo` and return `datepickerrange` if type is `date` and range is `true`', () => {
+        const expectedValue = 'datepickerrange';
+        const field = { type: 'date', property: 'code', range: true };
+
+        spyOn(component, <any>'compareTo').and.callThrough();
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['compareTo']).toHaveBeenCalledWith(field.type, PoDynamicFieldType.Date);
+      });
+
+      it('should call `compareTo` and return `datetimepicker` if type is `dateTime`', () => {
+        const expectedValue = 'datetimepicker';
         const field = { type: 'dateTime', property: 'code' };
 
         spyOn(component, <any>'compareTo').and.callThrough();
@@ -468,18 +579,27 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
         expect(component['compareTo']).toHaveBeenCalledWith('datetime', PoDynamicFieldType.DateTime);
       });
 
-      it('should call `compareTo`, set `field.mask` and return `input` if type is `time`', () => {
-        const expectedValue = 'input';
+      it('should call `compareTo` and return `datetimepicker` if type is `dateTime` and range is `true`', () => {
+        const expectedValue = 'datetimepicker';
+        const field = { type: 'dateTime', property: 'code', range: true };
+
+        spyOn(component, <any>'compareTo').and.callThrough();
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['compareTo']).toHaveBeenCalledWith('datetime', PoDynamicFieldType.DateTime);
+      });
+
+      it('should call `compareTo` and return `timepicker` if type is `time`', () => {
+        const expectedValue = 'timepicker';
         const field = <any>{ type: 'time', property: 'code' };
 
         spyOn(component, <any>'compareTo').and.callThrough();
 
         expect(component['getComponentControl'](field)).toBe(expectedValue);
         expect(component['compareTo']).toHaveBeenCalledWith(field.type, PoDynamicFieldType.Time);
-        expect(field.mask).toBe('99:99');
       });
 
-      it('should call `isCombo` and return `combo` if contains `optionsService`', () => {
+      it('should call `isCombo` and return `combo` if contains `optionsService` as url string', () => {
         const expectedValue = 'combo';
         const field = { optionService: 'http://api.example/1', property: 'code' };
 
@@ -489,9 +609,37 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
         expect(component['isCombo']).toHaveBeenCalledWith(field);
       });
 
-      it('should call `isLookup` and return `lookup` if contains `searchService`.', () => {
+      it('should call `isCombo` and return `combo` if contains `optionsService` as `PoComboFilter` instance', () => {
+        const expectedValue = 'combo';
+        const mockService = {
+          getFilteredData: null,
+          getObjectByValue: null
+        };
+        const field = { optionService: mockService, property: 'code' };
+
+        spyOn(component, <any>'isCombo').and.returnValue(true);
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['isCombo']).toHaveBeenCalledWith(field);
+      });
+
+      it('should call `isLookup` and return `lookup` if contains `searchService` as url string.', () => {
         const expectedValue = 'lookup';
         const field = { searchService: 'http://api.example/1', property: 'code' };
+
+        spyOn(component, <any>'isLookup').and.returnValue(true);
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['isLookup']).toHaveBeenCalledWith(field);
+      });
+
+      it('should call `isLookup` and return `lookup` if contains `searchService` as `PoLookupFilter` instance.', () => {
+        const expectedValue = 'lookup';
+        const mockService = {
+          getObjectByValue: null,
+          getFilteredItems: null
+        };
+        const field = { searchService: mockService, property: 'code' };
 
         spyOn(component, <any>'isLookup').and.returnValue(true);
 
@@ -539,12 +687,111 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
 
         expect(component['getComponentControl'](field)).toBe(expectedValue);
       });
+
+      it('should return checkbox if `forceBooleanComponentType` is checkbox', () => {
+        const expectedValue = ForceBooleanComponentEnum.checkbox;
+        const field: PoDynamicFormField = {
+          property: 'test',
+          forceBooleanComponentType: ForceBooleanComponentEnum.checkbox
+        };
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+      });
+
+      it('should return select if `forceOptionsComponentType` is select', () => {
+        const expectedValue = ForceOptionComponentEnum.select;
+        const field: PoDynamicFormField = {
+          property: 'test',
+          forceOptionsComponentType: ForceOptionComponentEnum.select,
+          options: [
+            {
+              label: 'Brasil',
+              value: 'brasil'
+            },
+            {
+              label: 'Chile',
+              value: 'chile'
+            },
+            {
+              label: 'Argentina',
+              value: 'argentina'
+            }
+          ]
+        };
+
+        spyOn(component, <any>'verifyForceOptionComponent').and.callThrough();
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['verifyForceOptionComponent']).toHaveBeenCalled();
+      });
+
+      it('shouldn`t return select if `forceOptionsComponentType` is select but optionsMulti is true', () => {
+        const expectedValue = 'multiselect';
+        const field: PoDynamicFormField = {
+          property: 'test',
+          forceOptionsComponentType: ForceOptionComponentEnum.select,
+          optionsMulti: true,
+          options: [
+            {
+              label: 'Brasil',
+              value: 'brasil'
+            },
+            {
+              label: 'Chile',
+              value: 'chile'
+            },
+            {
+              label: 'Argentina',
+              value: 'argentina'
+            },
+            {
+              label: 'Paraguai',
+              value: 'paraguai'
+            }
+          ]
+        };
+
+        spyOn(component, <any>'verifyForceOptionComponent').and.callThrough();
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['verifyForceOptionComponent']).toHaveBeenCalled();
+      });
+
+      it('should return `upload` if type is `upload` and has a `url`', () => {
+        const expectedValue = 'upload';
+        const field = { type: 'upload', property: 'upload', url: 'http://fakeurl.com' };
+
+        spyOn(component, <any>'isUpload').and.callThrough();
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['isUpload']).toHaveBeenCalled();
+      });
+
+      it("should return `input` if type is `upload` and hasn't a `url`", () => {
+        const expectedValue = 'input';
+        const field = { type: 'upload', property: 'upload' };
+
+        spyOn(component, <any>'isUpload').and.callThrough();
+
+        expect(component['getComponentControl'](field)).toBe(expectedValue);
+        expect(component['isUpload']).toHaveBeenCalled();
+      });
     });
 
     it('isCombo: should return `true` if `optionsService` is defined string', () => {
       const optionsService = 'http://service.api:3100';
 
       expect(component['isCombo']({ optionsService, property: 'states' })).toBe(true);
+    });
+
+    it('isCombo: should return `true` if `optionsService` is defined service', () => {
+      const optionsService = {
+        getFilteredData: null,
+        getObjectByValue: null
+      };
+      const field = { optionsService, property: 'states' };
+
+      expect(component['isCombo'](field)).toBeTruthy();
     });
 
     it('isCombo: should return `false` if `optionsService` is invalid string', () => {
@@ -573,6 +820,15 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
 
     it('isLookup: should return `true` if `searchService` is defined string.', () => {
       const field = { searchService: 'http://service.api:3100', property: 'states' };
+
+      expect(component['isLookup'](field)).toBeTruthy();
+    });
+
+    it('isLookup: should return `true` if `searchService` is defined service.', () => {
+      const searchService = {
+        getObjectByValue: null
+      };
+      const field = { searchService: searchService, property: 'states' };
 
       expect(component['isLookup'](field)).toBeTruthy();
     });
@@ -728,19 +984,7 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
       expect(component['isMultiselect'](field)).toBe(true);
     });
 
-    it('isMultiselect: should return false if `optionsMulti` is false', () => {
-      const options = [
-        { label: '1', value: 1 },
-        { label: '2', value: 2 },
-        { label: '3', value: 3 },
-        { label: '4', value: 4 }
-      ];
-      const field = { property: 'products', options, optionsMulti: false };
-
-      expect(component['isMultiselect'](field)).toBe(false);
-    });
-
-    it('isMultiselect: should return false if `optionsService` is truthy', () => {
+    it('isMultiselect: should return true if `optionsService` and `optionsMulti` is true', () => {
       const options = [
         { label: '1', value: 1 },
         { label: '2', value: 2 },
@@ -753,6 +997,34 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
         optionsMulti: true,
         optionsService: 'http://www.po.com.br/api/customers'
       };
+
+      expect(component['isMultiselect'](field)).toBe(true);
+    });
+
+    it('isMultiselect: should return `true` if `optionsMulti` is true and `optionsService` is defined service', () => {
+      const options = [
+        { label: '1', value: 1 },
+        { label: '2', value: 2 },
+        { label: '3', value: 3 },
+        { label: '4', value: 4 }
+      ];
+      const optionsService = {
+        getFilteredData: null,
+        getObjectByValue: null
+      };
+      const field = { optionsService, property: 'products', options, optionsMulti: true };
+
+      expect(component['isMultiselect'](field)).toBeTruthy();
+    });
+
+    it('isMultiselect: should return false if `optionsMulti` is false', () => {
+      const options = [
+        { label: '1', value: 1 },
+        { label: '2', value: 2 },
+        { label: '3', value: 3 },
+        { label: '4', value: 4 }
+      ];
+      const field = { property: 'products', options, optionsMulti: false };
 
       expect(component['isMultiselect'](field)).toBe(false);
     });
@@ -777,11 +1049,11 @@ describe('PoDynamicFormFieldsBaseComponent:', () => {
 
     it('printError: should call console.error with error message', () => {
       const error = 'error';
-      spyOn(global.console, 'error');
+      spyOn(console, 'error');
 
       component['printError'](error);
 
-      expect(global.console.error).toHaveBeenCalledWith(error);
+      expect(console.error).toHaveBeenCalledWith(error);
     });
   });
 });

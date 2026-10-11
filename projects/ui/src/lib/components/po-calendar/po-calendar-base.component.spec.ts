@@ -1,40 +1,45 @@
 import { expectPropertiesValues } from '../../util-test/util-expect.spec';
 import { PoDateService } from './../../services/po-date/po-date.service';
 
+import { PoCalendarMode } from './po-calendar-mode.enum';
 import { PoCalendarBaseComponent } from './po-calendar-base.component';
 import { PoCalendarLangService } from './services/po-calendar.lang.service';
 import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { getDefaultSizeFn, validateSizeFn } from '../../utils/util';
+import { PoFieldSize } from '../../enums/po-field-size.enum';
+import { PoThemeA11yEnum } from '../../services';
 
 describe('PoCalendarBaseComponent:', () => {
   let component: PoCalendarBaseComponent;
   let poDate: PoDateService;
-  let poCalendarLangService: PoCalendarLangService;
   let languageService: PoLanguageService;
 
   beforeEach(() => {
     poDate = new PoDateService();
-    poCalendarLangService = new PoCalendarLangService();
     languageService = new PoLanguageService();
-    component = new PoCalendarBaseComponent(poDate, poCalendarLangService, languageService);
-    component['shortLanguage'] = 'pt';
+    component = new PoCalendarBaseComponent(poDate, languageService);
+    Object.defineProperty(component, 'shortLanguage', { value: 'pt', configurable: true });
   });
 
   describe('Properties:', () => {
-    it('p-locale: should update with valid values and call `initializeLanguage`', () => {
-      const validValues = ['pt', 'es', 'en', 'ru'];
+    it('p-mode: should set mode and call `setActivateDate`', () => {
+      spyOn(component, <any>'setActivateDate');
 
-      spyOn(component, 'initializeLanguage');
+      component.mode = PoCalendarMode.Range;
 
-      expectPropertiesValues(component, 'locale', validValues, validValues);
-      expect(component.initializeLanguage).toHaveBeenCalled();
+      expect(component['setActivateDate']).toHaveBeenCalled();
     });
 
-    it('p-locale: should update to `pt` if invalid values and call `initializeLanguage`', () => {
+    it('p-locale: should update with valid values', () => {
+      const validValues = ['pt', 'es', 'en', 'ru'];
+
+      expectPropertiesValues(component, 'locale', validValues, validValues);
+    });
+
+    it('p-locale: should update to `pt` if invalid values', () => {
       const invalidValues = [undefined, null, '', true, false, 0, 1, 'string', [], {}];
-      spyOn(component, 'initializeLanguage');
 
       expectPropertiesValues(component, 'locale', invalidValues, 'pt');
-      expect(component.initializeLanguage).toHaveBeenCalled();
     });
 
     it('p-max-date: should call `poDate.getDateForDateRange` with `maxDate` and `false`', () => {
@@ -60,27 +65,292 @@ describe('PoCalendarBaseComponent:', () => {
       expect(component.poDate.getDateForDateRange).toHaveBeenCalledWith(minDate, true);
       expect(component.minDate).toEqual(dateExpected);
     });
+
+    it('p-year-range-limit: should accept a valid number', () => {
+      component.yearRangeLimit = 50;
+
+      expect(component.yearRangeLimit).toBe(50);
+    });
+
+    it('p-year-range-limit: should fallback to 150 when value is null', () => {
+      component.yearRangeLimit = null;
+
+      expect(component.yearRangeLimit).toBe(150);
+    });
+
+    it('p-year-range-limit: should fallback to 150 when value is undefined', () => {
+      component.yearRangeLimit = undefined;
+
+      expect(component.yearRangeLimit).toBe(150);
+    });
+
+    it('p-year-range-limit: should have default value of 150', () => {
+      expect(component.yearRangeLimit).toBe(150);
+    });
   });
 
   describe('Methods:', () => {
-    it(`initializeLanguage: should call 'setLanguage', 'getWeekDaysArray' and 'getMonthsArray' of
-      the 'poCalendarLangService' and set the value of displayWeekDays and displayMonths`, () => {
-      const weekDays = ['sun', 'mon', 'tue'];
-      const months = ['jan', 'feb', 'mar'];
-      component.locale = 'en';
+    it('setActivateDate: should set { start, end } with today date if isRange is true and date param is undefined', () => {
+      spyOnProperty(component, 'isRange').and.returnValue(true);
 
-      spyOn(component.poCalendarLangService, 'setLanguage');
-      spyOn(component.poCalendarLangService, 'getWeekDaysArray').and.returnValue(weekDays);
-      spyOn(component.poCalendarLangService, 'getMonthsArray').and.returnValue(months);
+      component['setActivateDate']();
 
-      component.initializeLanguage();
+      const { start, end } = component.activateDate;
 
-      expect(component.poCalendarLangService.setLanguage).toHaveBeenCalledWith(component.locale);
-      expect(component.poCalendarLangService.getWeekDaysArray).toHaveBeenCalled();
-      expect(component.poCalendarLangService.getMonthsArray).toHaveBeenCalled();
+      expect(start instanceof Date).toBe(true);
+      expect(end instanceof Date).toBe(true);
+    });
 
-      expect(component.displayWeekDays).toEqual(weekDays);
-      expect(component.displayMonths).toEqual(months);
+    it('setActivateDate: should set { start, end } with date param if isRange is true', () => {
+      const year = 2020;
+      const month = 10;
+      const day = 10;
+
+      const date = new Date(`${year}-${month}-${day}T00:00:00`);
+
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      component['setActivateDate'](date);
+
+      const { start, end } = component.activateDate;
+
+      expect(start instanceof Date).toBe(true);
+      expect(end instanceof Date).toBe(true);
+
+      expect(start.getDate()).toBe(day);
+      expect(start.getMonth()).toBe(date.getMonth());
+      expect(start.getFullYear()).toBe(year);
+
+      expect(end.getDate()).toBe(day);
+      expect(end.getMonth()).toBe(date.getMonth() + 1);
+      expect(end.getFullYear()).toBe(year);
+    });
+
+    it('setActivateDate: should set {start, end } with date param of type string if isRange is true', () => {
+      const date = '2021-09-15';
+      const day = 15;
+      const year = 2021;
+      const month = 9;
+
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      component['setActivateDate'](date);
+      const { start, end } = component.activateDate;
+
+      expect(start instanceof Date).toBe(true);
+      expect(end instanceof Date).toBe(true);
+
+      expect(start.getDate()).toBe(day);
+      expect(start.getMonth()).toBe(month - 1);
+      expect(start.getFullYear()).toBe(year);
+
+      expect(end.getDate()).toBe(day);
+      expect(end.getMonth()).toBe(month);
+      expect(end.getFullYear()).toBe(year);
+    });
+
+    it('setActivateDate: should set with date param if isRange is false', () => {
+      const date = new Date(2019, 10, 5);
+
+      spyOnProperty(component, 'isRange').and.returnValue(false);
+
+      component['setActivateDate'](date);
+
+      expect(component.activateDate instanceof Date).toBe(true);
+      expect(component.activateDate.getFullYear()).toBe(date.getFullYear());
+      expect(component.activateDate.getMonth()).toBe(date.getMonth());
+    });
+
+    it('setActivateDate: should set with today date if isRange is false and date param is undefined', () => {
+      const today = new Date();
+
+      spyOnProperty(component, 'isRange').and.returnValue(false);
+
+      component['setActivateDate']();
+
+      expect(component.activateDate instanceof Date).toBe(true);
+      expect(component.activateDate.getFullYear()).toBe(today.getFullYear());
+      expect(component.activateDate.getMonth()).toBe(today.getMonth());
+    });
+
+    it('setActivateDate: should set with date iso if isRange is false and date param is string', () => {
+      const date = '2010-10-10';
+
+      spyOnProperty(component, 'isRange').and.returnValue(false);
+
+      component['setActivateDate'](date);
+
+      expect(component.activateDate instanceof Date).toBe(true);
+      expect(component.activateDate.getFullYear()).toBe(2010);
+      expect(component.activateDate.getMonth()).toBe(9);
+    });
+
+    it('setActivateDate: should keep the initial month and the following month when selecting the last day of the month', () => {
+      const date = '2023-03-31';
+
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      component['setActivateDate'](date);
+
+      const { start, end } = component.activateDate;
+
+      expect(start instanceof Date).toBe(true);
+      expect(end instanceof Date).toBe(true);
+
+      expect(start.getMonth()).toBe(2);
+      expect(start.getFullYear()).toBe(2023);
+
+      expect(end.getMonth()).toBe(3);
+      expect(end.getFullYear()).toBe(2023);
+    });
+
+    it('setActivateDate: should keep the start month and the after month when selecting the first day of the month', () => {
+      const date = '2023-03-01';
+
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      component['setActivateDate'](date);
+
+      const { start, end } = component.activateDate;
+
+      expect(start instanceof Date).toBe(true);
+      expect(end instanceof Date).toBe(true);
+
+      expect(start.getMonth()).toBe(2);
+      expect(start.getFullYear()).toBe(2023);
+
+      expect(end.getMonth()).toBe(3);
+      expect(end.getFullYear()).toBe(2023);
+    });
+
+    it('verifyActivateDate: `activateDate` should receive `minDate` if the minimum date is later than today', () => {
+      const today = new Date();
+      component.minDate = new Date(new Date(today).setMonth(today.getMonth() + 1));
+
+      spyOnProperty(component, 'isRange').and.returnValue(false);
+      component['setActivateDate'](null);
+
+      spyOn(component, <any>'verifyActivateDate').and.callThrough();
+
+      expect(component.activateDate).toEqual(component.minDate);
+    });
+
+    it('verifyActivateDate: `activateDate` should receive `maxDate` if `minDate` is null and `maxDate` is before today', () => {
+      const today = new Date();
+      component.minDate = null;
+      component.maxDate = new Date(new Date(today).setMonth(today.getMonth() - 1));
+
+      spyOnProperty(component, 'isRange').and.returnValue(false);
+      component['setActivateDate'](null);
+
+      spyOn(component, <any>'verifyActivateDate').and.callThrough();
+
+      expect(component.activateDate).toEqual(component.maxDate);
+    });
+
+    it('verifyActivateDate: `activateDate` should receive `today` if `minDate` and `maxDate` is null', () => {
+      const today = new Date();
+      component.minDate = null;
+      component.maxDate = null;
+
+      spyOnProperty(component, 'isRange').and.returnValue(false);
+      component['setActivateDate'](null);
+
+      spyOn(component, <any>'verifyActivateDate').and.callThrough();
+
+      expect(component.activateDate.getDate()).toEqual(today.getDate());
+    });
+  });
+  describe('Properties:', () => {
+    it('p-size: should return default size when _size is undefined', () => {
+      component['_size'] = undefined;
+      expect(component.size).toBe(getDefaultSizeFn(PoFieldSize));
+    });
+
+    it('p-size: should accept valid values', () => {
+      const validSizes = Object.values(PoFieldSize);
+
+      validSizes.forEach(size => {
+        component.size = size;
+        expect(component.size).toBe(validateSizeFn(size, PoFieldSize));
+      });
+    });
+
+    it('p-size: should return _size value when it is defined', () => {
+      const validSize = 'medium';
+      component.size = validSize;
+      expect(component.size).toBe(validSize);
+    });
+
+    it('p-size: should handle invalid size values', () => {
+      const invalidSize = 'invalid-size';
+      component.size = invalidSize;
+      expect(component.size).toBe(getDefaultSizeFn(PoFieldSize));
+    });
+
+    it('p-size: should use default when _size is null', () => {
+      component['_size'] = null;
+      expect(component.size).toBe(getDefaultSizeFn(PoFieldSize));
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
     });
   });
 });

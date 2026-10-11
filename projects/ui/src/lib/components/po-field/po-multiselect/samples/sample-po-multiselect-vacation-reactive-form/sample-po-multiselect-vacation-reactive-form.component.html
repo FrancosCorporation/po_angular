@@ -1,7 +1,7 @@
 <form [formGroup]="formCollectiveVacations">
   <h3>Collective vacations</h3>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-datepicker
@@ -25,28 +25,27 @@
   </div>
 
   <div class="po-row">
-    <po-radio-group
-      class="po-lg-12"
-      name="days"
-      formControlName="days"
-      p-help="Maximum of days that employs can choose"
-      p-label="How many days of vacation the employees will be able to have?"
-      p-required
-      [p-options]="daysOptions"
-    >
-    </po-radio-group>
-  </div>
-
-  <div class="po-row">
     <po-multiselect
-      class="po-md-12"
+      class="po-md-4"
       name="employeesVacations"
       formControlName="employeesVacations"
       p-label="Select your employees for collective vacations"
+      [p-auto-height]="true"
       [p-options]="employees"
-      p-required
+      [p-required]="true"
     >
     </po-multiselect>
+
+    <po-radio-group
+      class="po-lg-8"
+      name="days"
+      formControlName="days"
+      p-label="How many days of vacation the employees will be able to have?"
+      p-required
+      [p-options]="daysOptions"
+      [p-columns]="3"
+    >
+    </po-radio-group>
   </div>
 
   <div class="po-row">
@@ -65,14 +64,14 @@
 
 <po-modal #modalEmployeesVacation p-title="Collective Vacation">
   <div class="po-row">
-    <po-info class="po-md-5" p-label="Initial period" [p-value]="initialPeriod | date: 'longDate':'+0000'"> </po-info>
+    <po-info class="po-md-5" p-label="Initial period" [p-value]="initialPeriod | date: 'longDate' : '+0000'"> </po-info>
 
-    <po-info class="po-md-5" p-label="Final period" [p-value]="finalPeriod | date: 'longDate':'+0000'"> </po-info>
+    <po-info class="po-md-5" p-label="Final period" [p-value]="finalPeriod | date: 'longDate' : '+0000'"> </po-info>
 
     <po-info class="po-md-2" p-label="Days" [p-value]="days"> </po-info>
   </div>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-info class="po-lg-12" p-label="Employees" [p-value]="nameEmployeesVacations"> </po-info>

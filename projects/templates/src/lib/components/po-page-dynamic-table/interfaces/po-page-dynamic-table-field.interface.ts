@@ -1,11 +1,8 @@
-import { PoDynamicFormField } from '@po-ui/ng-components';
+import { PoDynamicFormField, PoTableColumnLabel } from '@po-ui/ng-components';
 
 /**
- * @usedBy PoPageDynamicTableComponent
+ * @docsExtends PoDynamicFormField
  *
- * @description
- *
- * Interface dos fields usados para compor o template `po-page-dynamic-table`.
  */
 export interface PoPageDynamicTableField extends PoDynamicFormField {
   /** Indica se o campo será duplicado caso seja executada a ação de duplicação. */
@@ -24,4 +21,35 @@ export interface PoPageDynamicTableField extends PoDynamicFormField {
    * > Quando for `false`, será desconsiderado.
    */
   allowColumnsManager?: boolean;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Controla se a coluna será considerada como "ordenável". Caso seja definido um valor falso, a coluna não será usada para
+   * ordenação.
+   *
+   * @default `true`
+   */
+  sortable?: boolean;
+
+  /**
+   * Lista de objetos do tipo `PoTableColumnLabel` que representa as labels disponíveis na coluna do tipo `label`.
+   *
+   * Exemplo de utilização
+   *
+   * ```
+   * {
+   *   property: 'uf',
+   *   label: 'Estados',
+   *   type: 'label',
+   *   labels: [
+   *     { value: 'SC', label: 'SANTA CATARINA', color: 'color-02' },
+   *     { value: 'SP', label: 'SAO PAULO', color: 'color-10' }
+   *   ],
+   * }
+   * ```
+   */
+  labels?: Array<PoTableColumnLabel>;
 }

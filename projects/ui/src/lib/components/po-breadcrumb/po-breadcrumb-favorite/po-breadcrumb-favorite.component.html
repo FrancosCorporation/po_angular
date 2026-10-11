@@ -1,10 +1,20 @@
-<div class="po-breadcrumb-favorite po-clickable" (click)="toggleFavoriteAction()">
-  <span
-    class="po-icon po-icon-star po-breadcrumb-favorite-star po-clickable"
+<div
+  tabindex="0"
+  role="button"
+  class="po-breadcrumb-favorite po-clickable"
+  (click)="toggleFavoriteAction()"
+  (keyup.enter)="toggleFavoriteAction()"
+>
+  <po-icon
+    p-icon="ICON_STAR"
+    class="po-breadcrumb-favorite-star po-clickable"
     [class.po-breadcrumb-favorite-star-active]="favorite"
   >
-  </span>
-
-  <span class="po-hidden-sm po-breadcrumb-favorite-label" *ngIf="favorite">{{ literals?.unfavorite }}</span>
-  <span class="po-hidden-sm po-breadcrumb-favorite-label" *ngIf="!favorite">{{ literals?.favorite }}</span>
+  </po-icon>
+  @if (favorite && !hiddenLiteral) {
+    <span class="po-hidden-sm po-breadcrumb-favorite-label">{{ literals?.unfavorite }}</span>
+  }
+  @if (!favorite && !hiddenLiteral) {
+    <span class="po-hidden-sm po-breadcrumb-favorite-label">{{ literals?.favorite }}</span>
+  }
 </div>

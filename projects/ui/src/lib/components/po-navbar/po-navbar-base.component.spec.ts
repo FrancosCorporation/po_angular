@@ -2,9 +2,8 @@ import { Directive } from '@angular/core';
 
 import { expectPropertiesValues } from '../../util-test/util-expect.spec';
 
-import * as utilsFunctions from '../../utils/util';
-import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
 
 import { PoNavbarBaseComponent, poNavbarLiteralsDefault } from './po-navbar-base.component';
 
@@ -47,7 +46,7 @@ describe('PoNavbarBaseComponent:', () => {
     });
 
     it('literals: should be in portuguese if browser is setted with an unsupported language', () => {
-      component['language'] = 'zw';
+      Object.defineProperty(component, 'language', { value: 'zw', configurable: true });
 
       component.literals = {};
 
@@ -55,7 +54,7 @@ describe('PoNavbarBaseComponent:', () => {
     });
 
     it('literals: should be in portuguese if browser is setted with `pt`', () => {
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component.literals = {};
 
@@ -63,7 +62,7 @@ describe('PoNavbarBaseComponent:', () => {
     });
 
     it('literals: should be in english if browser is setted with `en`', () => {
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       component.literals = {};
 
@@ -71,7 +70,7 @@ describe('PoNavbarBaseComponent:', () => {
     });
 
     it('literals: should be in spanish if browser is setted with `es`', () => {
-      component['language'] = 'es';
+      Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
       component.literals = {};
 
@@ -79,7 +78,7 @@ describe('PoNavbarBaseComponent:', () => {
     });
 
     it('literals: should be in russian if browser is setted with `ru`', () => {
-      component['language'] = 'ru';
+      Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
 
       component.literals = {};
 
@@ -87,7 +86,7 @@ describe('PoNavbarBaseComponent:', () => {
     });
 
     it('literals: should accept custom literals', () => {
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       const customLiterals = Object.assign({}, poNavbarLiteralsDefault[poLocaleDefault]);
 
@@ -102,7 +101,7 @@ describe('PoNavbarBaseComponent:', () => {
     it('literals: should update property with default literals if is setted with invalid values', () => {
       const invalidValues = [null, undefined, false, true, '', 'literals', 0, 10, [], [1, 2], () => {}];
 
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       expectPropertiesValues(component, 'literals', invalidValues, poNavbarLiteralsDefault[poLocaleDefault]);
     });
@@ -119,19 +118,19 @@ describe('PoNavbarBaseComponent:', () => {
       expectPropertiesValues(component, 'shadow', invalidValues, false);
     });
 
-    it('logo: should call `validateMenuLogo` if has `menu`', () => {
+    it('logo: should call `validateMenuLogo` if has `applicationMenu`', () => {
       spyOn(component, 'validateMenuLogo');
 
-      component.menu = <any>{ logo: 'logo' };
+      component.applicationMenu = <any>{ logo: 'logo' };
       component.logo = 'logo';
 
       expect(component.validateMenuLogo).toHaveBeenCalled();
     });
 
-    it('logo: shouldn`t call `validateMenuLogo` if doesn`t have `menu`', () => {
+    it('logo: shouldn`t call `validateMenuLogo` if doesn`t have `applicationMenu`', () => {
       spyOn(component, 'validateMenuLogo');
 
-      component.menu = undefined;
+      component.applicationMenu = undefined;
       component.logo = 'logo';
 
       expect(component.validateMenuLogo).not.toHaveBeenCalled();

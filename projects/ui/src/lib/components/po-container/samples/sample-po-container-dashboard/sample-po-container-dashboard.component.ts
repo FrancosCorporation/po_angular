@@ -1,4 +1,4 @@
-import { AfterContentChecked, Component, ViewChild } from '@angular/core';
+import { AfterContentChecked, Component, ViewChild, OnInit, inject } from '@angular/core';
 import { NgForm } from '@angular/forms';
 
 import { SampleDashboardService } from './sample-po-container-dashboard.service';
@@ -15,28 +15,27 @@ import {
 @Component({
   selector: 'sample-po-container-dashboard',
   templateUrl: './sample-po-container-dashboard.component.html',
-  styles: [
-    `
-      .sample-container-dashboard {
-        color: #9da7a9;
-        font-family: NunitoSans;
-        font-size: 14px;
-      }
-    `
-  ],
-  providers: [SampleDashboardService]
+  styleUrls: ['./sample-po-container-dashboard.component.css'],
+  providers: [SampleDashboardService],
+  standalone: false
 })
-export class SamplePoContainerDashboardComponent implements AfterContentChecked {
-  columns: Array<PoTableColumn> = this.sampleDashboardService.getColumns();
+export class SamplePoContainerDashboardComponent implements AfterContentChecked, OnInit {
+  private poNotification = inject(PoNotificationService);
+  private sampleDashboardService = inject(SampleDashboardService);
+
+  @ViewChild('formShare', { static: true }) formShare: NgForm;
+  @ViewChild(PoModalComponent) poModal: PoModalComponent;
+
+  columns: Array<PoTableColumn>;
   email: string = undefined;
   isSubscribed: boolean = false;
-  items: Array<object> = this.sampleDashboardService.getItems();
+  items: Array<object>;
 
   public readonly actions: Array<PoPageAction> = [
-    { label: 'Share', action: this.modalOpen.bind(this), icon: 'po-icon-share' },
+    { label: 'Share', action: this.modalOpen.bind(this), icon: 'an an-share' },
     {
       label: 'Disable notification',
-      icon: 'po-icon-notification',
+      icon: 'an an-bell',
       action: this.disableNotification.bind(this),
       disabled: () => this.isSubscribed
     }
@@ -60,10 +59,10 @@ export class SamplePoContainerDashboardComponent implements AfterContentChecked 
     label: 'Share'
   };
 
-  @ViewChild('formShare', { static: true }) formShare: NgForm;
-  @ViewChild(PoModalComponent) poModal: PoModalComponent;
-
-  constructor(private poNotification: PoNotificationService, private sampleDashboardService: SampleDashboardService) {}
+  ngOnInit() {
+    this.columns = this.sampleDashboardService.getColumns();
+    this.items = this.sampleDashboardService.getItems();
+  }
 
   ngAfterContentChecked() {
     this.shareAction.danger = this.formShare.invalid;

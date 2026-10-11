@@ -1,13 +1,16 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { PoBreadcrumb } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-page-detail-user',
-  templateUrl: './sample-po-page-detail-user.component.html'
+  templateUrl: './sample-po-page-detail-user.component.html',
+  standalone: false
 })
 export class SamplePoPageDetailUserComponent {
+  private router = inject(Router);
+
   birthDate: string = '26/12/1978';
   email: string = 'john.doe@po-ui.com.br';
   fathersName: string = 'Mike Doe';
@@ -23,8 +26,6 @@ export class SamplePoPageDetailUserComponent {
   public readonly breadcrumb: PoBreadcrumb = {
     items: [{ label: 'Home', link: '/' }, { label: 'User Detail' }]
   };
-
-  constructor(private router: Router) {}
 
   edit() {
     this.router.navigate(['/documentation/po-page-edit'], { queryParams: { view: 'web' } });

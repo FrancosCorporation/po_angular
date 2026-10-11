@@ -1,6 +1,6 @@
-import { Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, ViewChild } from '@angular/core';
 
-import { isKeyCodeEnter } from '../../utils/util';
+import { PoUtils } from '../../utils/util';
 
 import { PoDisclaimerBaseComponent } from './po-disclaimer-base.component';
 
@@ -18,12 +18,25 @@ import { PoDisclaimerBaseComponent } from './po-disclaimer-base.component';
  */
 @Component({
   selector: 'po-disclaimer',
-  templateUrl: './po-disclaimer.component.html'
+  templateUrl: './po-disclaimer.component.html',
+  standalone: false
 })
 export class PoDisclaimerComponent extends PoDisclaimerBaseComponent {
+  @ViewChild('disclaimerContainer', { static: true }) disclaimerContainer: ElementRef;
+
   onKeyPress(event: any) {
-    if (isKeyCodeEnter(event)) {
+    if (PoUtils.isKeyCodeEnter(event)) {
       this.close();
     }
+  }
+
+  emitLastDisclaimer(isLast) {
+    if (isLast) {
+      this.clickNumber.emit();
+    }
+  }
+
+  getWidthDisclaimer() {
+    return this.disclaimerContainer.nativeElement.offsetWidth > this.disclaimerCustomWidth;
   }
 }

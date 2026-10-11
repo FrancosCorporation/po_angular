@@ -1,12 +1,17 @@
-import { Input, Directive } from '@angular/core';
 import { CurrencyPipe, DatePipe, DecimalPipe, TitleCasePipe } from '@angular/common';
+import { Directive, HostBinding, HostListener, Input } from '@angular/core';
 
-import { convertToBoolean, isTypeof, sortFields } from '../../../utils/util';
 import { PoTimePipe } from '../../../pipes/po-time/po-time.pipe';
+import { convertToBoolean, getDefaultSizeFn, isTypeof, sortFields, validateSizeFn } from '../../../utils/util';
 
-import { getGridColumnsClasses, isVisibleField } from '../po-dynamic.util';
+import { Observable, catchError, map, of } from 'rxjs';
+import { getGridColumnsClasses, PoDynamicUtil } from '../po-dynamic.util';
 import { PoDynamicViewField } from './po-dynamic-view-field.interface';
-import { PoDynamicViewService } from './po-dynamic-view.service';
+import { PoDynamicViewService } from './services/po-dynamic-view.service';
+import { PoComboFilterService } from '../../po-field/po-combo/po-combo-filter.service';
+import { PoMultiselectFilterService } from '../../po-field/po-multiselect/po-multiselect-filter.service';
+import { PoDynamicSharedBase } from '../shared/po-dynamic-shared-base';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
 
 /**
  *
@@ -18,12 +23,70 @@ import { PoDynamicViewService } from './po-dynamic-view.service';
  *
  */
 @Directive()
-export class PoDynamicViewBaseComponent {
+export class PoDynamicViewBaseComponent extends PoDynamicSharedBase {
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Possibilita executar uma função quando o componente é inicializado.
+   *
+   * A propriedade aceita os seguintes tipos:
+   * - **String**: Endpoint usado pelo componente para requisição via `POST`.
+   * - **Function**: Método que será executado na inicialização do componente.
+   *
+   * Para os dois tipos de utilização da propriedade espera-se o seguinte retorno:
+   *
+   * ```
+   * {
+   *   value: {
+   *     cnpj: '**************', // altera valor do campo
+   *     updated: (new Date()).toString() // atribui valor ao campo novo
+   *   },
+   *   fields: [
+   *     { property: 'updated', tag: true } // inclui campo novo
+   *   ]
+   * }
+   * ```
+   * > **value**: any = atribui novo valor do model.
+   *
+   * > **fields**: `Array<PoDynamicViewField>` = Lista de campos que deseja alterar as propriedades,
+   * caso enviar um campo a mais será criado um novo campo.
+   *
+   * - Para esconder/remover campos precisa informar no field a propriedade `visible = false`.
+   *
+   */
+  @Input('p-load') load: string | Function;
+
+  service: any;
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
   private _fields: Array<PoDynamicViewField> = [];
   private _showAllValue: boolean = false;
   private _value = {};
 
-  visibleFields = [];
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes no template entre `small` ou `medium`.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
 
   /**
    * @optional
@@ -77,35 +140,23 @@ export class PoDynamicViewBaseComponent {
    *
    * @description
    *
-   * Possibilita executar uma função quando o componente é inicializado.
-   *
-   * A propriedade aceita os seguintes tipos:
-   * - **String**: Endpoint usado pelo componente para requisição via `POST`.
-   * - **Function**: Método que será executado na inicialização do componente.
-   *
-   * Para os dois tipos de utilização da propriedade espera-se o seguinte retorno:
+   * Permite a quebra de linha no texto do `p-value`, aplicando-a onde há `\n`.
    *
    * ```
-   * {
-   *   value: {
-   *     cnpj: '**************', // altera valor do campo
-   *     updated: (new Date()).toString() // atribui valor ao campo novo
-   *   },
-   *   fields: [
-   *     { property: 'cnpj', tag: true, inverse: true }, // atribui novas propriedades ao field
-   *     { property: 'updated', tag: true } // inclui campo novo
-   *   ]
-   * }
+   * <po-dynamic-view
+   *   [p-value]="{ description: 'Primeira linha\nSegunda linha' }"
+   *   [p-text-wrap]="true"
+   * ></po-dynamic-view>
    * ```
-   * > **value**: any = atribui novo valor do model.
    *
-   * > **fields**: `Array<PoDynamicViewField>` = Lista de campos que deseja alterar as propriedades,
-   * caso enviar um campo a mais será criado um novo campo.
-   *
-   * - Para esconder/remover campos precisa informar no field a propriedade `visible = false`.
-   *
+   * Saída:
+   * ```
+   * Primeira linha
+   * Segunda linha
+   * ```
+   * @default `false`
    */
-  @Input('p-load') load: string | Function;
+  @Input('p-text-wrap') textWrap: boolean = false;
 
   /**
    * @description
@@ -124,25 +175,102 @@ export class PoDynamicViewBaseComponent {
   }
 
   constructor(
-    private currencyPipe: CurrencyPipe,
-    private datePipe: DatePipe,
-    private decimalPipe: DecimalPipe,
-    private timePipe: PoTimePipe,
-    private titleCasePipe: TitleCasePipe,
-    protected dynamicViewService: PoDynamicViewService
-  ) {}
+    private readonly currencyPipe: CurrencyPipe,
+    private readonly datePipe: DatePipe,
+    private readonly decimalPipe: DecimalPipe,
+    private readonly timePipe: PoTimePipe,
+    private readonly titleCasePipe: TitleCasePipe,
+    protected dynamicViewService: PoDynamicViewService,
+    protected comboFilterService: PoComboFilterService,
+    protected multiselectFilterService: PoMultiselectFilterService
+  ) {
+    super();
+  }
 
-  // retorna os fields com os valores recuperados do objeto value.
-  protected getConfiguredFields() {
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  protected getFieldOrderRetroactive(position: number, index: number = 1): number {
+    if (position === index) {
+      return position;
+    }
+    return this.fields.findIndex(field => field.order === index) > -1
+      ? this.getFieldOrderRetroactive(position, index + 1)
+      : index;
+  }
+
+  protected getFieldOrder(field: PoDynamicViewField, index: number): number {
+    const position = this.getFieldOrderRetroactive(index + 1);
+    return this.fields.findIndex(e => e.order === position) > -1 ? this.getFieldOrder(field, position) : position;
+  }
+
+  protected getConfiguredFields(useSearchService = true) {
     const newFields = [];
 
-    this.fields.forEach(field => {
-      if (isVisibleField(field)) {
+    this.fields.forEach((field, index) => {
+      field.order = field.order || this.getFieldOrder(field, index);
+
+      if (!PoDynamicUtil.isVisibleField(field)) {
+        return;
+      }
+
+      if (!field.searchService && !field.optionsService) {
         newFields.push(this.createField(field));
+        return;
+      }
+
+      const hasValue =
+        this.value[field.property]?.length ||
+        (!Array.isArray(this.value[field.property]) && this.value[field.property] && useSearchService) ||
+        field.container;
+
+      if (hasValue) {
+        const _field = this.returnValues({ ...field }, '');
+        newFields.push(_field);
+
+        if (field.searchService) {
+          if (typeof field.searchService === 'object') {
+            this.service = field.searchService as PoDynamicViewService;
+          } else if (typeof field.searchService === 'string') {
+            this.service = this.dynamicViewService;
+            this.service.setConfig(field.searchService);
+          }
+        } else if (field.optionsService) {
+          if (field.optionsMulti) {
+            if (typeof field.optionsService === 'object') {
+              this.service = field.optionsService as PoMultiselectFilterService;
+            } else {
+              this.service = this.multiselectFilterService;
+              this.service.configProperties(
+                field.optionsService,
+                field.fieldLabel || 'label',
+                field.fieldValue || 'value'
+              );
+            }
+          } else {
+            if (typeof field.optionsService === 'object') {
+              this.service = field.optionsService as PoComboFilterService;
+            } else {
+              this.service = this.comboFilterService;
+              this.service.configProperties(
+                field.optionsService,
+                field.fieldLabel || 'label',
+                field.fieldValue || 'value'
+              );
+            }
+          }
+        }
+
+        this.createFieldWithService(field, newFields, _field);
       }
     });
 
-    return sortFields(newFields);
+    const _sortedField = sortFields(newFields);
+    this.ensureFieldHasContainer(_sortedField);
+
+    return _sortedField;
   }
 
   // retorna fields ligado ao value mais os atributos do value que não possuiam fields.
@@ -163,21 +291,61 @@ export class PoDynamicViewBaseComponent {
 
   // retorna o objeto value como fields.
   protected getValueFields() {
-    return Object.keys(this.value).map(property => {
-      return this.createField({ property });
-    });
+    return Object.keys(this.value).map(property => this.createField({ property }));
   }
 
   private createField(field: PoDynamicViewField) {
     const property = field.property;
-    const value = this.transformValue(field.type, this.value[property], field.format);
+    let value;
+    if (field.isArrayOrObject && this.value[property]) {
+      value = this.transformArrayValue(this.value[property], field);
+    } else if (field.fieldLabel) {
+      value = this.transformFieldLabel(property, field);
+    }
 
+    if (!value) {
+      value = this.transformValue(field.type, this.value[property], field.format);
+    }
+
+    return this.returnValues(field, value);
+  }
+
+  private createFieldWithService(field: PoDynamicViewField, newFields?, oldField?) {
+    const property = field.property;
+
+    this.searchById(this.value[property], field).subscribe(response => {
+      const value = response;
+      const allValues = this.returnValues(field, value);
+      const oldFieldIndex = newFields.indexOf(newFields.find(field => field === oldField));
+      newFields.splice(oldFieldIndex, 1, allValues);
+      sortFields(newFields);
+      this.setContainerFields();
+    });
+  }
+
+  private returnValues(field: PoDynamicViewField, value: any) {
+    const property = field.property;
     const classesGridColumns = getGridColumnsClasses(
-      field.gridSmColumns,
-      field.gridMdColumns,
-      field.gridLgColumns,
-      field.gridXlColumns,
-      field.gridColumns
+      field.gridColumns,
+      field.offsetColumns,
+      {
+        smGrid: field.gridSmColumns,
+        mdGrid: field.gridMdColumns,
+        lgGrid: field.gridLgColumns,
+        xlGrid: field.gridXlColumns
+      },
+      {
+        smOffset: field.offsetSmColumns,
+        mdOffset: field.offsetMdColumns,
+        lgOffset: field.offsetLgColumns,
+        xlOffset: field.offsetXlColumns
+      },
+      {
+        smPull: field.gridSmPull,
+        mdPull: field.gridMdPull,
+        lgPull: field.gridLgPull,
+        xlPull: field.gridXlPull
+      }
     );
 
     return {
@@ -187,6 +355,72 @@ export class PoDynamicViewBaseComponent {
       cssClass: classesGridColumns,
       ...field
     };
+  }
+
+  private searchById(value: any, field: PoDynamicViewField): Observable<any> {
+    if (typeof value === 'string') {
+      value = value.trim();
+    }
+
+    if (value !== '') {
+      if (field.optionsMulti) {
+        return this.service
+          .getObjectsByValues(value, field.params)
+          .pipe(map(res => this.transformArrayValue(res, field)))
+          .pipe(catchError(() => of(null)));
+      } else {
+        return this.service
+          .getObjectByValue(value, field.params)
+          .pipe(map(res => this.transformArrayValue(res, field)))
+          .pipe(catchError(() => of(null)));
+      }
+    } else {
+      return of(null);
+    }
+  }
+
+  private transformArrayValue(valueProperty: any, field: PoDynamicViewField) {
+    const valueArray = Array.isArray(valueProperty) ? valueProperty : [valueProperty];
+    let labels: Array<string>;
+
+    if (Array.isArray(field.format)) {
+      labels = valueArray.map(objectData => this.formatField(objectData, field.format));
+    } else {
+      const arrayWithLabel = valueArray.map(item => ({
+        value: item[field.fieldValue] || item.value,
+        label: item[field.fieldLabel] || item.label
+      }));
+
+      labels = arrayWithLabel.map(optionValue => {
+        if (optionValue.label) {
+          const labelTranformed = this.transformValue(field.type, optionValue.label, field.format);
+          if (field.concatLabelValue && optionValue.value) {
+            return `${labelTranformed} - ${optionValue.value}`;
+          } else {
+            return labelTranformed;
+          }
+        }
+      });
+    }
+
+    if (labels[0] !== undefined && labels.join()) {
+      return labels.join(', ');
+    } else {
+      valueProperty = '';
+      return undefined;
+    }
+  }
+
+  private transformFieldLabel(property: string, field: PoDynamicViewField) {
+    if (field.concatLabelValue && field.fieldLabel && field.fieldValue && !field.isArrayOrObject) {
+      const transformedValue = this.transformValue(field.type, this.value[field.fieldLabel], field.format);
+      return `${transformedValue} - ${this.value[field.fieldValue]}`;
+    }
+
+    if (field.fieldLabel && !field.concatLabelValue && !field.isArrayOrObject) {
+      this.value[property] = this.value[field.fieldLabel];
+    }
+    return undefined;
   }
 
   private transformValue(type: string, value, format) {
@@ -211,5 +445,26 @@ export class PoDynamicViewBaseComponent {
     }
 
     return transformedValue;
+  }
+
+  private formatField(objectSelected, properties) {
+    let formattedField;
+    if (Array.isArray(properties)) {
+      for (const property of properties) {
+        if (objectSelected && objectSelected[property]) {
+          if (!formattedField) {
+            formattedField = objectSelected[property];
+          } else {
+            formattedField += ' - ' + objectSelected[property];
+          }
+        }
+      }
+    }
+    return formattedField;
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialComponentsSize, PoFieldSize);
+    this._componentsSize = size;
   }
 }

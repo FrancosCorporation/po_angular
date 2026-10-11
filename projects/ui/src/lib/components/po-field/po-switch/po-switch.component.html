@@ -1,30 +1,71 @@
-<po-field-container [p-label]="label" [p-help]="help">
-  <div class="po-field-container-content po-switch-content" [attr.name]="name">
-    <div
-      class="po-switch-container po-clickable"
-      #switchContainer
-      [class.po-switch-container-disabled]="disabled"
-      [class.po-switch-container-off]="switchValue === false && !disabled"
-      [class.po-switch-container-on]="switchValue === true && !disabled"
-      [class.po-switch-container-right]="getSwitchPosition() === 'right'"
-      [tabindex]="disabled ? -1 : 0"
-      (click)="eventClick()"
-      (keydown)="onKeyDown($event)"
-    >
+@let poHelper = setHelper(label, additionalHelpTooltip);
+<po-field-container
+  [p-disabled]="isDisabled"
+  [p-id]="id"
+  [p-label]="label"
+  [p-helper]="label ? poHelper.helperSettings : undefined"
+  [p-show-helper]="label ? displayAdditionalHelp : undefined"
+  [p-size]="size"
+  [p-text-wrap]="labelTextWrap()"
+  [p-compact-label]="compactLabel()"
+>
+  <div class="po-field-container-content" [attr.name]="name">
+    <div class="po-switch" [attr.data-label-position]="getLabelPosition()">
       <div
-        class="po-switch-button"
-        [class.po-switch-button-on]="switchValue === true"
-        [class.po-switch-button-off]="switchValue === false"
-        [class.po-switch-button-disabled]="disabled"
+        #switchContainer
+        class="po-switch-container"
+        role="switch"
+        [attr.aria-checked]="value"
+        [attr.aria-disabled]="isDisabled"
+        [attr.data-focused-element]="!isDisabled"
+        [attr.data-inactive-component]="isDisabled"
+        [id]="id"
+        [tabindex]="isDisabled ? -1 : 0"
+        (blur)="onBlur()"
+        (click)="eventClick()"
+        (keydown)="onKeyDown($event)"
       >
-        <span class="po-icon po-icon-{{ switchValue === true ? 'ok' : 'close' }}"></span>
+        @if (loading) {
+          <div class="po-switch-loading-container">
+            <po-loading-icon [p-size]="mapSizeToIcon(size)"></po-loading-icon>
+          </div>
+        } @else {
+          <div class="po-switch-track">
+            <div class="po-switch-toggle" [attr.aria-label]="value === true ? labelOn : labelOff">
+              @if (value === true) {
+                <po-icon class="po-switch-icon" p-icon="ICON_OK"></po-icon>
+              }
+            </div>
+          </div>
+        }
       </div>
+      @if (!hideLabelStatus && !loading) {
+        <po-label
+          class="po-switch-label"
+          [p-disabled]="isDisabled"
+          [p-label]="value === true ? labelOn : labelOff"
+          (click)="eventClick()"
+        >
+        </po-label>
+      }
     </div>
-
-    <span class="po-switch-label po-clickable po-switch-label-{{ getLabelPosition() }}" (click)="eventClick()">
-      {{ switchValue === true ? labelOn : labelOff }}
-    </span>
+    @if ((!this.label && poHelperComponent()) || (!this.label && poHelper.hideAdditionalHelp)) {
+      <po-helper
+        #helperEl
+        [p-size]="size"
+        [p-helper]="poHelper.helperSettings"
+        [p-disabled]="isDisabled"
+        [p-append-in-body]="appendBox"
+      >
+      </po-helper>
+    }
   </div>
-
-  <po-field-container-bottom></po-field-container-bottom>
+  <po-field-container-bottom
+    [p-append-in-body]="appendBox"
+    [p-help]="help"
+    [p-disabled]="isDisabled"
+    [p-error-limit]="errorLimit"
+    [p-error-pattern]="getErrorPattern()"
+    [p-size]="size"
+  ></po-field-container-bottom>
 </po-field-container>

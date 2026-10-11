@@ -1,15 +1,16 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
 import { PoDialogService } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-email-newsletter',
-  templateUrl: './sample-po-email-newsletter.component.html'
+  templateUrl: './sample-po-email-newsletter.component.html',
+  standalone: false
 })
 export class SamplePoEmailNewsletterComponent {
-  email: string = '';
+  private poAlert = inject(PoDialogService);
 
-  constructor(private poAlert: PoDialogService) {}
+  email: string = '';
 
   openDialog() {
     this.poAlert.alert({

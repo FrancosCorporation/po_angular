@@ -1,16 +1,18 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 
-import { map } from 'rxjs/operators';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import { PoMenuFilter, PoMenuItemFiltered } from '@po-ui/ng-components';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class SamplePoMenuHumanResourcesService implements PoMenuFilter {
-  private url: string = 'https://thf.totvs.com.br/sample/api/menus';
+  private http = inject(HttpClient);
 
-  constructor(private http: HttpClient) {}
+  private url: string = 'https://po-sample-api.onrender.com/v1/menus';
 
   getFilteredData(search: string): Observable<Array<PoMenuItemFiltered>> {
     const params = { search };

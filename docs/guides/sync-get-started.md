@@ -1,7 +1,7 @@
 [comment]: # (@label Começando com o PO Sync)
 [comment]: # (@link guides/sync-get-started)
 
-Esse guia servirá para criar e configurar uma aplicação em [Ionic 5](https://beta.ionicframework.com/docs/) com o uso do PO Sync.
+Esse guia servirá para criar e configurar uma aplicação em [Ionic](https://ionicframework.com/docs) com o uso do PO Sync.
 
 Para maiores detalhes sobre os serviços e métodos utilizados neste tutorial, consulte a documentação de
 [Fundamentos do PO Sync](/guides/sync-fundamentals) e a documentação de referência de [API do PO Sync](/documentation/po-sync).
@@ -9,17 +9,13 @@ Para maiores detalhes sobre os serviços e métodos utilizados neste tutorial, c
 ### Pré-requisitos
 
 - [Node.js e NPM](https://nodejs.org/en/)
-- [Angular CLI](https://cli.angular.io/) (^11.0.0):
+- [Angular CLI](https://cli.angular.io/) (~21.2.17):
   - ```shell
-    npm install -g @angular/cli@^11.0.0
+    npm install -g @angular/cli@21
     ```
-- [Ionic](https://ionicframework.com/docs/cli/) (5.4.16):
+- [Ionic](https://ionicframework.com/docs/cli/) (^7.2.0):
   - ```shell
-    npm install -g ionic@5.4.16
-    ```
-- [Cordova](https://cordova.apache.org/docs/en/latest/) (10.0.0):
-  - ```shell
-    npm i -g cordova
+    npm install -g @ionic/cli@7
     ```
 
 
@@ -27,13 +23,13 @@ Para maiores detalhes sobre os serviços e métodos utilizados neste tutorial, c
 
 ### Passo 1 - Criando o aplicativo
 
+> Atualmente, a Ionic CLI cria novos projetos utilizando Angular 20 como versão base, independentemente da versão final desejada do Angular.
+
 Para a aplicação de exemplo usaremos o template *blank* do Ionic. Para isso, execute o seguinte comando:
 
 ```shell
-ionic start po-sync-getting-started blank --no-deps
+ionic start po-sync-getting-started blank
 ```
-
-> `--no-deps`: pula a instalação das dependências do `package.json`.
 
 Caso surja a questão relacionada ao framework desejado, opte por `Angular`.
 
@@ -46,36 +42,49 @@ Navegue até a pasta do aplicativo:
 cd po-sync-getting-started
 ```
 
-Antes de executar a instalação, é necessário que todas as dependências do projeto estejam declaradas de acordo com a versão do PO no arquivo `package.json`, localizado na raiz da aplicação:
+Antes de instalar o po-sync, é necessário atualizar o projeto para o Angular 21, garantindo compatibilidade com o PO UI.
 
-```typescript
+```shell
+ng update @angular/core@21 @angular/cli@21
+```
+
+> Esse passo é necessário porque o projeto foi inicialmente criado com Angular 20, e o upgrade garante compatibilidade com as versões utilizadas pelo PO UI.
+
+Veja abaixo a lista de dependências e as versões compatíveis, elas devem ser conferidas e se necessário, ajustadas no seu projeto.
+
+```json
   ...
   "dependencies": {
-    "@angular/animations": "~11.1.0",
-    "@angular/common": "~11.1.0",
-    "@angular/core": "~11.1.0",
-    "@angular/forms": "~11.1.0",
-    "@angular/platform-browser": "~11.1.0",
-    "@angular/platform-browser-dynamic": "~11.1.0",
-    "@angular/router": "~11.1.0",
-    "@angular/service-worker": "~11.1.0",
-    "@ionic-native/core": "^5.0.0",
-    "@ionic-native/splash-screen": "^5.0.0",
-    "@ionic-native/status-bar": "^5.0.0",
-    "@ionic/angular": "^5.0.0",
-    "rxjs": "~6.6.0",
-    "tslib": "^2.0.0",
-    "zone.js": "~0.10.3"
-    ...
+    "@angular/animations": "~21.2.17",
+    "@angular/common": "~21.2.17",
+    "@angular/compiler": "~21.2.17",
+    "@angular/core": "~21.2.17",
+    "@angular/forms": "~21.2.17",
+    "@angular/platform-browser": "~21.2.17",
+    "@angular/platform-browser-dynamic": "~21.2.17",
+    "@angular/router": "~21.2.17",
+    "@capacitor/app": "8.0.0",
+    "@capacitor/core": "8.0.1",
+    "@capacitor/haptics": "8.0.0",
+    "@capacitor/keyboard": "8.0.0",
+    "@capacitor/splash-screen": "8.0.0",
+    "@capacitor/status-bar": "8.0.0",
+    "@ionic/angular": "~8.7.16",
+    "ionicons": "^7.0.0",
+    "rxjs": "~7.8.1",
+    "tslib": "^2.6.2",
+    "zone.js": "~0.15.0"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "~0.1101.1",
-    "@angular/cli": "~11.1.0",
-    "@angular/compiler": "~11.1.0",
-    "@angular/compiler-cli": "~11.1.0",
-    "@angular/language-service": "~11.1.0",
-    "@ionic/angular-toolkit": "^3.0.0",
-    "typescript": "~4.1.3"
+    "@angular-devkit/schematics": "~21.2.17",
+    ...
+    "@angular/cli": "~21.2.17",
+    "@angular/compiler-cli": "~21.2.17",
+    "@angular/language-service": "~21.2.17",
+    "@capacitor/cli": "8.0.1",
+    "@ionic/angular-toolkit": "^12.0.0",
+    ...
+    "typescript": "~5.9.3"
   },
   ...
 ```
@@ -96,22 +105,11 @@ Para instalar o `po-sync` no aplicativo execute o seguinte comando:
 ng add @po-ui/ng-sync
 ```
 
-Após a instalação do `po-sync`, é necessário instalar o plugin
-[cordova-plugin-network-information](https://github.com/apache/cordova-plugin-network-information) utilizado pelo [@ionic-native/network](https://ionicframework.com/docs/native/network/), para que a
-aplicação realize as sincronizações com sucesso.
-
-Para realizar essa instalação, execute o seguinte comando:
-
-```shell
-ionic cordova plugin add cordova-plugin-network-information
-```
-
 ### Passo 4 - Utilizando o po-sync
 
-#### Passo 4.1 - Importando o `po-sync` e o `po-storage`
-No arquivo `src/app/app.module.ts`, adicione a importação dos módulos do `po-storage` e do `po-sync`: 
+#### Passo 4.1 (NgModule) - Importando o `po-sync` e o `po-storage`
 
-> Caso você utilize o comando `ng add`, esse passo será feito automaticamente.
+No arquivo `src/app/app.module.ts`, adicione a importação dos módulos do `po-storage` e do `po-sync`: 
 
 ```typescript
 import { NgModule } from '@angular/core';
@@ -119,15 +117,13 @@ import { BrowserModule } from '@angular/platform-browser';
 import { RouteReuseStrategy } from '@angular/router';
 
 import { IonicModule, IonicRouteStrategy } from '@ionic/angular';
-import { SplashScreen } from '@ionic-native/splash-screen/ngx';
-import { StatusBar } from '@ionic-native/status-bar/ngx';
 
-/* Imports adicionados */
 import { PoStorageModule } from '@po-ui/ng-storage';
 import { PoSyncModule } from '@po-ui/ng-sync';
 
-import { AppComponent } from './app.component';
 import { AppRoutingModule } from './app-routing.module';
+import { AppComponent } from './app.component';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 @NgModule({
   declarations: [AppComponent],
@@ -135,17 +131,45 @@ import { AppRoutingModule } from './app-routing.module';
     BrowserModule,
     IonicModule.forRoot(),
     AppRoutingModule,
-    PoStorageModule.forRoot(), // import do módulo Po Storage
-    PoSyncModule, // import do módulo Po Sync
+    PoStorageModule.forRoot(),
+    PoSyncModule,
   ],
   providers: [
-    StatusBar,
-    SplashScreen,
-    { provide: RouteReuseStrategy, useClass: IonicRouteStrategy }
+    { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
+    provideHttpClient(withInterceptorsFromDi()),
   ],
-  bootstrap: [AppComponent]
+  bootstrap: [AppComponent],
 })
 export class AppModule {}
+```
+
+#### Passo 4.1 (Standalone) - Importando o `po-sync` e o `po-storage`
+
+No arquivo `src/main.ts`, adicione a importação dos módulos do `po-storage` e do `po-sync`: 
+
+```typescript
+import { bootstrapApplication } from '@angular/platform-browser';
+import { RouteReuseStrategy, provideRouter, withPreloading, PreloadAllModules } from '@angular/router';
+import { IonicRouteStrategy, provideIonicAngular } from '@ionic/angular/standalone';
+import { importProvidersFrom } from '@angular/core';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+
+import { PoSyncModule } from '@po-ui/ng-sync';
+import { PoStorageModule } from '@po-ui/ng-storage';
+
+import { routes } from './app/app.routes';
+import { AppComponent } from './app/app.component';
+
+bootstrapApplication(AppComponent, {
+  providers: [
+    { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
+    provideIonicAngular(),
+    provideRouter(routes, withPreloading(PreloadAllModules)),
+    provideHttpClient(withInterceptorsFromDi()),
+    importProvidersFrom(PoSyncModule),
+    importProvidersFrom(PoStorageModule.forRoot()),
+  ],
+});
 ```
 
 #### Passo 4.2 - Mapeando seu primeiro *schema*
@@ -158,8 +182,8 @@ Crie o arquivo `src/app/home/conference-schema.constants.ts` e adicione o conte�
 import { PoSyncSchema } from '@po-ui/ng-sync';
 
 export const conferenceSchema: PoSyncSchema = {
-  getUrlApi: 'https://po-sample-conference.herokuapp.com/conferences',
-  diffUrlApi: 'https://po-sample-conference.herokuapp.com/conferences/diff',
+  getUrlApi: 'https://po-sample-conference.onrender.com/conferences',
+  diffUrlApi: 'https://po-sample-conference.onrender.com/conferences/diff',
   deletedField: 'deleted',
   fields: [ 'id', 'title', 'location', 'description' ],
   idField: 'id',
@@ -172,51 +196,45 @@ export const conferenceSchema: PoSyncSchema = {
 
 Após ter o seu primeiro *schema* criado, configure o seu aplicativo utilizando o `po-sync` através do método `PoSyncService.prepare()`.
 
-#### Passo 5.1 - Alterando o `src/app/app.component.ts`
+#### Passo 5.1 (NgModule) - Alterando o `src/app/app.component.ts`
 
 Substitua o conteúdo do arquivo pelo conteúdo abaixo:
 
 ```typescript
 import { Component } from '@angular/core';
-
+import { Capacitor } from '@capacitor/core';
 import { Platform } from '@ionic/angular';
-import { SplashScreen } from '@ionic-native/splash-screen/ngx';
-import { StatusBar } from '@ionic-native/status-bar/ngx';
-import { PoSyncConfig, PoNetworkType, PoSyncService } from '@po-ui/ng-sync';
-
+import { SplashScreen } from '@capacitor/splash-screen';
+import { StatusBar } from '@capacitor/status-bar';
+import { PoNetworkType, PoSyncConfig, PoSyncService } from '@po-ui/ng-sync';
 import { conferenceSchema } from './home/conference-schema.constants';
 
 @Component({
   selector: 'app-root',
   templateUrl: 'app.component.html',
-  styleUrls: ['app.component.scss']
+  styleUrls: ['app.component.scss'],
+  standalone: false
 })
 export class AppComponent {
-  constructor(
-    private platform: Platform,
-    private splashScreen: SplashScreen,
-    private statusBar: StatusBar,
-    private poSync: PoSyncService
-  ) {
+  constructor(private platform: Platform, private poSync: PoSyncService) {
     this.initializeApp();
   }
 
-  initializeApp() {
-    this.platform.ready().then(() => {
-      this.statusBar.styleDefault();
-      this.splashScreen.hide();
+  async initializeApp() {
+    await this.platform.ready();
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setOverlaysWebView({ overlay: true });
+    }
+    await SplashScreen.hide();
 
-      this.initSync();
-
-    });
+    this.initSync();
   }
 
   initSync() {
     const config: PoSyncConfig = {
-      type: PoNetworkType.ethernet
+      type: PoNetworkType.wifi,
     };
     const schemas = [conferenceSchema];
-
     this.poSync.prepare(schemas, config).then(() => {
       this.poSync.sync();
     });
@@ -226,7 +244,58 @@ export class AppComponent {
 
 Após utilizar o método `PoSyncService.prepare()`, a aplicação estará pronta para sincronizar os dados através do método `PoSyncService.sync()`.
 
-### Passo 6 - Acessando os dados
+#### Passo 5.1 (Standalone) - Alterando o `src/app/app.component.ts`
+
+Substitua o conteúdo do arquivo pelo conteúdo abaixo:
+
+```typescript
+import { Component } from '@angular/core';
+import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
+import { Capacitor } from '@capacitor/core';
+import { Platform } from '@ionic/angular';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { StatusBar } from '@capacitor/status-bar';
+import { PoNetworkType, PoSyncConfig, PoSyncService } from '@po-ui/ng-sync';
+
+import { conferenceSchema } from './home/conference-schema.constants';
+
+@Component({
+  selector: 'app-root',
+  templateUrl: 'app.component.html',
+  imports: [IonApp, IonRouterOutlet],
+})
+export class AppComponent {
+  constructor(
+    private platform: Platform, private poSync: PoSyncService
+  ) {
+    this.initializeApp();
+  }
+
+  async initializeApp() {
+    await this.platform.ready();
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setOverlaysWebView({ overlay: true });
+    }
+    await SplashScreen.hide();
+
+    this.initSync();
+  }
+
+  initSync() {
+    const config: PoSyncConfig = {
+      type: PoNetworkType.wifi,
+    };
+
+    const schemas = [conferenceSchema];
+    
+    this.poSync.prepare(schemas, config).then(() => {
+      this.poSync.sync();
+    });
+  }
+}
+```
+
+### Passo 6 (NgModule) - Acessando os dados
 
 Localize o arquivo `src/app/home/home.page.ts` e faça as seguintes alterações:
 
@@ -239,10 +308,11 @@ import { PoSyncService } from '@po-ui/ng-sync';
   selector: 'app-home',
   templateUrl: 'home.page.html',
   styleUrls: ['home.page.scss'],
+  standalone: false
 })
 export class HomePage {
 
-  conference;
+  conference: any;
 
   constructor(private poSync: PoSyncService) {
     this.poSync.onSync().subscribe(() => this.loadHomePage());
@@ -260,6 +330,41 @@ export class HomePage {
 ```
 
 No construtor, foi realizado uma inscrição no método `PoSyncService.onSync()`, para quando ocorrer uma sincronização, o método `loadHomePage()` busque um registro do *schema* "Conference".
+
+### Passo 6 (Standalone) - Acessando os dados
+
+Localize o arquivo `src/app/home/home.page.ts` e faça as seguintes alterações:
+
+```typescript
+import { Component } from '@angular/core';
+import { NgIf } from '@angular/common';
+
+import { IonicModule } from '@ionic/angular';
+import { PoSyncService } from '@po-ui/ng-sync';
+
+@Component({
+  selector: 'app-home',
+  templateUrl: 'home.page.html',
+  styleUrls: ['home.page.scss'],
+  imports: [IonicModule, NgIf],
+})
+export class HomePage {
+  conference: any;
+
+  constructor(private poSync: PoSyncService) {
+    this.poSync.onSync().subscribe(() => this.loadHomePage());
+  }
+
+  async loadHomePage() {
+    this.conference = await this.poSync.getModel('conference').findOne().exec();
+  }
+
+  clear() {
+    this.conference = null;
+  }
+}
+
+```
 
 ### Passo 7 - Exibindo os dados em tela
 
@@ -284,6 +389,10 @@ No arquivo `src/app/home/home.page.html` crie a seguinte estrutura:
 ### Passo 8 - Executando o aplicativo
 
 Execute o comando `ionic serve` e verifique o funcionamento do aplicativo Ionic com `po-sync`.
+
+> Pode ocorrer o seguinte erro `TS2320: Interface 'HTMLIonIconElement' cannot simultaneously extend types 'IonIcon' and 'HTMLStencilElement'` por conta da versão do TypeScript (5.2.x) conforme esta [issue](https://github.com/ionic-team/ionicons/issues/1011), neste caso adicione no arquivo **tsconfig.json** `"skipLibCheck": true`.
+
+> Ao executar um projeto standalone, pode ocorrer o seguinte erro: `[ERROR] Invalid project type: angular-standalone (project config: ./ionic.config.json).`. Para corrigir, edite o arquivo `ionic.config.json` e ajuste a propriedade `type` para o valor `angular`.
 
 #### Passo 8.1 - Entendendo o funcionamento do `po-sync`
 

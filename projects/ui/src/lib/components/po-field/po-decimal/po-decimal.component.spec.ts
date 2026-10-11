@@ -1,13 +1,16 @@
 import { ComponentFixture, fakeAsync, TestBed, tick, waitForAsync } from '@angular/core/testing';
-import { FormControl } from '@angular/forms';
+import { UntypedFormControl } from '@angular/forms';
 
 import { expectPropertiesValues } from '../../../util-test/util-expect.spec';
 
-import { PoCleanComponent } from './../po-clean/po-clean.component';
-import { PoDecimalComponent } from './po-decimal.component';
-import { PoFieldContainerBottomComponent } from './../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
-import { PoFieldContainerComponent } from '../po-field-container/po-field-container.component';
+import { ElementRef, EventEmitter, provideNgReflectAttributes } from '@angular/core';
+import { of, Subscription } from 'rxjs';
 import { PoLanguageService } from '../../../services';
+import { PoIconModule } from '../../po-icon';
+import { PoFieldContainerComponent } from '../po-field-container/po-field-container.component';
+import { PoCleanComponent } from './../po-clean/po-clean.component';
+import { PoFieldContainerBottomComponent } from './../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
+import { PoDecimalComponent } from './po-decimal.component';
 
 describe('PoDecimalComponent:', () => {
   let component: PoDecimalComponent;
@@ -17,19 +20,13 @@ describe('PoDecimalComponent:', () => {
   let inputEl: any;
   let spyService: jasmine.Spy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        declarations: [
-          PoDecimalComponent,
-          PoFieldContainerComponent,
-          PoCleanComponent,
-          PoFieldContainerBottomComponent
-        ],
-        providers: [PoLanguageService]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      imports: [PoIconModule],
+      declarations: [PoDecimalComponent, PoFieldContainerComponent, PoCleanComponent, PoFieldContainerBottomComponent],
+      providers: [PoLanguageService, provideNgReflectAttributes()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     languageService = TestBed.inject(PoLanguageService);
@@ -40,8 +37,6 @@ describe('PoDecimalComponent:', () => {
     component.help = 'Help de teste';
     component.clean = true;
     inputEl = component.inputEl;
-
-    fixture.detectChanges();
 
     nativeElement = fixture.debugElement.nativeElement;
   });
@@ -128,7 +123,7 @@ describe('PoDecimalComponent:', () => {
     it('p-min: should call min failed', () => {
       component.min = 4;
 
-      expect(component.validate(new FormControl('2'))).not.toBeNull();
+      expect(component.validate(new UntypedFormControl('2'))).not.toBeNull();
     });
 
     it('p-max: should update property with valid values', () => {
@@ -148,24 +143,90 @@ describe('PoDecimalComponent:', () => {
     it('p-max: should call max failed', () => {
       component.max = 5;
 
-      expect(component.validate(new FormControl('10'))).not.toBeNull();
+      expect(component.validate(new UntypedFormControl('10'))).not.toBeNull();
+    });
+
+    describe('p-display-format: ', () => {
+      it('should set formatParsed signal when format is defined', () => {
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+
+        const parsed = component['formatParsed']();
+
+        expect(parsed).not.toBeNull();
+        expect(parsed.integerDigitCount).toBe(6);
+        expect(parsed.decimalDigitCount).toBe(2);
+      });
+
+      it('should set formatParsed signal to null when format is undefined', () => {
+        fixture.componentRef.setInput('p-display-format', undefined);
+        fixture.detectChanges();
+
+        const parsed = component['formatParsed']();
+
+        expect(parsed).toBeNull();
+      });
+
+      it('should set formatParsed signal to null when format is empty string', () => {
+        fixture.componentRef.setInput('p-display-format', '');
+        fixture.detectChanges();
+
+        const parsed = component['formatParsed']();
+
+        expect(parsed).toBeNull();
+      });
+
+      it('should detect allowNegative from format starting with dash', () => {
+        fixture.componentRef.setInput('p-display-format', '->>,>>9.99');
+        fixture.detectChanges();
+
+        const parsed = component['formatParsed']();
+
+        expect(parsed.allowNegative).toBe(true);
+      });
+    });
+
+    describe('decimalsLength: ', () => {
+      it('should call refreshOnPropertyChange when set', () => {
+        fixture.detectChanges();
+        const spy = spyOn(component as never, 'refreshOnPropertyChange' as never);
+
+        component.decimalsLength = 4;
+
+        expect(spy).toHaveBeenCalled();
+      });
+    });
+
+    describe('thousandMaxlength: ', () => {
+      it('should call refreshOnPropertyChange when set', () => {
+        fixture.detectChanges();
+        const spy = spyOn(component as never, 'refreshOnPropertyChange' as never);
+
+        component.thousandMaxlength = 8;
+
+        expect(spy).toHaveBeenCalled();
+      });
     });
   });
 
   it('should create button clean', () => {
+    fixture.detectChanges();
     expect(nativeElement.querySelector('po-clean')).not.toBeNull();
   });
 
   it('should not create button clean', () => {
+    fixture.detectChanges();
     component.clean = false;
     expect(nativeElement.querySelector('po-clean').length).toBe(undefined);
   });
 
   it('should have a Label', () => {
+    fixture.detectChanges();
     expect(fixture.debugElement.nativeElement.innerHTML).toContain('Label de teste');
   });
 
   it('should have a Help', () => {
+    fixture.detectChanges();
     expect(fixture.debugElement.nativeElement.innerHTML).toContain('Help de teste');
   });
 
@@ -190,17 +251,47 @@ describe('PoDecimalComponent:', () => {
     expect(component.hasInvalidClass.call(fakeThis)).toBeTruthy();
   });
 
+  it('should return true in hasInvalidClass if showErrorMessageRequired and required is true', () => {
+    const fakeThis = {
+      el: component.inputEl,
+      getScreenValue: () => '',
+      showErrorMessageRequired: true,
+      required: true
+    };
+
+    fakeThis.el.nativeElement.classList.add('ng-invalid');
+    fakeThis.el.nativeElement.classList.add('ng-dirty');
+    expect(component.hasInvalidClass.call(fakeThis)).toBeTruthy();
+  });
+
+  it('should return true in hasInvalidClass if showErrorMessageRequired and hasValidatorRequired is true', () => {
+    const fakeThis = {
+      el: component.inputEl,
+      getScreenValue: () => '',
+      showErrorMessageRequired: true,
+      hasValidatorRequired: true
+    };
+
+    fakeThis.el.nativeElement.classList.add('ng-invalid');
+    fakeThis.el.nativeElement.classList.add('ng-dirty');
+    expect(component.hasInvalidClass.call(fakeThis)).toBeTruthy();
+  });
+
   it('blur event must be called', () => {
     const fakeEvent = {
       target: {
         value: '123.456'
       }
     };
+    component['onTouched'] = () => {};
 
     spyOn(component.blur, 'emit');
     spyOn(component, <any>'controlChangeEmitter');
+    spyOn(component, <any>'onTouched');
 
     component.onBlur(fakeEvent);
+
+    expect(component['onTouched']).toHaveBeenCalled();
     expect(component.blur.emit).toHaveBeenCalled();
     expect(component['controlChangeEmitter']).toHaveBeenCalled();
   });
@@ -209,11 +300,15 @@ describe('PoDecimalComponent:', () => {
     const fakeEvent = {
       target: {}
     };
+    component['onTouched'] = () => {};
 
     spyOn(component.blur, 'emit');
     spyOn(component, <any>'controlChangeEmitter');
+    spyOn(component, <any>'onTouched');
 
     component.onBlur(fakeEvent);
+
+    expect(component['onTouched']).toHaveBeenCalled();
     expect(component.blur.emit).toHaveBeenCalled();
     expect(component['controlChangeEmitter']).toHaveBeenCalled();
   });
@@ -224,13 +319,38 @@ describe('PoDecimalComponent:', () => {
         value: 'ABC'
       }
     };
+    component['onTouched'] = () => {};
 
     spyOn(component, <any>'setViewValue');
     spyOn(component, <any>'callOnChange');
+    spyOn(component, <any>'onTouched');
 
     component.onBlur(fakeEvent);
+
+    expect(component['onTouched']).toHaveBeenCalled();
     expect(component['setViewValue']).toHaveBeenCalled();
     expect(component['callOnChange']).toHaveBeenCalled();
+  });
+
+  it('blur event must be called if has only hyphen', () => {
+    const fakeEvent = {
+      target: {
+        value: '-'
+      }
+    };
+    component['onTouched'] = () => {};
+
+    spyOn(component, <any>'setViewValue');
+    spyOn(component, <any>'onTouched');
+    spyOn(component, <any>'callOnChange');
+    spyOn(component.blur, 'emit');
+
+    component.onBlur(fakeEvent);
+
+    expect(component['onTouched']).toHaveBeenCalled();
+    expect(component['setViewValue']).toHaveBeenCalled();
+    expect(component['callOnChange']).toHaveBeenCalled();
+    expect(component.blur.emit).not.toHaveBeenCalled();
   });
 
   it('should have a call onInput method', () => {
@@ -240,6 +360,10 @@ describe('PoDecimalComponent:', () => {
         selectionEnd: 5,
         value: '10425'
       }
+    };
+    component.errorAsyncProperties = {
+      errorAsync: value => of(true),
+      triggerMode: 'changeModel'
     };
 
     spyOn(component, <any>'setViewValue');
@@ -254,7 +378,7 @@ describe('PoDecimalComponent:', () => {
   });
 
   it('should have a call onInput method with this.isKeyboardAndroid true', () => {
-    component['isKeyboardAndroid'] = true;
+    Object.defineProperty(component, 'isKeyboardAndroid', { value: true, configurable: true });
 
     const fakeEvent = {
       target: {
@@ -356,7 +480,31 @@ describe('PoDecimalComponent:', () => {
     component.min = 0;
     component.max = 0;
 
-    expect(component.extraValidation(new FormControl(null))).toBeNull();
+    expect(component.extraValidation(new UntypedFormControl(null))).toBeNull();
+  });
+
+  it('should reset errorPattern to empty when it equals "Valor Inválido"', () => {
+    component.errorPattern = 'Valor Inválido';
+    component.min = undefined;
+    component.max = undefined;
+
+    component.extraValidation(new UntypedFormControl(5));
+
+    expect(component.errorPattern).toBe('');
+  });
+
+  it(`Shouldn't return null in extraValidation if value has separator`, () => {
+    const value = new UntypedFormControl(12345678901234.56);
+
+    expect(component.extraValidation(value)).not.toBeNull();
+  });
+
+  it(`Shouldn't return null in extraValidation if thousandMaxlength has value`, () => {
+    component.thousandMaxlength = 5;
+
+    const value = new UntypedFormControl(123456);
+
+    expect(component.extraValidation(value)).not.toBeNull();
   });
 
   it('should have a call getScreenValue method', () => {
@@ -368,6 +516,7 @@ describe('PoDecimalComponent:', () => {
   });
 
   it('should have a call replaceCommaToDot method', () => {
+    fixture.detectChanges();
     const valueFormatted = component['replaceCommaToDot']('123,10');
     expect(valueFormatted).toEqual('123.10');
   });
@@ -378,6 +527,7 @@ describe('PoDecimalComponent:', () => {
   });
 
   it('should have a call formatValueWithoutThousandSeparator method', () => {
+    fixture.detectChanges();
     const valueFormatted = component['formatValueWithoutThousandSeparator']('12345.10');
     expect(valueFormatted).toEqual('1234510');
   });
@@ -397,6 +547,7 @@ describe('PoDecimalComponent:', () => {
   });
 
   it('should return `true` value if call isKeyDecimalSeparator() with event.char `,`', () => {
+    fixture.detectChanges();
     const event = {
       key: '',
       char: ','
@@ -407,6 +558,7 @@ describe('PoDecimalComponent:', () => {
   });
 
   it('should have a call containsComma method', () => {
+    fixture.detectChanges();
     const containsComma = component['containsComma']('123456789,10');
     expect(containsComma).toBeTruthy();
   });
@@ -432,6 +584,7 @@ describe('PoDecimalComponent:', () => {
   });
 
   it('should have a call addZeroBefore method', () => {
+    fixture.detectChanges();
     const addZeroBefore = component['addZeroBefore'](',');
     expect(addZeroBefore).toEqual('0,');
   });
@@ -546,7 +699,21 @@ describe('PoDecimalComponent:', () => {
     expect(isLessDot).toBeTruthy();
   });
 
+  it('hasLessDot: should return true', () => {
+    const fakeThis = {
+      regex: {
+        thousand: '.'
+      },
+      oldDotsLength: 2
+    };
+
+    const isLessDot = component['hasLessDot'].call(fakeThis, '12.100');
+
+    expect(isLessDot).toBeTruthy();
+  });
+
   it('should have a call hasMoreDot method if path', () => {
+    fixture.detectChanges();
     component['oldDotsLength'] = 1;
 
     const hasMoreDot = component['hasMoreDot']('1234.121.100');
@@ -567,11 +734,13 @@ describe('PoDecimalComponent:', () => {
   });
 
   it('should have a call formatMask method', () => {
+    fixture.detectChanges();
     const valueFormatted = component['formatMask']('12345');
     expect(valueFormatted).toEqual('12.345');
   });
 
   it('should have a call formatMask method else path', () => {
+    fixture.detectChanges();
     const valueFormatted = component['formatMask']('10123,4');
     expect(valueFormatted).toEqual('10.123,4');
   });
@@ -607,7 +776,8 @@ describe('PoDecimalComponent:', () => {
       inputEl: component.inputEl,
       valueBeforeChange: undefined,
       change: component.change,
-      getScreenValue: () => {}
+      getScreenValue: () => {},
+      verifyErrorAsync: () => {}
     };
 
     spyOn(fakeThis.change, 'emit');
@@ -617,6 +787,7 @@ describe('PoDecimalComponent:', () => {
   }));
 
   it('should have a call formatToViewValue method', () => {
+    fixture.detectChanges();
     component['_decimalsLength'] = 0;
 
     const returnMethod = component['formatToViewValue']('123400');
@@ -625,12 +796,14 @@ describe('PoDecimalComponent:', () => {
   });
 
   it('should have a call formatToViewValue method else path', () => {
+    fixture.detectChanges();
     const returnMethod = component['formatToViewValue']('1234');
 
     expect(returnMethod).toBe('1.234,00');
   });
 
   it('should have a call verifyInsertComma method', () => {
+    fixture.detectChanges();
     const fakeEvent = {
       target: {
         value: '123,00'
@@ -643,6 +816,7 @@ describe('PoDecimalComponent:', () => {
   });
 
   it('should have a call verifyValueAfterComma method', () => {
+    fixture.detectChanges();
     const fakeEvent = {
       target: {
         value: '10.245,60',
@@ -658,11 +832,36 @@ describe('PoDecimalComponent:', () => {
 
   it('should call callOnChange if input is cleaned', () => {
     component.clean = true;
+    component.errorAsyncProperties = {
+      errorAsync: value => of(true),
+      triggerMode: 'changeModel'
+    };
 
     spyOn(component, <any>'callOnChange');
     component.clear('');
     expect(component['callOnChange']).toHaveBeenCalled();
   });
+
+  it('clear: should emit p-change even without prior focus', fakeAsync(() => {
+    fixture.detectChanges();
+    spyOn(component.change, 'emit');
+
+    component.clear(undefined);
+    tick(250);
+
+    expect(component.change.emit).toHaveBeenCalled();
+  }));
+
+  it('clear: should emit p-change when field had prior focus', fakeAsync(() => {
+    fixture.detectChanges();
+    component['valueBeforeChange'] = '123,45';
+    spyOn(component.change, 'emit');
+
+    component.clear(undefined);
+    tick(250);
+
+    expect(component.change.emit).toHaveBeenCalled();
+  }));
 
   it('should call hasLessDot', () => {
     const fakeThis = {
@@ -700,7 +899,7 @@ describe('PoDecimalComponent:', () => {
       },
       key: '-'
     };
-    component['isKeyboardAndroid'] = true;
+    Object.defineProperty(component, 'isKeyboardAndroid', { value: true, configurable: true });
 
     const verifyInsertMinusSign = component['verifyInsertMinusSign'](fakeEvent);
 
@@ -719,25 +918,12 @@ describe('PoDecimalComponent:', () => {
     expect(isInvalidMinusSign).toBeTruthy();
   });
 
-  it('should calc icons position without clean', fakeAsync(() => {
-    const fakeThis = {
-      clean: false,
-      inputEl: component.inputEl,
-      el: component.inputEl
-    };
-
-    component.setPaddingInput.call(fakeThis);
-    tick(10);
-
-    expect(fakeThis.inputEl.nativeElement.style.paddingRight).toBe('');
-  }));
-
   it('should have a call isPositionAfterDecimalSeparator method', () => {
     const isPositionAfterDecimalSeparator = component['isPositionAfterDecimalSeparator'](2, undefined);
     expect(isPositionAfterDecimalSeparator).toBeFalsy();
   });
 
-  // testes já utilizando boas práticas.
+  // testes j� utilizando boas pr�ticas.
   describe('Methods:', () => {
     it('focus: should call `focus` of decimal', () => {
       component.inputEl = {
@@ -903,7 +1089,7 @@ describe('PoDecimalComponent:', () => {
         },
         preventDefault: () => {}
       };
-      component['isKeyboardAndroid'] = true;
+      Object.defineProperty(component, 'isKeyboardAndroid', { value: true, configurable: true });
 
       spyOn(component, <any>'isInvalidKey').and.returnValue(false);
       spyOn(fakeEvent, 'preventDefault');
@@ -922,7 +1108,7 @@ describe('PoDecimalComponent:', () => {
         which: 8,
         preventDefault: () => {}
       };
-      component['isKeyboardAndroid'] = false;
+      Object.defineProperty(component, 'isKeyboardAndroid', { value: false, configurable: true });
 
       const isValidKey = component['isValidKey'](fakeEvent);
 
@@ -1074,6 +1260,7 @@ describe('PoDecimalComponent:', () => {
       });
 
       it('should return true if all validators equal true', () => {
+        fixture.detectChanges();
         spyOn(component, <any>'isKeyDecimalSeparator');
 
         expect(component['validateCursorPositionBeforeSeparator'](fakeEvent)).toBeTruthy();
@@ -1108,6 +1295,7 @@ describe('PoDecimalComponent:', () => {
       });
 
       it('should return false if isKeyDecimalSeparator is true', () => {
+        fixture.detectChanges();
         spyOn(component, <any>'isKeyDecimalSeparator').and.returnValue(true);
 
         expect(component['validateCursorPositionBeforeSeparator'](fakeEvent)).toBeFalsy();
@@ -1129,6 +1317,7 @@ describe('PoDecimalComponent:', () => {
       });
 
       it('should return true if all validators equal true', () => {
+        fixture.detectChanges();
         spyOn(component, <any>'isKeyDecimalSeparator').and.returnValue(false);
         spyOn(component, <any>'isPositionAfterDecimalSeparator').and.returnValue(true);
 
@@ -1144,6 +1333,7 @@ describe('PoDecimalComponent:', () => {
       });
 
       it('should return false if isKeyDecimalSeparator is true', () => {
+        fixture.detectChanges();
         spyOn(component, <any>'isKeyDecimalSeparator').and.returnValue(true);
 
         expect(component['verifyThousandLength'](fakeEvent)).toBeFalsy();
@@ -1162,21 +1352,73 @@ describe('PoDecimalComponent:', () => {
       });
     });
 
-    it(`onBlur: should call 'setViewValue' with empty string and 'callOnChange' with undefined if 'target.value'
-      contains more than one comma`, () => {
-      const fakeEvent = {
-        target: {
-          value: '1,200,50'
-        }
-      };
+    describe('onBlur:', () => {
+      let setupTest;
 
-      spyOn(component, <any>'setViewValue');
-      spyOn(component, <any>'callOnChange');
+      beforeEach(() => {
+        setupTest = (tooltip: string, displayHelp: boolean, additionalHelpEvent: any) => {
+          component.additionalHelpTooltip = tooltip;
+          component.displayAdditionalHelp = displayHelp;
+          component.additionalHelp = additionalHelpEvent;
+          spyOn(component, 'showAdditionalHelp');
+        };
+      });
 
-      component.onBlur(fakeEvent);
+      it(`onBlur: should call 'setViewValue' with empty string and 'callOnChange' with undefined if 'target.value'
+        contains more than one comma`, () => {
+        fixture.detectChanges();
+        const fakeEvent = {
+          target: {
+            value: '1,200,50'
+          }
+        };
+        component['onTouched'] = () => {};
 
-      expect(component['setViewValue']).toHaveBeenCalledWith('');
-      expect(component['callOnChange']).toHaveBeenCalledWith(undefined);
+        spyOn(component, <any>'setViewValue');
+        spyOn(component, <any>'callOnChange');
+        spyOn(component, <any>'onTouched');
+
+        component.onBlur(fakeEvent);
+
+        expect(component['onTouched']).toHaveBeenCalled();
+        expect(component['setViewValue']).toHaveBeenCalledWith('');
+        expect(component['callOnChange']).toHaveBeenCalledWith(undefined);
+      });
+
+      it('onBlur: shouldn�t throw error if onTouched is falsy', () => {
+        const fakeEvent = { target: { value: '' } };
+
+        component['onTouched'] = null;
+
+        const fnError = () => component.onBlur(fakeEvent);
+
+        expect(fnError).not.toThrow();
+      });
+
+      it('should not call showAdditionalHelp when tooltip is not displayed', () => {
+        setupTest('Mensagem de apoio adicional.', false, { observed: false });
+        const fakeEvent = { target: { value: '' } };
+
+        component.onBlur(fakeEvent);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+
+      it('should not call showAdditionalHelp when additionalHelp event is true', () => {
+        setupTest('Mensagem de apoio adicional.', true, { observed: true });
+        const fakeEvent = { target: { value: '' } };
+
+        component.onBlur(fakeEvent);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+
+      it('should include additionalHelp when event is triggered', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        component.additionalHelp = new EventEmitter<any>();
+
+        const result = component.setHelper('label', 'tooltip');
+
+        expect(result).toBeDefined();
+      });
     });
 
     describe('containsMoreThanOneDecimalSeparator:', () => {
@@ -1187,6 +1429,7 @@ describe('PoDecimalComponent:', () => {
       });
 
       it('should return `true` if param contains more than one comma', () => {
+        fixture.detectChanges();
         const value = '1.444,200,55';
 
         expect(component['containsMoreThanOneDecimalSeparator'](value)).toBeTruthy();
@@ -1257,7 +1500,8 @@ describe('PoDecimalComponent:', () => {
         valueBeforeChange: '1',
         fireChange: true,
         change: component.change,
-        getScreenValue: () => value
+        getScreenValue: () => value,
+        verifyErrorAsync: () => {}
       };
 
       spyOn(fakeThis.change, 'emit');
@@ -1272,7 +1516,8 @@ describe('PoDecimalComponent:', () => {
         valueBeforeChange: 1,
         fireChange: false,
         change: component.change,
-        getScreenValue: () => {}
+        getScreenValue: () => {},
+        verifyErrorAsync: () => {}
       };
 
       spyOn(fakeThis.change, 'emit');
@@ -1312,6 +1557,39 @@ describe('PoDecimalComponent:', () => {
       expect(component['setCursorInput']).not.toHaveBeenCalled();
     });
 
+    describe('onKeyDown:', () => {
+      it('should emit event when field is focused', () => {
+        const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+        component.inputEl = {
+          nativeElement: {
+            focus: () => {}
+          }
+        };
+
+        spyOn(component.keydown, 'emit');
+        spyOnProperty(document, 'activeElement', 'get').and.returnValue(component.inputEl.nativeElement);
+
+        component.onKeyDown(fakeEvent);
+
+        expect(component.keydown.emit).toHaveBeenCalledWith(fakeEvent);
+      });
+
+      it('should not emit event when field is not focused', () => {
+        const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+        component.inputEl = {
+          nativeElement: {
+            focus: () => {}
+          }
+        };
+
+        spyOn(component.keydown, 'emit');
+        spyOnProperty(document, 'activeElement', 'get').and.returnValue(document.createElement('div'));
+        component.onKeyDown(fakeEvent);
+
+        expect(component.keydown.emit).not.toHaveBeenCalled();
+      });
+    });
+
     it('hasLetters: should return true with numbers.', () => {
       expect(component.hasLetters('333')).toBeFalsy();
     });
@@ -1326,6 +1604,18 @@ describe('PoDecimalComponent:', () => {
 
     it('hasLetters: should return true with undefined value.', () => {
       expect(component.hasLetters(undefined)).toBeFalsy();
+    });
+
+    it('hasNotSpace: should return false with whitespace value.', () => {
+      expect(component.hasNotSpace(' ')).toBeFalsy();
+    });
+
+    it('hasNotSpace: should return true with number.', () => {
+      expect(component.hasNotSpace('211')).toBeTruthy();
+    });
+
+    it('hasNotSpace: should return true with undefined value.', () => {
+      expect(component.hasNotSpace(undefined)).toBeTruthy();
     });
 
     it('isGreaterThanTotalLengthLimit: should return `false` if total sum is 16.', () => {
@@ -1403,6 +1693,451 @@ describe('PoDecimalComponent:', () => {
         expect(fixture.debugElement.nativeElement.querySelector('.po-field-container-bottom-text-error')).toBeNull();
       });
     });
+
+    describe('verifyErrorAsync', () => {
+      beforeEach(() => {
+        component['cd'] = { detectChanges: () => {} } as any;
+        component['inputEl'] = { nativeElement: { value: 'test' } } as ElementRef;
+        Object.defineProperty(component, 'el', {
+          value: { nativeElement: document.createElement('div') }
+        });
+
+        component.errorPattern = 'Erro de exemplo';
+        component.errorAsyncProperties = {
+          errorAsync: jasmine.createSpy('errorAsync').and.returnValue(of(true))
+        };
+
+        component['subscriptionValidator'] = new Subscription();
+      });
+
+      afterEach(() => {
+        component['subscriptionValidator'].unsubscribe();
+      });
+
+      it('should add ng-invalid and ng-dirty classes when error is true', () => {
+        spyOn(component['cd'], 'detectChanges');
+        component['verifyErrorAsync']('test');
+
+        expect(component.errorAsyncProperties.errorAsync).toHaveBeenCalledWith('test');
+        expect(component['el'].nativeElement.classList.contains('ng-invalid')).toBeTrue();
+        expect(component['el'].nativeElement.classList.contains('ng-dirty')).toBeTrue();
+        expect(component['cd'].detectChanges).toHaveBeenCalled();
+      });
+
+      it('should remove ng-invalid class when error is false and isInvalid is false', () => {
+        spyOn(component['cd'], 'detectChanges');
+        component.errorAsyncProperties.errorAsync = jasmine.createSpy('errorAsync').and.returnValue(of(false));
+        component['el'].nativeElement.classList.add('ng-invalid');
+        component['el'].nativeElement.classList.add('ng-dirty');
+        component.isInvalid = false;
+
+        component['verifyErrorAsync']('test');
+
+        expect(component.errorAsyncProperties.errorAsync).toHaveBeenCalledWith('test');
+        expect(component['el'].nativeElement.classList.contains('ng-invalid')).toBeFalse();
+        expect(component['cd'].detectChanges).toHaveBeenCalled();
+      });
+
+      it('must cancel the previous subscription from subscriptionValidator', () => {
+        const unsubscribeSpy = spyOn(component['subscriptionValidator'], 'unsubscribe');
+
+        component['verifyErrorAsync']('value');
+
+        expect(unsubscribeSpy).toHaveBeenCalled();
+      });
+    });
+
+    describe('applyFormatOnBlur: ', () => {
+      it('should call applyDecimalFormat with effective parsed format and separators', () => {
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+
+        const result = component['applyFormatOnBlur'](1234.56);
+
+        expect(result.isValid).toBe(true);
+        expect(result.viewValue).toContain('1.234');
+        expect(result.viewValue).toContain(',56');
+      });
+
+      it('should return isValid false when formatParsed is null', () => {
+        const result = component['applyFormatOnBlur'](1234.56);
+
+        expect(result.isValid).toBe(false);
+        expect(result.viewValue).toBe('');
+      });
+
+      it('should return isValid true with empty viewValue when value is null', () => {
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+
+        const result = component['applyFormatOnBlur'](null);
+
+        expect(result.isValid).toBe(true);
+        expect(result.viewValue).toBe('');
+      });
+    });
+
+    describe('getEffectiveFormatParsed: ', () => {
+      it('should return null when formatParsed signal is null', () => {
+        const result = component['getEffectiveFormatParsed']();
+
+        expect(result).toBeNull();
+      });
+
+      it('should return parsed with min of format limits and component thousandMaxlength', () => {
+        fixture.componentRef.setInput('p-display-format', '>>>,>>>,>>9.99');
+        fixture.detectChanges();
+        component.thousandMaxlength = 5;
+
+        const result = component['getEffectiveFormatParsed']();
+
+        expect(result.integerDigitCount).toBe(5);
+      });
+
+      it('should return parsed with min of format limits and component decimalsLength', () => {
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.9999');
+        fixture.detectChanges();
+        component.decimalsLength = 2;
+
+        const result = component['getEffectiveFormatParsed']();
+
+        expect(result.decimalDigitCount).toBe(2);
+      });
+    });
+
+    describe('getModelValueFromView: ', () => {
+      it('should return undefined when inputEl is not set', () => {
+        component.inputEl = undefined;
+
+        const result = component['getModelValueFromView']();
+
+        expect(result).toBe(undefined);
+      });
+
+      it('should return undefined when screen value is empty', () => {
+        fixture.detectChanges();
+        component['setViewValue']('');
+
+        const result = component['getModelValueFromView']();
+
+        expect(result).toBe(undefined);
+      });
+
+      it('should return model value from current screen value', () => {
+        fixture.detectChanges();
+        component['setViewValue']('1.234,56');
+
+        const result = component['getModelValueFromView']();
+
+        expect(result).toBe(1234.56);
+      });
+    });
+
+    describe('refreshOnPropertyChange: ', () => {
+      it('should not call setViewValue when modelValue is null', () => {
+        fixture.detectChanges();
+        component['setViewValue']('');
+        const spy = spyOn(component as never, 'setViewValue' as never);
+
+        component['refreshOnPropertyChange']();
+
+        expect(spy).not.toHaveBeenCalled();
+      });
+
+      it('should not call setViewValue when inputEl is undefined', () => {
+        component.inputEl = undefined;
+        const spy = spyOn(component as never, 'setViewValue' as never);
+
+        component['refreshOnPropertyChange']();
+
+        expect(spy).not.toHaveBeenCalled();
+      });
+
+      it('should re-format view value using format when formatParsed is set', () => {
+        fixture.detectChanges();
+        component['setViewValue']('1234,56');
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+
+        const screenValue = component.getScreenValue();
+
+        expect(screenValue).toContain('1.234');
+        expect(screenValue).toContain(',56');
+      });
+
+      it('should re-format view value using default formatToViewValue when formatParsed is null', () => {
+        fixture.detectChanges();
+        component['setViewValue']('1234,56');
+        component['formatParsed'].set(null);
+
+        component['refreshOnPropertyChange']();
+
+        const screenValue = component.getScreenValue();
+        expect(screenValue).toBe('1.234,56');
+      });
+
+      it('should use formatToViewValue fallback when value overflows format on property change', () => {
+        fixture.detectChanges();
+        component['setViewValue']('99999,99');
+        fixture.componentRef.setInput('p-display-format', '99.99');
+        fixture.detectChanges();
+
+        component['refreshOnPropertyChange']();
+
+        const screenValue = component.getScreenValue();
+        expect(screenValue).toContain('99.999');
+        expect(screenValue).toContain(',99');
+      });
+    });
+
+    describe('onBlur with displayFormat: ', () => {
+      beforeEach(() => {
+        fixture.detectChanges();
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+        component['onTouched'] = () => {};
+      });
+
+      it('should apply format on blur when formatParsed is active and value is valid', () => {
+        const fakeEvent = { target: { value: '1234,56' } };
+        const spy = spyOn(component as never, 'setViewValue' as never).and.callThrough();
+
+        component.onBlur(fakeEvent);
+
+        const lastCall = spy.calls.mostRecent().args[0] as string;
+        expect(lastCall).toContain('1.234');
+        expect(lastCall).toContain(',56');
+      });
+
+      it('should clear model when value results in null model', () => {
+        const fakeEvent = { target: { value: '' } };
+        spyOn(component as never, 'callOnChange' as never);
+
+        component.onBlur(fakeEvent);
+
+        expect(component['callOnChange']).not.toHaveBeenCalled();
+      });
+
+      it('should use fallback format when applyFormatOnBlur returns isValid false', () => {
+        fixture.componentRef.setInput('p-display-format', '99.99');
+        fixture.detectChanges();
+
+        const fakeEvent = { target: { value: '99999,99' } };
+        const spy = spyOn(component as never, 'setViewValue' as never).and.callThrough();
+
+        component.onBlur(fakeEvent);
+
+        expect(spy).toHaveBeenCalled();
+      });
+
+      it('should call callOnChange with undefined when model value is undefined', () => {
+        const fakeEvent = { target: { value: 'ABC' } };
+        spyOn(component as never, 'callOnChange' as never);
+
+        component.onBlur(fakeEvent);
+
+        expect(component['callOnChange']).toHaveBeenCalledWith(undefined);
+      });
+
+      it('should call callOnChange(undefined) and set empty view when formatToModelValue returns undefined', () => {
+        const fakeEvent = { target: { value: ',' } };
+        const spyChange = spyOn(component as any, 'callOnChange');
+        const spyView = spyOn(component as any, 'setViewValue').and.callThrough();
+
+        component.onBlur(fakeEvent);
+
+        expect(spyChange).toHaveBeenCalledWith(undefined);
+        expect(spyView).toHaveBeenCalledWith('');
+      });
+
+      it('should use originalValue as fallback when formatToViewValue returns empty on overflow', () => {
+        fixture.componentRef.setInput('p-display-format', '99.99');
+        fixture.detectChanges();
+        spyOn(component as any, 'formatToViewValue').and.returnValue('');
+        spyOn(component as any, 'formatToModelValue').and.returnValue(99999.99);
+        const spyView = spyOn(component as any, 'setViewValue').and.callThrough();
+
+        component['applyFormatOnBlurAndSetView']('99999,99', '99.999,99');
+
+        expect(spyView).toHaveBeenCalledWith('99.999,99');
+      });
+    });
+
+    describe('onInput with displayFormat: ', () => {
+      beforeEach(() => {
+        fixture.detectChanges();
+        fixture.componentRef.setInput('p-display-format', '->>,>>9.99');
+        fixture.detectChanges();
+      });
+
+      it('should block negative sign when format does not allow negative', () => {
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+
+        const fakeEvent = {
+          target: {
+            value: '-123',
+            selectionStart: 1,
+            selectionEnd: 1,
+            setSelectionRange: jasmine.createSpy('setSelectionRange')
+          }
+        };
+
+        spyOn(component as never, 'setViewValue' as never).and.callThrough();
+
+        component.onInput(fakeEvent);
+
+        expect(fakeEvent.target.setSelectionRange).toHaveBeenCalledWith(0, 0);
+      });
+
+      it('should revert to previous value when input exceeds format integer capacity', () => {
+        fixture.componentRef.setInput('p-display-format', '999.99');
+        fixture.detectChanges();
+
+        const fakeEvent = {
+          target: {
+            value: '1234,5',
+            selectionStart: 5,
+            selectionEnd: 5,
+            setSelectionRange: jasmine.createSpy('setSelectionRange')
+          }
+        };
+
+        const spy = spyOn(component as never, 'setViewValue' as never).and.callThrough();
+
+        component.onInput(fakeEvent);
+
+        expect(spy).toHaveBeenCalled();
+        expect(fakeEvent.target.setSelectionRange).toHaveBeenCalledWith(4, 4);
+      });
+
+      it('should allow valid input that fits within format', () => {
+        const fakeEvent = {
+          target: {
+            value: '123,45',
+            selectionStart: 6,
+            selectionEnd: 6,
+            setSelectionRange: jasmine.createSpy('setSelectionRange')
+          }
+        };
+
+        spyOn(component as never, 'callOnChange' as never);
+
+        component.onInput(fakeEvent);
+
+        expect(component['callOnChange']).toHaveBeenCalled();
+      });
+    });
+
+    describe('formatMaskWithAblPositions: ', () => {
+      it('should insert separators at correct positions during input for format >>>,>>9.99', () => {
+        fixture.detectChanges();
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+
+        const result = component['formatMaskWithAblPositions']('123456');
+
+        expect(result).toBe('123.456');
+      });
+
+      it('should not insert separators when value has fewer digits than first group position', () => {
+        fixture.detectChanges();
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+
+        const result = component['formatMaskWithAblPositions']('12');
+
+        expect(result).toBe('12');
+      });
+
+      it('should preserve decimal part without modification', () => {
+        fixture.detectChanges();
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+
+        const result = component['formatMaskWithAblPositions']('1234,56');
+
+        expect(result).toBe('1.234,56');
+      });
+
+      it('should preserve negative sign at the beginning', () => {
+        fixture.detectChanges();
+        fixture.componentRef.setInput('p-display-format', '->>>,>>>,>>9.99');
+        fixture.detectChanges();
+
+        const result = component['formatMaskWithAblPositions']('-1234567');
+
+        expect(result).toBe('-1.234.567');
+      });
+
+      it('should return value unchanged when format has no group separators', () => {
+        fixture.detectChanges();
+        fixture.componentRef.setInput('p-display-format', '>>>>>>>>9.99');
+        fixture.detectChanges();
+
+        const result = component['formatMaskWithAblPositions']('1234567');
+
+        expect(result).toBe('1234567');
+      });
+
+      it('should return value unchanged when formatParsed is null', () => {
+        fixture.detectChanges();
+        fixture.componentRef.setInput('p-display-format', undefined);
+        fixture.detectChanges();
+
+        const result = component['formatMaskWithAblPositions']('1234567');
+
+        expect(result).toBe('1234567');
+      });
+    });
+
+    describe('writeValueModel with displayFormat: ', () => {
+      beforeEach(() => {
+        fixture.detectChanges();
+        fixture.componentRef.setInput('p-display-format', '>>>,>>9.99');
+        fixture.detectChanges();
+      });
+
+      it('should format value using advanced format when formatParsed is active', () => {
+        const spy = spyOn(component as never, 'setViewValue' as never).and.callThrough();
+
+        component.writeValueModel(1234.56);
+
+        const lastCall = spy.calls.mostRecent().args[0] as string;
+        expect(lastCall).toContain('1.234');
+        expect(lastCall).toContain(',56');
+      });
+
+      it('should use fallback format when value overflows format capacity', () => {
+        fixture.componentRef.setInput('p-display-format', '99.99');
+        fixture.detectChanges();
+
+        const spy = spyOn(component as never, 'setViewValue' as never).and.callThrough();
+
+        component.writeValueModel(9999.99);
+
+        const lastCall = spy.calls.mostRecent().args[0] as string;
+        expect(lastCall).toContain('9.999');
+      });
+
+      it('should set empty view value when value is falsy', () => {
+        const spy = spyOn(component as any, 'setViewValue').and.callThrough();
+
+        component.writeValueModel(undefined);
+
+        expect(spy).toHaveBeenCalledWith('');
+      });
+
+      it('should format string value parsed to number', () => {
+        const spy = spyOn(component as never, 'setViewValue' as never).and.callThrough();
+
+        component.writeValueModel('4567.89');
+
+        const lastCall = spy.calls.mostRecent().args[0] as string;
+        expect(lastCall).toContain('4.567');
+        expect(lastCall).toContain(',89');
+      });
+    });
   });
 
   describe('Templates:', () => {
@@ -1414,14 +2149,14 @@ describe('PoDecimalComponent:', () => {
     });
 
     it('should includes an icon.', () => {
-      component.icon = 'po-icon-settings';
+      component.icon = 'an-gear-six';
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('.po-icon-settings')).toBeTruthy();
+      expect(nativeElement.querySelector('.an-gear-six')).toBeTruthy();
     });
 
     it('should attribute `po-field-icon-disabled` class if input is disabled.', () => {
-      component.icon = 'po-icon-settings';
+      component.icon = 'an-gear-six';
       component.disabled = true;
       fixture.detectChanges();
 
@@ -1429,41 +2164,11 @@ describe('PoDecimalComponent:', () => {
     });
 
     it('shouldn`t attribute `po-field-icon-disabled` class if input is not disabled.', () => {
-      component.icon = 'po-icon-settings';
+      component.icon = 'an-gear-six';
       component.disabled = false;
       fixture.detectChanges();
 
       expect(nativeElement.querySelector('.po-field-icon-disabled')).toBeFalsy();
-    });
-
-    it(`should show optional if the field isn't 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = false;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeTruthy();
-    });
-
-    it(`shouldn't show optional if the field is 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = true;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-    });
-
-    it(`shouldn't show optional if the field isn't 'required', has 'label' but 'p-optional' is false.`, () => {
-      component.required = true;
-      component.optional = false;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
     });
 
     it('should show po-clean if `clean` is true and `disabled` and `readonly` are false', () => {

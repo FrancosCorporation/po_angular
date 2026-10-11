@@ -76,7 +76,7 @@
     </div>
   </form>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-select
@@ -85,12 +85,12 @@
       [(ngModel)]="actionsIcon"
       p-clean
       p-label="Actions icon"
-      [p-options]="iconOptions"
+      [p-options]="actionsIconOptions"
     >
     </po-select>
   </div>
 
-  <hr />
+  <po-divider />
 
   <form #formProfile="ngForm">
     <div class="po-row">
@@ -118,7 +118,7 @@
     </div>
   </form>
 
-  <hr />
+  <po-divider />
 
   <form #formToolbar="ngForm">
     <div class="po-row">

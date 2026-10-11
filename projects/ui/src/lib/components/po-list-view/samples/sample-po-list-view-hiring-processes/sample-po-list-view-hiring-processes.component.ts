@@ -1,7 +1,8 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, inject } from '@angular/core';
 
 import {
   PoListViewAction,
+  PoListViewFieldProperties,
   PoModalComponent,
   PoNotificationService,
   PoPageAction,
@@ -13,29 +14,43 @@ import { SamplePoListViewHiringProcessesService } from './sample-po-list-view-hi
 @Component({
   selector: 'sample-po-list-view-hiring-processes',
   templateUrl: 'sample-po-list-view-hiring-processes.component.html',
-  providers: [SamplePoListViewHiringProcessesService]
+  providers: [SamplePoListViewHiringProcessesService],
+  standalone: false
 })
 export class SamplePoListViewHiringProcessesComponent implements OnInit {
-  hiringProcesses: Array<any>;
-  hiringProcessesFiltered: Array<object>;
+  private poNotification = inject(PoNotificationService);
+  private hiringProcessesService = inject(SamplePoListViewHiringProcessesService);
+
+  @ViewChild('detailsModal', { static: true }) detailsModalElement!: PoModalComponent;
+
+  hiringProcesses!: Array<any>;
+  hiringProcessesFiltered!: Array<object>;
   labelFilter: string = '';
   modalDetail: boolean = false;
-  selectedActionItem = {};
+  selectedActionItem: any = {};
   titleDetailsModal: string = 'User Detail';
+
+  readonly fieldProperties: PoListViewFieldProperties = {
+    title: 'name',
+    subtitle: 'jobDescription',
+    link: 'url',
+    avatar: 'avatar',
+    tag: { value: 'hireStatus', type: 'hireTagType' }
+  };
 
   readonly actions: Array<PoListViewAction> = [
     {
       label: 'Hire',
       action: this.hireCandidate.bind(this),
       disabled: this.isHiredOrCanceled.bind(this),
-      icon: 'po-icon-ok'
+      icon: 'an an-check'
     },
     {
       label: 'Cancel',
       action: this.cancelCandidate.bind(this),
       disabled: this.isHiredOrCanceled.bind(this),
       type: 'danger',
-      icon: 'po-icon-close'
+      icon: 'an an-x'
     }
   ];
 
@@ -44,13 +59,13 @@ export class SamplePoListViewHiringProcessesComponent implements OnInit {
       label: 'Hire selected',
       action: this.updateCandidates.bind(this, this.hireCandidate),
       disabled: this.disableHireButton.bind(this),
-      icon: 'po-icon-ok'
+      icon: 'an an-check'
     },
     {
       label: 'Cancel selected',
       action: this.updateCandidates.bind(this, this.cancelCandidate),
       disabled: this.disableHireButton.bind(this),
-      icon: 'po-icon-close'
+      icon: 'an an-x'
     }
   ];
 
@@ -59,41 +74,34 @@ export class SamplePoListViewHiringProcessesComponent implements OnInit {
     placeholder: 'Search'
   };
 
-  @ViewChild('detailsModal', { static: true }) detailsModalElement: PoModalComponent;
-
-  constructor(
-    private poNotification: PoNotificationService,
-    private hiringProcessesService: SamplePoListViewHiringProcessesService
-  ) {}
-
   ngOnInit() {
     this.hiringProcesses = this.hiringProcessesService.getItems();
     this.hiringProcessesFiltered = [...this.hiringProcesses];
   }
 
-  formatTitle(item) {
+  formatTitle(item: any) {
     return `${item.idCard} - ${item.name}`;
   }
 
-  showDetail(item) {
+  showDetail(item: any) {
     return item.url;
   }
 
-  showDetailModal(item) {
+  showDetailModal(item: any) {
     this.setModalItem(item);
     this.detailsModalElement.open();
   }
 
-  private cancelCandidate(selectedCandidate) {
+  private cancelCandidate(selectedCandidate: any) {
     selectedCandidate['hireStatus'] = 'canceled';
     this.poNotification.error('Canceled candidate!');
   }
 
   private disableHireButton() {
-    return !this.hiringProcesses.find(candidate => candidate['$selected']);
+    return !this.hiringProcesses.find((candidate: any) => candidate['$selected']);
   }
 
-  private hireCandidate(selectedCandidate) {
+  private hireCandidate(selectedCandidate: any) {
     selectedCandidate['hireStatus'] = 'hired';
     this.poNotification.success('Hired candidate!');
   }
@@ -101,20 +109,20 @@ export class SamplePoListViewHiringProcessesComponent implements OnInit {
   private hiringProcessesFilter(labelFilter: string | Array<string>) {
     const filters = typeof labelFilter === 'string' ? [labelFilter] : [...labelFilter];
 
-    this.hiringProcessesFiltered = this.hiringProcesses.filter(item => {
-      return Object.keys(item).some(key => !(item[key] instanceof Object) && this.includeFilter(item[key], filters));
-    });
+    this.hiringProcessesFiltered = this.hiringProcesses.filter((item: any) =>
+      Object.keys(item).some(key => !(item[key] instanceof Object) && this.includeFilter(item[key], filters))
+    );
   }
 
-  private includeFilter(item, filters) {
+  private includeFilter(item: any, filters: Array<string>) {
     return filters.some(filter => String(item).toLocaleLowerCase().includes(filter.toLocaleLowerCase()));
   }
 
-  private isHiredOrCanceled(candidate): boolean {
+  private isHiredOrCanceled(candidate: any): boolean {
     return candidate['hireStatus'] === 'hired' || candidate['hireStatus'] === 'canceled';
   }
 
-  private setModalItem(listItem) {
+  private setModalItem(listItem: any) {
     this.selectedActionItem = listItem;
     this.titleDetailsModal = `Get in touch with ${this.selectedActionItem['name']}`;
   }

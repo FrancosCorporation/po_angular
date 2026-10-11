@@ -1,7 +1,6 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { Directive, EventEmitter, HostBinding, HostListener, Input, Output } from '@angular/core';
 
 import {
-  InputBoolean,
   PoBreadcrumb,
   PoDynamicFormField,
   PoLanguageService,
@@ -9,16 +8,18 @@ import {
   poLocaleDefault
 } from '@po-ui/ng-components';
 
-import { convertToInt } from '../../utils/util';
+import { convertToBoolean, convertToInt, getDefaultSizeFn, validateSizeFn } from '../../utils/util';
 
-import { PoPageDynamicSearchLiterals } from './po-page-dynamic-search-literals.interface';
+import { PoPageDynamicSearchFilters } from './interfaces/po-page-dynamic-search-filters.interface';
+import { PoPageDynamicSearchLiterals } from './interfaces/po-page-dynamic-search-literals.interface';
+import { PoPageDynamicSearchOptions } from './interfaces/po-page-dynamic-search-options.interface';
 import { poAdvancedFiltersLiteralsDefault } from './po-advanced-filter/po-advanced-filter-base.component';
 import { PoAdvancedFilterLiterals } from './po-advanced-filter/po-advanced-filter-literals.interface';
-import { PoPageDynamicSearchOptions } from './po-page-dynamic-search-options.interface';
-import { PoPageDynamicSearchFilters } from './po-page-dynamic-search-filters.interface';
 
 export const poPageDynamicSearchLiteralsDefault = {
   en: <PoPageDynamicSearchLiterals>{
+    disclaimerBooleanFalse: 'No',
+    disclaimerBooleanTrue: 'Yes',
     disclaimerGroupTitle: 'Displaying results filtered by:',
     filterTitle: poAdvancedFiltersLiteralsDefault.en.title,
     filterCancelLabel: poAdvancedFiltersLiteralsDefault.en.cancelLabel,
@@ -27,6 +28,8 @@ export const poPageDynamicSearchLiteralsDefault = {
     searchPlaceholder: 'Search'
   },
   es: <PoPageDynamicSearchLiterals>{
+    disclaimerBooleanFalse: 'No',
+    disclaimerBooleanTrue: 'Sí',
     disclaimerGroupTitle: 'Presentando resultados filtrados por:',
     filterTitle: poAdvancedFiltersLiteralsDefault.es.title,
     filterCancelLabel: poAdvancedFiltersLiteralsDefault.es.cancelLabel,
@@ -35,6 +38,8 @@ export const poPageDynamicSearchLiteralsDefault = {
     searchPlaceholder: 'Buscar'
   },
   pt: <PoPageDynamicSearchLiterals>{
+    disclaimerBooleanFalse: 'Não',
+    disclaimerBooleanTrue: 'Sim',
     disclaimerGroupTitle: 'Apresentando resultados filtrados por:',
     filterTitle: poAdvancedFiltersLiteralsDefault.pt.title,
     filterCancelLabel: poAdvancedFiltersLiteralsDefault.pt.cancelLabel,
@@ -43,6 +48,8 @@ export const poPageDynamicSearchLiteralsDefault = {
     searchPlaceholder: 'Pesquisar'
   },
   ru: <PoPageDynamicSearchLiterals>{
+    disclaimerBooleanFalse: 'Нет',
+    disclaimerBooleanTrue: 'Да',
     disclaimerGroupTitle: 'Отображение результатов, отфильтрованных по:',
     filterTitle: poAdvancedFiltersLiteralsDefault.ru.title,
     filterCancelLabel: poAdvancedFiltersLiteralsDefault.ru.cancelLabel,
@@ -57,23 +64,211 @@ export const poPageDynamicSearchLiteralsDefault = {
  *
  * Componente com as ações de pesquisa já definidas, bastando que o desenvolvedor implemente apenas a chamada para as APIs
  * e exiba as informações.
+ *
+ * #### Tokens customizáveis
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade         | Descrição                                   | Valor Padrão                          |
+ * |---------------------|---------------------------------------------|---------------------------------------|
+ * | **Header**          |                                             |                                       |
+ * | `--padding`         | Espaçamento do header                       | `var(--spacing-xs) var(--spacing-md)` |
+ * | `--gap`             | Espaçamento entre os breadcrumbs e o título | `var(--spacing-md)`                   |
+ * | `--gap-actions`     | Espaçamento entre as ações                  | `var(--spacing-xs)`                   |
+ * | `--font-family`     | Família tipográfica do título               | `var(--font-family-theme)`            |
+ * | **Content**         |                                             |                                       |
+ * | `--padding-content` | Espaçamento do conteúdo                     | `var(--spacing-xs) var(--spacing-sm)` |
  */
 @Directive()
 export abstract class PoPageDynamicSearchBaseComponent {
-  private _filters: Array<PoDynamicFormField> = [];
-  private _literals: PoPageDynamicSearchLiterals;
-  private _quickSearchWidth: number;
-
-  advancedFilterLiterals: PoAdvancedFilterLiterals;
-
-  private previousFilters: Array<PoDynamicFormField>;
-  private language: string;
-
   /** Nesta propriedade deve ser definido um array de objetos que implementam a interface `PoPageAction`. */
   @Input('p-actions') actions?: Array<PoPageAction> = [];
 
   /** Objeto com propriedades do breadcrumb. */
   @Input('p-breadcrumb') breadcrumb?: PoBreadcrumb = { items: [] };
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Mantém na busca avançada os valores preenchidos do último filtro realizado pelo usuário.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-keep-filters', transform: convertToBoolean }) keepFilters: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite a utilização da pesquisa rápida junto com a pesquisa avançada.
+   *
+   * Desta forma, ao ter uma pesquisa avançada estabelecida e ser
+   * preenchido a pesquisa rápida, o filtro será concatenado adicionando a pesquisa
+   * rápida também na lista de `disclaimers`.
+   *
+   * > Os valores que são emitidos no `p-quick-search` e no `p-advanced-search`
+   * permanecem separados durante a emissão dos valores alterados. A concatenação
+   * é apenas nos `disclaimers`.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-concat-filters', transform: convertToBoolean }) concatFilters: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Oculta o botão para remover todos os *disclaimers* do grupo.
+   *
+   * > Por padrão, o mesmo é exibido à partir de dois ou mais *disclaimers* com a opção `hideClose` habilitada.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-remove-all-disclaimer', transform: convertToBoolean })
+  hideRemoveAllDisclaimer: boolean = false;
+
+  /**
+   * Função ou serviço que será executado na inicialização do componente.
+   *
+   * A propriedade aceita os seguintes tipos:
+   * - `string`: *Endpoint* usado pelo componente para requisição via `POST`.
+   * - `function`: Método que será executado.
+   *
+   * O retorno desta função deve ser do tipo `PoPageDynamicSearchOptions`,
+   * onde o usuário poderá customizar novos filtros, breadcrumb, title e actions
+   *
+   * Por exemplo:
+   *
+   * ```
+   * getPageOptions(): PoPageDynamicSearchOptions {
+   * return {
+   *   actions: [
+   *     { label: 'Find on Google' },
+   *   ],
+   *   filters: [
+   *     { property: 'idCard', gridColumns: 6 }
+   *   ]
+   * };
+   * }
+   *
+   * ```
+   * Para referenciar a sua função utilize a propriedade `bind`, por exemplo:
+   * ```
+   *  [p-load]="onLoadOptions.bind(this)"
+   * ```
+   */
+  @Input('p-load') onLoad: string | (() => PoPageDynamicSearchOptions);
+
+  /** Título da página. */
+  @Input('p-title') title: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Valor padrão na busca rápida ao inicializar o componente
+   *
+   */
+  @Input('p-quick-search-value') quickSearchValue: string;
+
+  _visibleFixedFilters = true;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Controla a visibilidade dos filtros fixos na página.
+   *
+   * - Quando `true` (default), todos os filtros, incluindo os fixos, são exibidos, permitindo que o usuário visualize os filtros aplicados.
+   * - Quando `false`, os filtros fixos são ocultados, não sendo exibidos na interface, mas ainda sendo aplicados como filtros nas requisições.
+   *
+   * Esta propriedade trabalha em conjunto com a propriedade `fixed` dos filtros individuais. Filtros marcados como `fixed: true` não serão exibidos na interface do filtro avançado quando `visibleFixedFilters` for `false`, mas continuarão a ser aplicados de forma transparente ao usuário. Dessa forma, permite-se maior flexibilidade no controle de quais filtros devem ser visíveis ao usuário ou devem ser aplicados permanentemente sem interferência.
+   *
+   * **Exemplo de uso:**
+   * ```html
+   * <!-- Para ocultar os filtros fixos -->
+   * <po-page-dynamic-table [p-visible-fixed-filters]="false"></po-page-dynamic-table>
+   * ```
+   */
+  @Input('p-visible-fixed-filters') set visibleFixedFilters(visible: boolean) {
+    this._visibleFixedFilters = visible;
+  }
+
+  get visibleFixedFilters(): boolean {
+    return this._visibleFixedFilters;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao executar a pesquisa avançada, o mesmo irá repassar um objeto com os valores preenchidos no modal de pesquisa.
+   *
+   * > Campos não preenchidos não irão aparecer no objeto passado por parâmetro.
+   */
+  @Output('p-advanced-search') advancedSearch: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao remover um ou todos os disclaimers pelo usuário.
+   */
+  @Output('p-change-disclaimers') changeDisclaimers: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao realizar uma busca pelo campo de pesquisa rápida, o mesmo será chamado repassando o valor digitado.
+   */
+  @Output('p-quick-search') quickSearch: EventEmitter<string> = new EventEmitter();
+
+  advancedFilterLiterals: PoAdvancedFilterLiterals;
+
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _filters: Array<PoDynamicFormField> = [];
+  private _hideCloseDisclaimers: Array<string> = [];
+  private _literals: PoPageDynamicSearchLiterals;
+  private _quickSearchWidth: number;
+  private readonly language: string;
+
+  previousFilters: Array<PoDynamicFormField>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
+  }
 
   /**
    * @optional
@@ -86,6 +281,8 @@ export abstract class PoPageDynamicSearchBaseComponent {
    *
    * ```
    *  const customLiterals: PoPageDynamicSearchLiterals = {
+   *    disclaimerBooleanFalse: 'Inativo',
+   *    disclaimerBooleanTrue: 'Ativo',
    *    disclaimerGroupTitle: 'Filtros aplicados:',
    *    filterTitle: 'Filtro avançado',
    *    filterCancelLabel: 'Fechar',
@@ -140,86 +337,11 @@ export abstract class PoPageDynamicSearchBaseComponent {
    */
   @Input('p-filters') set filters(filters: Array<PoPageDynamicSearchFilters>) {
     this._filters = Array.isArray(filters) ? [...filters] : [];
-
-    if (JSON.stringify(this._filters) !== JSON.stringify(this.previousFilters)) {
-      this.onChangeFilters(this.filters);
-
-      this.previousFilters = [...this._filters];
-    }
   }
 
   get filters(): Array<PoPageDynamicSearchFilters> {
     return this._filters;
   }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Mantém na busca avançada os valores preenchidos do último filtro realizado pelo usuário.
-   *
-   * @default `false`
-   */
-  @InputBoolean()
-  @Input('p-keep-filters')
-  keepFilters: boolean = false;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Permite a utilização da pesquisa rápida junto com a pesquisa avançada.
-   *
-   * Desta forma, ao ter uma pesquisa avançada estabelecida e ser
-   * preenchido a pesquisa rápida, o filtro será concatenado adicionando a pesquisa
-   * rápida também na lista de `disclaimers`.
-   *
-   * > Os valores que são emitidos no `p-quick-search` e no `p-advanced-search`
-   * permanecem separados durante a emissão dos valores alterados. A concatenação
-   * é apenas nos `disclaimers`.
-   *
-   * @default `false`
-   */
-  @InputBoolean()
-  @Input('p-concat-filters')
-  concatFilters: boolean = false;
-
-  /**
-   * Função ou serviço que será executado na inicialização do componente.
-   *
-   * A propriedade aceita os seguintes tipos:
-   * - `string`: *Endpoint* usado pelo componente para requisição via `POST`.
-   * - `function`: Método que será executado.
-   *
-   * O retorno desta função deve ser do tipo `PoPageDynamicSearchOptions`,
-   * onde o usuário poderá customizar novos filtros, breadcrumb, title e actions
-   *
-   * Por exemplo:
-   *
-   * ```
-   * getPageOptions(): PoPageDynamicSearchOptions {
-   * return {
-   *   actions: [
-   *     { label: 'Find on Google' },
-   *   ],
-   *   filters: [
-   *     { property: 'idCard', gridColumns: 6 }
-   *   ]
-   * };
-   * }
-   *
-   * ```
-   * Para referenciar a sua função utilize a propriedade `bind`, por exemplo:
-   * ```
-   *  [p-load]="onLoadOptions.bind(this)"
-   * ```
-   */
-  @Input('p-load') onLoad: string | (() => PoPageDynamicSearchOptions);
-
-  /** Título da página. */
-  @Input('p-title') title: string;
 
   /**
    * @optional
@@ -243,35 +365,25 @@ export abstract class PoPageDynamicSearchBaseComponent {
    *
    * @description
    *
-   * Evento disparado ao executar a pesquisa avançada, o mesmo irá repassar um objeto com os valores preenchidos no modal de pesquisa.
+   * Lista de filtros que terão a opção de fechar ocultada
+   * em seu respectivo disclaimer. Utilizar o atributo `property` do filtro.
    *
-   * > Campos não preenchidos não irão aparecer no objeto passado por parâmetro.
+   * Exemplo de utilização:
+   * ```
+   * ['city','name'];
+   * ```
    */
-  @Output('p-advanced-search') advancedSearch: EventEmitter<any> = new EventEmitter();
+  @Input('p-hide-close-disclaimers') set hideCloseDisclaimers(value: Array<string>) {
+    this._hideCloseDisclaimers = Array.isArray(value) ? value : [];
+  }
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado ao remover um ou todos os disclaimers pelo usuário.
-   */
-  @Output('p-change-disclaimers') changeDisclaimers: EventEmitter<any> = new EventEmitter();
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado ao realizar uma busca pelo campo de pesquisa rápida, o mesmo será chamado repassando o valor digitado.
-   */
-  @Output('p-quick-search') quickSearch: EventEmitter<string> = new EventEmitter();
+  get hideCloseDisclaimers(): Array<string> {
+    return this._hideCloseDisclaimers;
+  }
 
   constructor(languageService: PoLanguageService) {
     this.language = languageService.getShortLanguage();
   }
-
-  abstract onChangeFilters(filters: Array<PoPageDynamicSearchFilters>);
 
   protected setAdvancedFilterLiterals(literals: PoPageDynamicSearchLiterals) {
     this.advancedFilterLiterals = {
@@ -280,4 +392,24 @@ export abstract class PoPageDynamicSearchBaseComponent {
       title: literals.filterTitle
     };
   }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  stringify(columns: Array<PoPageDynamicSearchFilters>) {
+    // não faz o stringify da propriedade searchService, pois pode conter objeto complexo e disparar um erro.
+    return JSON.stringify(columns, (key, value) => {
+      if (key !== 'searchService') {
+        return value;
+      }
+    });
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
+  }
+
+  abstract onChangeFilters(filters: Array<PoPageDynamicSearchFilters>);
 }

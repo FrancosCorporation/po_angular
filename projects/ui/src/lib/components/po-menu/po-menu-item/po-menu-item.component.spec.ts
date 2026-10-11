@@ -5,16 +5,25 @@ import { RouterTestingModule } from '@angular/router/testing';
 
 import { Observable } from 'rxjs';
 
-import { configureTestSuite, expectPropertiesValues } from './../../../util-test/util-expect.spec';
+import { expectPropertiesValues } from './../../../util-test/util-expect.spec';
 
 import { PoBadgeComponent } from '../../po-badge';
+import { PoIconModule } from '../../po-icon/po-icon.module';
 import { PoMenuItemsService } from '../services/po-menu-items.service';
 import { PoMenuItemComponent } from './po-menu-item.component';
 
-@Component({ template: 'Search' })
+@Component({
+  selector: 'app-menu-item-search',
+  template: 'Search',
+  standalone: false
+})
 export class SearchComponent {}
 
-@Component({ template: 'Home' })
+@Component({
+  selector: 'app-menu-item-home',
+  template: 'Home',
+  standalone: false
+})
 export class HomeComponent {}
 
 export const routes: Routes = [
@@ -28,15 +37,13 @@ describe('PoMenuItemComponent:', () => {
   let fixture: ComponentFixture<PoMenuItemComponent>;
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      imports: [RouterTestingModule.withRoutes(routes)],
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [RouterTestingModule.withRoutes(routes), PoIconModule],
       declarations: [SearchComponent, HomeComponent, PoMenuItemComponent, PoBadgeComponent],
       providers: [PoMenuItemsService]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoMenuItemComponent);
     component = fixture.componentInstance;
     nativeElement = fixture.debugElement.nativeElement;
@@ -186,7 +193,10 @@ describe('PoMenuItemComponent:', () => {
 
   it('should call receiveFromParentMenuClicked Observable', () => {
     const menuItem = { label: 'Teste', type: 'subItems' };
-    component['menuItemsService'] = fakeMenuService(menuItem) as PoMenuItemsService;
+    Object.defineProperty(component, 'menuItemsService', {
+      value: fakeMenuService(menuItem),
+      configurable: true
+    });
 
     spyOn(component, <any>'processMenuItem');
 
@@ -484,7 +494,7 @@ describe('PoMenuItemComponent:', () => {
 
     component.id = '1';
     component.type = 'subItems';
-    component.subItems = <any>[menuItem];
+    component.subItems = [menuItem];
 
     const menuOpened = menuItem;
     const menuActive = { id: '3', label: 'Register' };
@@ -504,7 +514,7 @@ describe('PoMenuItemComponent:', () => {
 
     component.id = '1';
     component.type = 'subItems';
-    component.subItems = <any>[menuItem];
+    component.subItems = [menuItem];
 
     const menuOpened = menuItem;
     const menuActive = { id: '2', label: 'Search' };
@@ -556,24 +566,24 @@ describe('PoMenuItemComponent:', () => {
 
   describe('Templates:', () => {
     it('should not show icon if level is bigger than 1', () => {
-      component.icon = 'po-icon-star';
+      component.icon = 'an-star';
       component.level = 2;
 
       fixture.detectChanges();
 
       expect(nativeElement.querySelectorAll('.po-menu-icon-container').length).toBe(0);
-      expect(nativeElement.querySelectorAll('.po-icon-star').length).toBe(0);
+      expect(nativeElement.querySelectorAll('.an-star').length).toBe(0);
       expect(nativeElement.querySelectorAll('.po-menu-icon-item').length).toBe(0);
     });
 
     it('should show icon if it`s first level', () => {
-      component.icon = 'po-icon-star';
+      component.icon = 'an-star';
       component.level = 1;
 
       fixture.detectChanges();
 
       expect(nativeElement.querySelectorAll('.po-menu-icon-container').length).toBe(1);
-      expect(nativeElement.querySelectorAll('.po-icon-star').length).toBe(1);
+      expect(nativeElement.querySelectorAll('.an-star').length).toBe(1);
       expect(nativeElement.querySelectorAll('.po-menu-icon-item').length).toBe(1);
       expect(nativeElement.querySelectorAll('.po-menu-icon-label').length).toBe(1);
     });
@@ -584,16 +594,16 @@ describe('PoMenuItemComponent:', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelectorAll('.po-icon-star').length).toBe(0);
+      expect(nativeElement.querySelectorAll('.an-star').length).toBe(0);
     });
 
-    it('should show icon class if icon is `po-icon-star`.', () => {
-      component.icon = 'po-icon-star';
+    it('should show icon class if icon is `an-star`.', () => {
+      component.icon = 'an-star';
       component.level = 1;
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelectorAll('.po-icon-star').length).toBe(1);
+      expect(nativeElement.querySelectorAll('.an-star').length).toBe(1);
     });
 
     it('should hide `po-menu-sub-item` if menu is collapsed', () => {
@@ -606,6 +616,7 @@ describe('PoMenuItemComponent:', () => {
 
     it('should show `po-menu-sub-item` if menu isn`t collapsed', () => {
       component.type = 'subItems';
+      component.isOpened = true;
       component.collapsedMenu = false;
       fixture.detectChanges();
 
@@ -626,29 +637,6 @@ describe('PoMenuItemComponent:', () => {
       fixture.detectChanges();
 
       expect(nativeElement.querySelector('.po-menu-group-icon')).toBeFalsy();
-    });
-
-    it('should show short label is menu is collapsed', () => {
-      component.collapsedMenu = true;
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-menu-short-label')).toBeTruthy();
-    });
-
-    it('should hide short label is menu is open', () => {
-      component.collapsedMenu = false;
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-menu-short-label')).toBeFalsy();
-    });
-
-    it('should add short lavel if menu is collapsed', () => {
-      const value = 'Value';
-      component.collapsedMenu = true;
-      component.shortLabel = value;
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-menu-short-label').innerHTML).toBe('Value');
     });
 
     it('should show `po-badge` if `canShowBadge` is `true`', () => {

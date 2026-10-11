@@ -1,7 +1,6 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 
-import * as utilsFunctions from '../../../utils/util';
-import { configureTestSuite } from '../../../util-test/util-expect.spec';
+import { PoUtils as utilsFunctions } from '../../../utils/util';
 
 import { PoCheckboxGroupModule } from '../../po-field/po-checkbox-group/po-checkbox-group.module';
 import { PoFieldContainerModule } from '../../po-field/po-field-container/po-field-container.module';
@@ -9,19 +8,18 @@ import { PoPopoverModule } from '../../po-popover/po-popover.module';
 import { PoTableModule } from '../po-table.module';
 
 import { PoTableColumnManagerComponent } from './po-table-column-manager.component';
+import { PoTableColumn } from '../interfaces/po-table-column.interface';
 
 describe('PoTableColumnManagerComponent:', () => {
   let component: PoTableColumnManagerComponent;
   let fixture: ComponentFixture<PoTableColumnManagerComponent>;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       declarations: [],
       imports: [PoCheckboxGroupModule, PoFieldContainerModule, PoPopoverModule, PoTableModule]
     }).compileComponents();
-  });
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoTableColumnManagerComponent);
     component = fixture.componentInstance;
 
@@ -33,106 +31,112 @@ describe('PoTableColumnManagerComponent:', () => {
   });
 
   describe('Methods:', () => {
-    it('ngOnInit: should call `updateColumnsOptions` with `columns`', () => {
-      component.columns = [
-        { property: 'id', label: 'Code', type: 'number' },
-        { property: 'initial', label: 'initial' },
-        { property: 'name', label: 'Name' },
-        { property: 'total', label: 'Total', type: 'currency', format: 'BRL' },
-        { property: 'atualization', label: 'Atualization', type: 'date' }
-      ];
+    describe('ngOnChanges:', () => {
+      it(`ngOnChanges: should call 'initializeListeners' if 'target.firstChange' is defined`, () => {
+        component.columns = [
+          { property: 'id', label: 'Code' },
+          { property: 'initial', label: 'initial' },
+          { property: 'name', label: 'Name' },
+          { property: 'total', label: 'Total' },
+          { property: 'atualization', label: 'Atualization' }
+        ];
 
-      spyOn(component, <any>'updateColumnsOptions');
+        const changes = { target: { firstChange: true } };
 
-      component.ngOnInit();
+        spyOn(component, <any>'initializeListeners');
 
-      expect(component['updateColumnsOptions']).toHaveBeenCalledWith(component.columns);
-    });
+        component.ngOnChanges(<any>changes);
 
-    it(`ngOnChanges: should call 'initializeListeners' if 'target.firstChange' is defined`, () => {
-      component.columns = [
-        { property: 'id', label: 'Code' },
-        { property: 'initial', label: 'initial' },
-        { property: 'name', label: 'Name' },
-        { property: 'total', label: 'Total' },
-        { property: 'atualization', label: 'Atualization' }
-      ];
+        expect(component['initializeListeners']).toHaveBeenCalled();
+      });
 
-      const changes = { target: { firstChange: true } };
+      it(`ngOnChanges: shouldn't call 'initializeListeners' if 'target' is undefined`, () => {
+        const changes = { target: undefined };
 
-      spyOn(component, <any>'initializeListeners');
+        spyOn(component, <any>'initializeListeners');
 
-      component.ngOnChanges(<any>changes);
+        component.ngOnChanges(changes);
 
-      expect(component['initializeListeners']).toHaveBeenCalled();
-    });
+        expect(component['initializeListeners']).not.toHaveBeenCalled();
+      });
 
-    it(`ngOnChanges: shouldn't call 'initializeListeners' if 'target' is undefined`, () => {
-      const changes = { target: undefined };
+      it(`ngOnChanges: shouldn't call 'initializeListeners' if 'target.firstChange' is false`, () => {
+        const changes = { target: { firstChange: false } };
 
-      spyOn(component, <any>'initializeListeners');
+        spyOn(component, <any>'initializeListeners');
 
-      component.ngOnChanges(<any>changes);
+        component.ngOnChanges(<any>changes);
 
-      expect(component['initializeListeners']).not.toHaveBeenCalled();
-    });
+        expect(component['initializeListeners']).not.toHaveBeenCalled();
+      });
 
-    it(`ngOnChanges: shouldn't call 'initializeListeners' if 'target.firstChange' is false`, () => {
-      const changes = { target: { firstChange: false } };
+      it(`ngOnChanges: should call 'onChangeColumns' if 'columns' is defined`, () => {
+        const changes = { columns: { currentValue: [] } };
 
-      spyOn(component, <any>'initializeListeners');
+        spyOn(component, <any>'onChangeColumns');
 
-      component.ngOnChanges(<any>changes);
+        component.ngOnChanges(<any>changes);
 
-      expect(component['initializeListeners']).not.toHaveBeenCalled();
-    });
+        expect(component['onChangeColumns']).toHaveBeenCalled();
+      });
 
-    it(`ngOnChanges: should call 'onChangeColumns' if 'columns' is defined`, () => {
-      const changes = { columns: { currentValue: [] } };
+      it(`ngOnChanges: should call 'updateValues' with 'columns' if 'maxColumns' is defined`, () => {
+        component.columns = [
+          { property: 'id', label: 'Code' },
+          { property: 'initial', label: 'initial' },
+          { property: 'name', label: 'Name' },
+          { property: 'total', label: 'Total' },
+          { property: 'atualization', label: 'Atualization' }
+        ];
 
-      spyOn(component, <any>'onChangeColumns');
+        const changes = { maxColumns: 2 };
 
-      component.ngOnChanges(<any>changes);
+        spyOn(component, <any>'updateValues');
 
-      expect(component['onChangeColumns']).toHaveBeenCalled();
-    });
+        component.ngOnChanges(<any>changes);
 
-    it(`ngOnChanges: should call 'updateColumnsOptions' with 'columns' if 'maxColumns' is defined`, () => {
-      component.columns = [
-        { property: 'id', label: 'Code' },
-        { property: 'initial', label: 'initial' },
-        { property: 'name', label: 'Name' },
-        { property: 'total', label: 'Total' },
-        { property: 'atualization', label: 'Atualization' }
-      ];
+        expect(component['updateValues']).toHaveBeenCalledWith(component.columns);
+      });
 
-      const changes = { maxColumns: 2 };
+      it(`ngOnChanges: should open page slide if 'lastVisibleColumnsSelected.currentValue' is defined`, () => {
+        const changes = { lastVisibleColumnsSelected: { currentValue: ['table'] } };
 
-      spyOn(component, <any>'updateColumnsOptions');
+        spyOn(component.pageSlideColumnsManager, 'open');
 
-      component.ngOnChanges(<any>changes);
+        component.ngOnChanges(<any>changes);
 
-      expect(component['updateColumnsOptions']).toHaveBeenCalledWith(component.columns);
-    });
+        expect(component.pageSlideColumnsManager.open).toHaveBeenCalled();
+      });
 
-    it(`ngOnChanges: shouldn't call 'updateColumnsOptions' if 'maxColumns' is undefined`, () => {
-      const changes = { maxColumns: undefined };
+      it(`ngOnChanges: shouldn't call 'updateValues' if 'maxColumns' is undefined`, () => {
+        const changes = { maxColumns: undefined };
 
-      spyOn(component, <any>'updateColumnsOptions');
+        spyOn(component, <any>'updateValues');
 
-      component.ngOnChanges(<any>changes);
+        component.ngOnChanges(changes);
 
-      expect(component['updateColumnsOptions']).not.toHaveBeenCalled();
-    });
+        expect(component['updateValues']).not.toHaveBeenCalled();
+      });
 
-    it(`ngOnChanges: shouldn't call 'onChangeColumns' if 'columns' is undefined`, () => {
-      const changes = { columns: undefined };
+      it(`ngOnChanges: shouldn't call 'onChangeColumns' if 'columns' is undefined`, () => {
+        const changes = { columns: undefined };
 
-      spyOn(component, <any>'onChangeColumns');
+        spyOn(component, <any>'onChangeColumns');
 
-      component.ngOnChanges(<any>changes);
+        component.ngOnChanges(changes);
 
-      expect(component['onChangeColumns']).not.toHaveBeenCalled();
+        expect(component['onChangeColumns']).not.toHaveBeenCalled();
+      });
+
+      it(`ngOnChanges: shouldn't call page slide if 'lastVisibleColumnsSelected.current' is undefined`, () => {
+        const changes = { lastVisibleColumnsSelected: { currentValue: undefined } };
+
+        spyOn(component.pageSlideColumnsManager, 'open');
+
+        component.ngOnChanges(<any>changes);
+
+        expect(component.pageSlideColumnsManager.open).not.toHaveBeenCalled();
+      });
     });
 
     it('ngOnDestroy: should call `removeListeners`', () => {
@@ -143,322 +147,741 @@ describe('PoTableColumnManagerComponent:', () => {
       expect(component['removeListeners']).toHaveBeenCalled();
     });
 
-    it('onChangeVisibleColumns: should call `disableColumnsOptions` with `columnsOptions`', () => {
-      const checkedColumns = ['initial', 'name'];
-      component.columnsOptions = [{ value: 'column', label: 'Column', disabled: false }];
+    describe('checkChanges:', () => {
+      it('should call `verifyToEmitChange`', () => {
+        const fakeEvent = [];
+        spyOn(component, <any>'verifyToEmitChange');
 
-      spyOn(component, <any>'disableColumnsOptions');
+        component.checkChanges();
 
-      component.onChangeVisibleColumns(checkedColumns);
+        expect(component['verifyToEmitChange']).toHaveBeenCalledWith(fakeEvent);
+      });
 
-      expect(component['disableColumnsOptions']).toHaveBeenCalledWith(component.columnsOptions);
+      it('should call `verifyToEmitVisibleColumns` if emit is true', () => {
+        const fakeEvent = [];
+        const fakeEmit = true;
+        spyOn(component, <any>'verifyToEmitVisibleColumns');
+
+        component.checkChanges(fakeEvent, fakeEmit);
+
+        expect(component['verifyToEmitVisibleColumns']).toHaveBeenCalled();
+      });
+
+      it('shouldn`t call `verifyToEmitVisibleColumns` if emit is false', () => {
+        spyOn(component, <any>'verifyToEmitVisibleColumns');
+
+        component.checkChanges();
+
+        expect(component['verifyToEmitVisibleColumns']).not.toHaveBeenCalled();
+      });
     });
 
-    it(`onChangeVisibleColumns: should call 'getVisibleTableColumns' to set 'visibleColumnsChange'
-      and call 'visibleColumnsChange.emit'`, () => {
-      const checkedColumns = ['initial'];
+    describe('verifyToEmitChange:', () => {
+      it('should call `emitChangesToSelectedColumns` if allowsChangeVisibleColumns is true', () => {
+        spyOn(component, <any>'allowsChangeVisibleColumns').and.returnValue(true);
+        spyOn(component, <any>'emitChangesToSelectedColumns');
 
-      const visibleColumnsChange = [{ label: 'initial' }];
+        const fakeEvent = ['test1', 'test2'];
 
-      spyOn(component, <any>'getVisibleTableColumns').and.returnValue(visibleColumnsChange);
+        component['verifyToEmitChange'](fakeEvent);
+
+        expect(component['emitChangesToSelectedColumns']).toHaveBeenCalledWith(fakeEvent);
+      });
+
+      it('should call `disabledLastColumn` and `mapTableColumnsToCheckboxOptions` if columns length is 1', () => {
+        spyOn(component, <any>'mapTableColumnsToCheckboxOptions');
+        spyOn(component, <any>'disabledLastColumn');
+
+        const fakeEvent = ['test1'];
+
+        component['verifyToEmitChange'](fakeEvent);
+
+        expect(component['mapTableColumnsToCheckboxOptions']).toHaveBeenCalled();
+        expect(component['disabledLastColumn']).toHaveBeenCalled();
+      });
+
+      it('disabledLastColumn: should disable column that is visible ', () => {
+        const tableColumns = [
+          { property: 'test1', label: 'Code', visible: true },
+          { property: 'test2', label: 'initial', visible: false }
+        ];
+
+        const tableColumnsExpected = [
+          { property: 'test1', label: 'Code', visible: true, disabled: true },
+          { property: 'test2', label: 'initial', visible: false, disabled: false }
+        ];
+
+        const newColumns = component['disabledLastColumn'](tableColumns);
+
+        expect(newColumns).toEqual(tableColumnsExpected);
+      });
+
+      it('shouldn`t call `emitChangesToSelectedColumns` if allowsChangeVisibleColumns is false', () => {
+        spyOn(component, <any>'allowsChangeVisibleColumns').and.returnValue(false);
+        spyOn(component, <any>'emitChangesToSelectedColumns');
+
+        const fakeEvent = ['test1', 'test2'];
+
+        component['verifyToEmitChange'](fakeEvent);
+
+        expect(component['emitChangesToSelectedColumns']).not.toHaveBeenCalledWith(fakeEvent);
+      });
+
+      it('should return change fixed to false', () => {
+        const result = component['removePropertyFixed']([{ value: 'test', fixed: true }]);
+
+        expect(result).toEqual([{ value: 'test', fixed: false }]);
+      });
+    });
+
+    it('emitChangesToSelectedColumns: should update `visibleColumns` and call `getVisibleTableColumns` and `visibleColumnsChange.emit`', () => {
+      const fakeEvent = ['test1', 'test2'];
+      const fakeVisibleTableColumns = [
+        { property: 'test1', label: 'Code' },
+        { property: 'test2', label: 'initial' }
+      ];
+
+      spyOn(component, <any>'getVisibleTableColumns').and.returnValue(fakeVisibleTableColumns);
       spyOn(component.visibleColumnsChange, 'emit');
 
-      spyOn(component, <any>'disableColumnsOptions');
+      component['emitChangesToSelectedColumns'](fakeEvent);
 
-      component.onChangeVisibleColumns(checkedColumns);
-
-      expect(component.visibleColumnsChange.emit).toHaveBeenCalledWith(visibleColumnsChange);
+      expect(component.visibleColumns).toEqual(fakeEvent);
+      expect(component['getVisibleTableColumns']).toHaveBeenCalledWith(fakeEvent);
+      expect(component.visibleColumnsChange.emit).toHaveBeenCalledWith(fakeVisibleTableColumns);
     });
 
-    it(`onChangeVisibleColumns: should call 'updatesControlValues'`, () => {
-      spyOn(component, <any>'updatesControlValues');
-      const checkedColumns = ['initial'];
+    describe('allowsChangeVisibleColumns:', () => {
+      it('should call `getVisibleTableColumns` and return true if `visibleTableColumns`is different from `this.columns`', () => {
+        const fakeVisibleTableColumns = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
 
-      component.onChangeVisibleColumns(checkedColumns);
+        const fakeEvent = ['test1', 'test2'];
 
-      expect(component['updatesControlValues']).toHaveBeenCalledWith(checkedColumns);
+        component.visibleColumns = fakeEvent;
+
+        component.columns = [{ property: 'test1', label: 'Code' }];
+
+        spyOn(component, <any>'getVisibleTableColumns').and.returnValue(fakeVisibleTableColumns);
+
+        const result = component['allowsChangeVisibleColumns']();
+
+        expect(component['getVisibleTableColumns']).toHaveBeenCalledWith(fakeEvent);
+        expect(result).toBeTrue();
+      });
+
+      it('should call `getVisibleTableColumns` and return true if `visibleTableColumns`is different from `this.columns`', () => {
+        const fakeVisibleTableColumns = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
+
+        const fakeEvent = ['test1', 'test2'];
+
+        component.visibleColumns = fakeEvent;
+
+        component.columns = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
+
+        spyOn(component, <any>'getVisibleTableColumns').and.returnValue(fakeVisibleTableColumns);
+
+        const result = component['allowsChangeVisibleColumns']();
+
+        expect(component['getVisibleTableColumns']).toHaveBeenCalledWith(fakeEvent);
+        expect(result).toBeFalse();
+      });
     });
 
-    it(`updatesControlValues: should set 'lastValueCheckedColumns' with 'checkedColumns' if 'lastValueCheckedColumns' is 'undefined'`, () => {
-      component['lastValueCheckedColumns'] = undefined;
-      const checkedColumns = ['initial'];
+    describe('verifyToEmitVisibleColumns:', () => {
+      it('should call `verifyRestoreValues` if `restoreDefaultEvent` is true', () => {
+        component['restoreDefaultEvent'] = true;
 
-      component['updatesControlValues'](checkedColumns);
+        spyOn(component, <any>'verifyRestoreValues');
+        spyOn(component, <any>'verifyOnClose');
 
-      expect(component['lastValueCheckedColumns']).toEqual(checkedColumns);
+        component['verifyToEmitVisibleColumns']();
+
+        expect(component['verifyRestoreValues']).toHaveBeenCalled();
+        expect(component['verifyOnClose']).not.toHaveBeenCalled();
+      });
+
+      it('should call `verifyOnClose` if `restoreDefaultEvent` is false', () => {
+        component['restoreDefaultEvent'] = false;
+
+        spyOn(component, <any>'verifyRestoreValues');
+        spyOn(component, <any>'verifyOnClose');
+
+        component['verifyToEmitVisibleColumns']();
+
+        expect(component['verifyRestoreValues']).not.toHaveBeenCalled();
+        expect(component['verifyOnClose']).toHaveBeenCalled();
+      });
     });
 
-    it(`updatesControlValues: should set 'selectedColumns' with 'checkedColumns' if 'lastValueCheckedColumns' isn't 'undefined'`, () => {
-      component['lastValueCheckedColumns'] = ['teste'];
-      const checkedColumns = ['initial'];
+    describe('verifyRestoreValues:', () => {
+      it('should emit `visibleColumnsChange` if `allowsChangeSelectedColumns` is true', () => {
+        component['defaultColumns'] = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
 
-      component['updatesControlValues'](checkedColumns);
+        const fakeVisible = ['test1', 'test2'];
 
-      expect(component['selectedColumns']).toEqual(checkedColumns);
+        spyOn(component, <any>'getVisibleColumns').and.returnValue(fakeVisible);
+        spyOn(component, <any>'allowsChangeSelectedColumns').and.returnValue(true);
+        spyOn(component.visibleColumnsChange, 'emit');
+
+        component['verifyRestoreValues']();
+
+        expect(component['getVisibleColumns']).toHaveBeenCalled();
+        expect(component['allowsChangeSelectedColumns']).toHaveBeenCalled();
+        expect(component.visibleColumnsChange.emit).toHaveBeenCalledWith(component['defaultColumns']);
+        expect(component['restoreDefaultEvent']).toBeFalse();
+      });
+
+      it('shouldn`t emit `visibleColumnsChange` if `allowsChangeSelectedColumns` is false', () => {
+        component['defaultColumns'] = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
+
+        const fakeVisible = ['test1', 'test2'];
+
+        spyOn(component, <any>'getVisibleColumns').and.returnValue(fakeVisible);
+        spyOn(component, <any>'allowsChangeSelectedColumns').and.returnValue(false);
+        spyOn(component.visibleColumnsChange, 'emit');
+
+        component['verifyRestoreValues']();
+
+        expect(component['getVisibleColumns']).toHaveBeenCalled();
+        expect(component['allowsChangeSelectedColumns']).toHaveBeenCalled();
+        expect(component.visibleColumnsChange.emit).not.toHaveBeenCalledWith(component['defaultColumns']);
+        expect(component['restoreDefaultEvent']).toBeFalse();
+      });
     });
 
-    it(`updatesControlValues: shouldn't set 'selectedColumns' with 'checkedColumns' if 'lastValueCheckedColumns' and 'checkedColumns' are 'undefined'`, () => {
-      component['lastValueCheckedColumns'] = undefined;
-      const checkedColumns = undefined;
+    describe('allowsChangeSelectedColumns:', () => {
+      it(`should call 'getVisibleColumns' and 'isEqualArrays' and should return true if 'defaultVisibleColumns' is different
+      from 'visibleColumns'`, () => {
+        component.columns = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
 
-      component['updatesControlValues'](checkedColumns);
+        const fakeDefaultVisibleColumns = ['test1', 'test2'];
 
-      expect(component['selectedColumns']).toEqual(undefined);
+        spyOn(component, <any>'getVisibleColumns').and.returnValue(fakeDefaultVisibleColumns);
+        spyOn(component, <any>'isEqualArrays').and.returnValue(false);
+
+        const result = component['allowsChangeSelectedColumns'](fakeDefaultVisibleColumns);
+
+        expect(component['getVisibleColumns']).toHaveBeenCalled();
+        expect(component['isEqualArrays']).toHaveBeenCalled();
+        expect(result).toBeTrue();
+      });
+
+      it(`should call 'getVisibleColumns' and 'isEqualArrays' and should return false if 'defaultVisibleColumns' is equal
+      'visibleColumns'`, () => {
+        component.columns = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
+
+        const fakeDefaultVisibleColumns = ['test1', 'test2'];
+
+        spyOn(component, <any>'getVisibleColumns').and.returnValue(fakeDefaultVisibleColumns);
+        spyOn(component, <any>'isEqualArrays').and.returnValue(true);
+
+        const result = component['allowsChangeSelectedColumns'](fakeDefaultVisibleColumns);
+
+        expect(component['getVisibleColumns']).toHaveBeenCalled();
+        expect(component['isEqualArrays']).toHaveBeenCalled();
+        expect(result).toBeFalse();
+      });
     });
 
-    it(`emitVisibleColumns: should set 'lastEmittedValue' if 'isUpdate' is true`, () => {
+    describe('verifyOnClose:', () => {
+      it(`should call 'emitVisibleColumns' if 'allowsEmission' is true`, () => {
+        spyOn(component, <any>'allowsEmission').and.returnValue(true);
+        spyOn(component, <any>'emitVisibleColumns');
+
+        component['verifyOnClose']();
+
+        expect(component['allowsEmission']).toHaveBeenCalled();
+        expect(component['emitVisibleColumns']).toHaveBeenCalled();
+      });
+
+      it(`shouldn't call 'emitVisibleColumns' if 'allowsEmission' is false`, () => {
+        spyOn(component, <any>'allowsEmission').and.returnValue(false);
+        spyOn(component, <any>'emitVisibleColumns');
+
+        component['verifyOnClose']();
+
+        expect(component['allowsEmission']).toHaveBeenCalled();
+        expect(component['emitVisibleColumns']).not.toHaveBeenCalled();
+      });
+    });
+
+    it(`emitVisibleColumns: should update 'lastEmittedValue' and should call 'changeVisibleColumns.emit'`, () => {
+      const fakeVisible = ['test1', 'test2'];
+      component.visibleColumns = fakeVisible;
       spyOn(component.changeVisibleColumns, 'emit');
-      spyOn(component, <any>'isUpdate').and.returnValue(true);
-      component['selectedColumns'] = ['initial'];
 
-      component.emitVisibleColumns();
+      component['verifyOnClose']();
 
-      expect(component.changeVisibleColumns.emit).toHaveBeenCalledWith(component['selectedColumns']);
-      expect(component['lastEmittedValue']).toEqual(['initial']);
+      expect(component['lastEmittedValue']).toEqual(fakeVisible);
+      expect(component.changeVisibleColumns.emit).toHaveBeenCalledWith(fakeVisible);
     });
 
-    it(`emitVisibleColumns: should set 'lastEmittedValue' if 'isFirstTime' is true`, () => {
-      spyOn(component.changeVisibleColumns, 'emit');
-      spyOn(component, <any>'isUpdate').and.returnValue(false);
-      spyOn(component, <any>'isFirstTime').and.returnValue(true);
-      component['selectedColumns'] = ['initial'];
-
-      component.emitVisibleColumns();
-
-      expect(component.changeVisibleColumns.emit).toHaveBeenCalledWith(component['selectedColumns']);
-      expect(component['lastEmittedValue']).toEqual(['initial']);
-    });
-
-    it(`isUpdate: should return true if it's an update`, () => {
-      spyOn(component, <any>'columnsAreEquals').and.returnValue(false);
-      component['selectedColumns'] = ['initial'];
-      component['lastEmittedValue'] = ['teste'];
-
-      const result = component['isUpdate'](component['selectedColumns'], component['lastEmittedValue']);
-
-      expect(result).toBeTrue();
-    });
-
-    it(`isUpdate: should return true if it's an update and 'columnsAreEquals' is false`, () => {
-      spyOn(component, <any>'columnsAreEquals').and.returnValue(false);
-      component['selectedColumns'] = ['initial', 'teste'];
-      component['lastEmittedValue'] = ['teste', 'initial'];
-
-      const result = component['isUpdate'](component['selectedColumns'], component['lastEmittedValue']);
-
-      expect(result).toBeTrue();
-    });
-
-    it(`isUpdate: should return false if 'columnsAreEquals' is true`, () => {
-      spyOn(component, <any>'columnsAreEquals').and.returnValue(true);
-      component['selectedColumns'] = ['initial', 'teste'];
-      component['lastEmittedValue'] = ['initial', 'teste'];
-
-      const result = component['isUpdate'](component['selectedColumns'], component['lastEmittedValue']);
-
-      expect(result).toBeFalse();
-    });
-
-    it(`isFirstTime: should return true if it's a first access`, () => {
-      spyOn(component, <any>'columnsAreEquals').and.returnValue(false);
-      component['selectedColumns'] = ['initial'];
-      component['lastValueCheckedColumns'] = ['teste'];
-      component['lastEmittedValue'] = undefined;
-
-      const result = component['isFirstTime'](
-        component['selectedColumns'],
-        component['lastEmittedValue'],
-        component['lastValueCheckedColumns']
-      );
-
-      expect(result).toBeTrue();
-    });
-
-    it(`isFirstTime: should return false if 'columnsAreEquals' is true`, () => {
-      spyOn(component, <any>'columnsAreEquals').and.returnValue(true);
-      component['selectedColumns'] = ['initial'];
-      component['lastValueCheckedColumns'] = ['initial'];
-      component['lastEmittedValue'] = undefined;
-
-      const result = component['isFirstTime'](
-        component['selectedColumns'],
-        component['lastEmittedValue'],
-        component['lastValueCheckedColumns']
-      );
-
-      expect(result).toBeFalse();
-    });
-
-    it(`isFirstTime: should return true if 'columnsAreEquals' is false`, () => {
-      spyOn(component, <any>'columnsAreEquals').and.returnValue(false);
-      component['selectedColumns'] = ['initial', 'teste'];
-      component['lastValueCheckedColumns'] = ['teste', 'initial'];
-      component['lastEmittedValue'] = undefined;
-
-      const result = component['isFirstTime'](
-        component['selectedColumns'],
-        component['lastEmittedValue'],
-        component['lastValueCheckedColumns']
-      );
-
-      expect(result).toBeTrue();
-    });
-
-    it(`columnsAreEquals: should return true if the current value is equal to the old value`, () => {
-      const oldValue = ['initial', 'teste'];
-      const newValue = ['teste', 'initial'];
-
-      const result = component['columnsAreEquals'](oldValue, newValue);
-
-      expect(result).toBeTrue();
-    });
-
-    it(`columnsAreEquals: should return false if the current value is different from the old value`, () => {
-      const oldValue = ['initial', 'teste'];
-      const newValue = ['initial'];
-
-      const result = component['columnsAreEquals'](oldValue, newValue);
-
-      expect(result).toBeFalse();
-    });
-
-    it(`columnsAreEquals: should return false if 'oldValue' is undefined`, () => {
-      const oldValue = undefined;
-      const newValue = ['initial'];
-
-      const result = component['columnsAreEquals'](oldValue, newValue);
-
-      expect(result).toBeFalsy();
-    });
-
-    it('restore: should call `updateColumnsOptions` with `defaultColumns`', () => {
-      spyOn(component, <any>'updateColumnsOptions');
-
-      component['defaultColumns'] = component.columns;
-
-      component.restore();
-
-      expect(component['updateColumnsOptions']).toHaveBeenCalledWith(component['defaultColumns']);
-    });
-
-    it('disableColumnsOptions: should disable columns that exceeds the maximum value of columns', fakeAsync(() => {
-      component.maxColumns = 2;
-      component.columnsOptions = undefined;
-
-      component.visibleColumns = ['id', 'initial'];
-
-      const columns = [
-        { value: 'id', label: 'Code' },
-        { value: 'initial', label: 'initial' },
-        { value: 'name', label: 'Name' },
-        { value: 'total', label: 'Total' },
-        { value: 'atualization', label: 'Atualization' }
+    it(`changePosition: Should change the column position up'`, () => {
+      component.columns = [
+        { property: 'id', label: 'Code' },
+        { property: 'initial', label: 'initial' },
+        { property: 'name', label: 'Name' }
       ];
 
-      const columnsOptionsExpected = [
-        { value: 'id', label: 'Code', disabled: false },
-        { value: 'initial', label: 'initial', disabled: false },
-        { value: 'name', label: 'Name', disabled: true },
-        { value: 'total', label: 'Total', disabled: true },
-        { value: 'atualization', label: 'Atualization', disabled: true }
+      component.changePosition({ option: { value: 'initial', label: 'initial' }, direction: 'up' });
+
+      expect(component.columns[0]).toEqual({ property: 'initial', label: 'initial' });
+    });
+
+    it(`changePosition: Should change the column position down'`, () => {
+      component.columns = [
+        { property: 'id', label: 'Code' },
+        { property: 'initial', label: 'initial' },
+        { property: 'name', label: 'Name' }
       ];
 
-      component['disableColumnsOptions'](columns);
+      component.changePosition({ option: { value: 'initial', label: 'initial' }, direction: 'down' });
 
-      tick();
-
-      expect(component.columnsOptions).toEqual(columnsOptionsExpected);
-    }));
-
-    it('disableColumnsOptions: should set `columnsOptions` with empty array if `columns` is undefined ', fakeAsync(() => {
-      component.columnsOptions = undefined;
-      const columns = undefined;
-      const columnsOptionsExpected = [];
-
-      component['disableColumnsOptions'](columns);
-
-      tick();
-
-      expect(component.columnsOptions).toEqual(columnsOptionsExpected);
-    }));
-
-    it(`getColumnTitleLabel: should return 'column.label' if it has 'column.label'`, () => {
-      const fakeColumn = { property: 'name', label: 'Name' };
-
-      expect(component['getColumnTitleLabel'](<any>fakeColumn)).toBe(fakeColumn.label);
+      expect(component.columns[component.columns.length - 1]).toEqual({ property: 'initial', label: 'initial' });
     });
 
-    it(`getColumnTitleLabel: should call 'capitalizeFirstLetter' to set 'getColumnTitleLabel' if 'column.label' is undefined`, () => {
-      const fakeColumn = { property: 'name' };
-      const label = 'Name';
+    describe('allowsEmission:', () => {
+      it(`should call 'getVisibleColumns' and should return true if 'isFirstTime' is true`, () => {
+        const fakeDefaultVisibleColumns = ['test1', 'test2'];
+        component.visibleColumns = undefined;
+        component['lastEmittedValue'] = undefined;
+        component['lastVisibleColumnsSelected'] = undefined;
 
-      spyOn(utilsFunctions, <any>'capitalizeFirstLetter').and.returnValue(label);
+        spyOn(component, <any>'getVisibleColumns').and.returnValue(fakeDefaultVisibleColumns);
+        spyOn(component, <any>'isUpdate').and.returnValue(false);
+        spyOn(component, <any>'isFirstTime').and.returnValue(true);
 
-      expect(component['getColumnTitleLabel'](fakeColumn)).toBe(label);
-      expect(utilsFunctions.capitalizeFirstLetter).toHaveBeenCalledWith(fakeColumn.property);
+        const result = component['allowsEmission']();
+
+        expect(component['getVisibleColumns']).toHaveBeenCalled();
+        expect(component['isUpdate']).toHaveBeenCalled();
+        expect(component['isFirstTime']).toHaveBeenCalled();
+        expect(result).toBeTrue();
+      });
+
+      it(`should call 'getVisibleColumns' and should return true if 'isUpdate' is true`, () => {
+        const fakeDefaultVisibleColumns = ['test1', 'test2'];
+        component.visibleColumns = fakeDefaultVisibleColumns;
+        component['lastEmittedValue'] = fakeDefaultVisibleColumns;
+        component['lastVisibleColumnsSelected'] = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
+
+        spyOn(component, <any>'getVisibleColumns').and.returnValue(fakeDefaultVisibleColumns);
+        spyOn(component, <any>'isUpdate').and.returnValue(true);
+        spyOn(component, <any>'isFirstTime').and.returnValue(false);
+
+        const result = component['allowsEmission']();
+
+        expect(component['getVisibleColumns']).toHaveBeenCalled();
+        expect(component['isUpdate']).toHaveBeenCalled();
+        expect(component['isFirstTime']).not.toHaveBeenCalled();
+        expect(result).toBeTrue();
+      });
+
+      it(`should call 'getVisibleColumns' and should return true if 'isUpdate' and 'isFirstTime' is true`, () => {
+        const fakeDefaultVisibleColumns = ['test1', 'test2'];
+        component.visibleColumns = fakeDefaultVisibleColumns;
+        component['lastEmittedValue'] = fakeDefaultVisibleColumns;
+        component['lastVisibleColumnsSelected'] = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
+
+        spyOn(component, <any>'getVisibleColumns').and.returnValue(fakeDefaultVisibleColumns);
+        spyOn(component, <any>'isUpdate').and.returnValue(true);
+        spyOn(component, <any>'isFirstTime').and.returnValue(true);
+
+        const result = component['allowsEmission']();
+
+        expect(component['getVisibleColumns']).toHaveBeenCalled();
+        expect(component['isUpdate']).toHaveBeenCalled();
+        expect(component['isFirstTime']).not.toHaveBeenCalled();
+        expect(result).toBeTrue();
+      });
+
+      it(`should call 'getVisibleColumns' and should return false if 'isUpdate' and 'isFirstTime' is false`, () => {
+        const fakeDefaultVisibleColumns = ['test1', 'test2'];
+        component.visibleColumns = fakeDefaultVisibleColumns;
+        component['lastEmittedValue'] = fakeDefaultVisibleColumns;
+        component['lastVisibleColumnsSelected'] = [
+          { property: 'test1', label: 'Code' },
+          { property: 'test2', label: 'initial' }
+        ];
+
+        spyOn(component, <any>'getVisibleColumns').and.returnValue(fakeDefaultVisibleColumns);
+        spyOn(component, <any>'isUpdate').and.returnValue(false);
+        spyOn(component, <any>'isFirstTime').and.returnValue(false);
+
+        const result = component['allowsEmission']();
+
+        expect(component['getVisibleColumns']).toHaveBeenCalled();
+        expect(component['isUpdate']).toHaveBeenCalled();
+        expect(component['isFirstTime']).toHaveBeenCalled();
+        expect(result).toBeFalse();
+      });
     });
 
-    it(`getColumnTitleLabel: should return false if 'column.label' and 'column.property' are undefined`, () => {
-      const fakeColumn = { value: 'name' };
+    describe('isFirstTime:', () => {
+      it(`should call 'isEqualArrays' and should return true`, () => {
+        const fakeUpdatedVisibleColumns = ['test1', 'test2'];
+        const fakeLastVisibleColumns = ['test1', 'test2', 'test3'];
+        component['lastEmittedValue'] = undefined;
 
-      spyOn(utilsFunctions, <any>'capitalizeFirstLetter').and.returnValue(false);
+        spyOn(component, <any>'isEqualArrays').and.returnValue(false);
 
-      expect(component['getColumnTitleLabel'](<any>fakeColumn)).toBeFalsy();
+        const result = component['isFirstTime'](fakeUpdatedVisibleColumns, fakeLastVisibleColumns);
+
+        expect(component['isEqualArrays']).toHaveBeenCalled();
+        expect(result).toBeTrue();
+      });
+
+      it(`shouldn't call 'isEqualArrays' and should return false if 'lastEmittedValue' is defined`, () => {
+        const fakeUpdatedVisibleColumns = ['test1', 'test2'];
+        const fakeLastVisibleColumns = ['test1', 'test2', 'test3'];
+        component['lastEmittedValue'] = fakeUpdatedVisibleColumns;
+
+        spyOn(component, <any>'isEqualArrays').and.returnValue(false);
+
+        const result = component['isFirstTime'](fakeUpdatedVisibleColumns, fakeLastVisibleColumns);
+
+        expect(component['isEqualArrays']).not.toHaveBeenCalled();
+        expect(result).toBeFalse();
+      });
+
+      it(`should call 'isEqualArrays' and should return false if 'isEqualArrays' return true`, () => {
+        const fakeUpdatedVisibleColumns = ['test1', 'test2'];
+        const fakeLastVisibleColumns = ['test1', 'test2'];
+        component['lastEmittedValue'] = undefined;
+
+        spyOn(component, <any>'isEqualArrays').and.returnValue(true);
+
+        const result = component['isFirstTime'](fakeUpdatedVisibleColumns, fakeLastVisibleColumns);
+
+        expect(component['isEqualArrays']).toHaveBeenCalled();
+        expect(result).toBeFalse();
+      });
+
+      it(`shouldn't call 'isEqualArrays' and should return false`, () => {
+        const fakeUpdatedVisibleColumns = ['test1', 'test2'];
+        const fakeLastVisibleColumns = ['test1', 'test2'];
+        component['lastEmittedValue'] = fakeUpdatedVisibleColumns;
+
+        spyOn(component, <any>'isEqualArrays').and.returnValue(true);
+
+        const result = component['isFirstTime'](fakeUpdatedVisibleColumns, fakeLastVisibleColumns);
+
+        expect(component['isEqualArrays']).not.toHaveBeenCalled();
+        expect(result).toBeFalse();
+      });
     });
 
-    it(`getVisibleColumns: should return visible columns`, () => {
-      const columns = [
-        { property: 'id', label: 'Code', visible: true },
-        { property: 'initial', label: 'initial', visible: true },
-        { property: 'name', label: 'Name', visible: false },
-        { property: 'total', label: 'Total', visible: false },
-        { property: 'atualization', label: 'Atualization', visible: true }
-      ];
+    describe('isUpdate:', () => {
+      it(`should call 'isEqualArrays' and should return true`, () => {
+        const fakeUpdatedVisibleColumns = ['test1', 'test2'];
+        const fakeLastEmittedValue = ['test1', 'test2', 'test3'];
+        component['lastEmittedValue'] = fakeLastEmittedValue;
 
-      const visibleColumns = ['id', 'initial', 'atualization'];
+        spyOn(component, <any>'isEqualArrays').and.returnValue(false);
 
-      component.maxColumns = 3;
+        const result = component['isUpdate'](fakeUpdatedVisibleColumns, fakeLastEmittedValue);
 
-      const result = component['getVisibleColumns'](columns);
+        expect(component['isEqualArrays']).toHaveBeenCalled();
+        expect(result).toBeTrue();
+      });
 
-      expect(result).toEqual(visibleColumns);
+      it(`should call 'isEqualArrays' and should return false if 'lastEmittedValue' is undefined`, () => {
+        const fakeUpdatedVisibleColumns = ['test1', 'test2'];
+        const fakeLastEmittedValue = [];
+        component['lastEmittedValue'] = undefined;
+
+        spyOn(component, <any>'isEqualArrays').and.returnValue(false);
+
+        const result = component['isUpdate'](fakeUpdatedVisibleColumns, fakeLastEmittedValue);
+
+        expect(component['isEqualArrays']).not.toHaveBeenCalled();
+        expect(result).toBeFalsy();
+      });
+
+      it(`should call 'isEqualArrays' and should return false if 'isEqualArrays' return true`, () => {
+        const fakeUpdatedVisibleColumns = ['test1', 'test2'];
+        const fakeLastEmittedValue = ['test1', 'test2'];
+        component['lastEmittedValue'] = fakeLastEmittedValue;
+
+        spyOn(component, <any>'isEqualArrays').and.returnValue(true);
+
+        const result = component['isUpdate'](fakeUpdatedVisibleColumns, fakeLastEmittedValue);
+
+        expect(component['isEqualArrays']).toHaveBeenCalled();
+        expect(result).toBeFalsy();
+      });
     });
 
-    it(`getVisibleColumns: should return two visible columns if 'maxColumns' is two`, () => {
-      const columns = [
-        { property: 'id', label: 'Code', visible: true },
-        { property: 'initial', label: 'initial', visible: true },
-        { property: 'name', label: 'Name', visible: false },
-        { property: 'total', label: 'Total', visible: false },
-        { property: 'atualization', label: 'Atualization', visible: true }
-      ];
+    describe('isEqualArrays:', () => {
+      it(`should return true if arrays are equals`, () => {
+        const first = ['test1', 'test2'];
+        const second = ['test1', 'test2'];
 
-      const visibleColumns = ['id', 'initial'];
+        const result = component['isEqualArrays'](first, second);
 
-      component.maxColumns = 2;
+        expect(result).toBeTrue();
+      });
 
-      const result = component['getVisibleColumns'](columns);
+      it(`should return false if arrays are diferrent`, () => {
+        const first = ['test1', 'test2'];
+        const second = ['test1', 'test2', 'teste3'];
 
-      expect(result).toEqual(visibleColumns);
+        const result = component['isEqualArrays'](first, second);
+
+        expect(result).toBeFalse();
+      });
+
+      it(`should return false if arrays are equals but they are in different order`, () => {
+        const first = ['test1', 'test2'];
+        const second = ['test2', 'test1'];
+
+        const result = component['isEqualArrays'](first, second);
+
+        expect(result).toBeFalse();
+      });
+
+      it(`should return true if arrays are undefined`, () => {
+        const first = undefined;
+        const second = undefined;
+
+        const result = component['isEqualArrays'](first, second);
+
+        expect(result).toBeTrue();
+      });
     });
 
-    it(`getVisibleColumns: should return one visible column if 'maxColumns' is two
-      and has only one column with visible equal to true `, () => {
-      const columns = [
-        { property: 'id', label: 'Code', visible: false },
-        { property: 'initial', label: 'initial', visible: true },
-        { property: 'name', label: 'Name', visible: false },
-        { property: 'total', label: 'Total', visible: false },
-        { property: 'atualization', label: 'Atualization', visible: false }
-      ];
+    it(`restore: should update 'restoreDefaultEvent' and should call 'getVisibleColumns' and 'checkChanges'`, () => {
+      const fakeDefaultVisibleColumns = ['test1', 'test2'];
 
-      const visibleColumns = ['initial'];
+      spyOn(component, <any>'getVisibleColumns').and.returnValue(fakeDefaultVisibleColumns);
+      spyOn(component, <any>'checkChanges');
+      spyOn(component.initialColumns, 'emit');
 
-      component.maxColumns = 2;
+      component['restore']();
 
-      const result = component['getVisibleColumns'](columns);
+      expect(component['getVisibleColumns']).toHaveBeenCalled();
+      expect(component['checkChanges']).toHaveBeenCalledWith(fakeDefaultVisibleColumns, true);
+      expect(component.initialColumns.emit).toHaveBeenCalled();
+    });
 
-      expect(result).toEqual(visibleColumns);
+    it(`restore: should emit 'changeFixedColumns' with empty array to signal fixed columns were cleared`, () => {
+      spyOn(component, <any>'getVisibleColumns').and.returnValue([]);
+      spyOn(component, <any>'checkChanges');
+      spyOn(component.initialColumns, 'emit');
+      spyOn(component.changeFixedColumns, 'emit');
+
+      component['restore']();
+
+      expect(component.changeFixedColumns.emit).toHaveBeenCalledWith([]);
+    });
+
+    it(`restore: should not emit 'changeFixedColumns' when hideActionFixedColumns is true`, () => {
+      spyOn(component, <any>'getVisibleColumns').and.returnValue([]);
+      spyOn(component, <any>'checkChanges');
+      spyOn(component.initialColumns, 'emit');
+      spyOn(component.changeFixedColumns, 'emit');
+      component.hideActionFixedColumns = true;
+
+      component['restore']();
+
+      expect(component.changeFixedColumns.emit).not.toHaveBeenCalled();
+    });
+
+    describe('disableColumnsOptions:', () => {
+      it('disableColumnsOptions: should return disable columns that exceeds the maximum value of columns', () => {
+        component.maxColumns = 2;
+        component.columnsOptions = undefined;
+
+        component.visibleColumns = ['id', 'initial'];
+
+        const columns = [
+          { value: 'id', label: 'Code' },
+          { value: 'initial', label: 'initial' },
+          { value: 'name', label: 'Name' },
+          { value: 'total', label: 'Total' },
+          { value: 'atualization', label: 'Atualization' }
+        ];
+
+        const columnsOptionsExpected = [
+          { value: 'id', label: 'Code', disabled: false },
+          { value: 'initial', label: 'initial', disabled: false },
+          { value: 'name', label: 'Name', disabled: true },
+          { value: 'total', label: 'Total', disabled: true },
+          { value: 'atualization', label: 'Atualization', disabled: true }
+        ];
+
+        const result = component['disableColumnsOptions'](columns);
+
+        expect(result).toEqual(columnsOptionsExpected);
+      });
+
+      it('disableColumnsOptions: should set `columnsOptions` with empty array if `columns` is undefined ', () => {
+        component.columnsOptions = undefined;
+        const columns = undefined;
+        const columnsOptionsExpected = [];
+
+        const result = component['disableColumnsOptions'](columns);
+
+        expect(result).toEqual(columnsOptionsExpected);
+      });
+    });
+
+    describe('getColumnTitleLabel:', () => {
+      it(`should return 'column.label' if it has 'column.label'`, () => {
+        const fakeColumn = { property: 'name', label: 'Name' };
+
+        expect(component['getColumnTitleLabel'](<any>fakeColumn)).toBe(fakeColumn.label);
+      });
+
+      it(`should call 'capitalizeFirstLetter' to set 'getColumnTitleLabel' if 'column.label' is undefined`, () => {
+        const fakeColumn = { property: 'name' };
+        const label = 'Name';
+
+        spyOn(utilsFunctions, <any>'capitalizeFirstLetter').and.returnValue(label);
+
+        expect(component['getColumnTitleLabel'](fakeColumn)).toBe(label);
+        expect(utilsFunctions.capitalizeFirstLetter).toHaveBeenCalledWith(fakeColumn.property);
+      });
+
+      it(`should return false if 'column.label' and 'column.property' are undefined`, () => {
+        const fakeColumn = { value: 'name' };
+
+        spyOn(utilsFunctions, <any>'capitalizeFirstLetter').and.returnValue(false);
+
+        expect(component['getColumnTitleLabel'](<any>fakeColumn)).toBeFalsy();
+      });
+    });
+
+    describe('getColumnTitleLabel:', () => {
+      it(`should return visible columns`, () => {
+        const columns = [
+          { property: 'id', label: 'Code', visible: true },
+          { property: 'initial', label: 'initial', visible: true },
+          { property: 'name', label: 'Name', visible: false },
+          { property: 'total', label: 'Total', visible: false },
+          { property: 'atualization', label: 'Atualization', visible: true }
+        ];
+
+        const visibleColumns = ['id', 'initial', 'atualization'];
+
+        component.maxColumns = 3;
+
+        const result = component['getVisibleColumns'](columns);
+
+        expect(result).toEqual(visibleColumns);
+      });
+
+      it(`should return two visible columns if 'maxColumns' is two`, () => {
+        const columns = [
+          { property: 'id', label: 'Code', visible: true },
+          { property: 'initial', label: 'initial', visible: true },
+          { property: 'name', label: 'Name', visible: false },
+          { property: 'total', label: 'Total', visible: false },
+          { property: 'atualization', label: 'Atualization', visible: true }
+        ];
+
+        const visibleColumns = ['id', 'initial'];
+
+        component.maxColumns = 2;
+
+        const result = component['getVisibleColumns'](columns);
+
+        expect(result).toEqual(visibleColumns);
+      });
+
+      it(`should return one visible column if 'maxColumns' is two
+        and has only one column with visible equal to true `, () => {
+        const columns = [
+          { property: 'id', label: 'Code', visible: false },
+          { property: 'initial', label: 'initial', visible: true },
+          { property: 'name', label: 'Name', visible: false },
+          { property: 'total', label: 'Total', visible: false },
+          { property: 'atualization', label: 'Atualization', visible: false }
+        ];
+
+        const visibleColumns = ['initial'];
+
+        component.maxColumns = 2;
+
+        const result = component['getVisibleColumns'](columns);
+
+        expect(result).toEqual(visibleColumns);
+      });
+    });
+
+    describe('isVisibleColumn:', () => {
+      it(`should return true if 'maxColumns' is two
+        and column with visible equal to true `, () => {
+        const column = { property: 'id', label: 'Code', visible: true };
+        const visibleColumns = ['id'];
+
+        component.maxColumns = 2;
+
+        const result = component['isVisibleColumn'](column, visibleColumns);
+
+        expect(result).toBeTrue();
+      });
+
+      it(`should return false if 'maxColumns' is two
+        and column with visible equal to fale `, () => {
+        const columns = { property: 'id', label: 'Code', visible: false };
+        const visibleColumns = ['id'];
+
+        component.maxColumns = 2;
+
+        const result = component['isVisibleColumn'](columns, visibleColumns);
+
+        expect(result).toBeFalse();
+      });
+
+      it(`should return false if 'maxColumns' is one`, () => {
+        const columns = { property: 'id', label: 'Code', visible: true };
+        const visibleColumns = ['id'];
+
+        component.maxColumns = 1;
+
+        const result = component['isVisibleColumn'](columns, visibleColumns);
+
+        expect(result).toBeFalse();
+      });
+
+      it(`should return false if 'column.type' is different from 'detail'`, () => {
+        const column = { property: 'id', label: 'Code', type: 'detail', visible: true };
+        const visibleColumns = ['id'];
+
+        component.maxColumns = 2;
+
+        const result = component['isVisibleColumn'](column, visibleColumns);
+
+        expect(result).toBeFalse();
+      });
     });
 
     it(`getVisibleTableColumns: should return table columns with visible property for visible columns`, () => {
@@ -485,6 +908,18 @@ describe('PoTableColumnManagerComponent:', () => {
       expect(result).toEqual(columnsExpected);
     });
 
+    it(`getVisibleTableColumns: should return table columns with visible property for visible columns`, () => {
+      component.columns = undefined;
+
+      const columnsExpected = [];
+
+      const visibleColumns = ['name', 'atualization'];
+
+      const result = component['getVisibleTableColumns'](visibleColumns);
+
+      expect(result).toEqual(columnsExpected);
+    });
+
     describe('initializeListeners:', () => {
       it(`should call 'renderer.listen' to set 'resizeListener'`, () => {
         const resizeListenerFunction = () => {};
@@ -497,13 +932,23 @@ describe('PoTableColumnManagerComponent:', () => {
       });
 
       it(`should call 'popover.close' into callback of renderer.listen`, () => {
-        component.popover = <any>{ close: () => {} };
+        component.popover = <any>{ close: () => {}, isHidden: false };
         spyOn(component.popover, 'close');
         spyOn(component['renderer'], 'listen').and.callFake((window, resize, callback: any) => callback());
 
         component['initializeListeners']();
 
         expect(component.popover.close).toHaveBeenCalled();
+      });
+
+      it(`shouldn't call 'popover.close' into callback of renderer.listen`, () => {
+        component.popover = <any>{ close: () => {}, isHidden: true };
+        spyOn(component.popover, 'close');
+        spyOn(component['renderer'], 'listen').and.callFake((window, resize, callback: any) => callback());
+
+        component['initializeListeners']();
+
+        expect(component.popover.close).not.toHaveBeenCalled();
       });
 
       it(`should not call 'popover.close' into callback of renderer.listen if it is undefined`, () => {
@@ -518,114 +963,113 @@ describe('PoTableColumnManagerComponent:', () => {
       });
     });
 
-    it(`isDisableColumn: should return true if 'visibleColumns' equals 'maxColumns' and 'visibleColumns'
-      does not contain 'property'`, () => {
-      component.visibleColumns = ['column 1', 'column 2'];
-      component.maxColumns = 2;
+    describe('isDisableColumn:', () => {
+      it(`isDisableColumn: should return true if 'visibleColumns' is greater than 'maxColumns' and 'visibleColumns'
+        does not contain 'property'`, () => {
+        component.visibleColumns = ['column 1', 'column 2', 'column 3'];
+        component.maxColumns = 2;
 
-      expect(component['isDisableColumn']('column 3')).toBe(true);
+        expect(component['isDisableColumn']('column 4')).toBe(true);
+      });
+
+      it(`isDisableColumn: should return false if 'visibleColumns' equals 'maxColumns' and 'visibleColumns' contain 'property'`, () => {
+        component.visibleColumns = ['column 1', 'column 2'];
+        component.maxColumns = 2;
+
+        expect(component['isDisableColumn']('column 2')).toBe(false);
+      });
+
+      it(`isDisableColumn: should return false if 'visibleColumns' is greater than 'maxColumns' and 'visibleColumns'
+        contain 'property'`, () => {
+        component.visibleColumns = ['column 1', 'column 2', 'column 3'];
+        component.maxColumns = 2;
+
+        expect(component['isDisableColumn']('column 3')).toBe(false);
+      });
+
+      it(`isDisableColumn: should return false if 'visibleColumns' is less than 'maxColumns'`, () => {
+        component.visibleColumns = ['column 1'];
+        component.maxColumns = 2;
+
+        expect(component['isDisableColumn']('column 2')).toBe(false);
+      });
     });
 
-    it(`isDisableColumn: should return true if 'visibleColumns' is greater than 'maxColumns' and 'visibleColumns'
-      does not contain 'property'`, () => {
-      component.visibleColumns = ['column 1', 'column 2', 'column 3'];
-      component.maxColumns = 2;
+    describe('mapTableColumnsToCheckboxOptions:', () => {
+      it(`mapTableColumnsToCheckboxOptions: should convert table columns to checkbox options and return it without detail columns`, () => {
+        const tableColumns = [
+          { property: 'id', label: 'Code', type: 'number', visible: true },
+          { property: 'initial', label: 'initial', type: 'detail', visible: true },
+          { property: 'name', label: 'Name', visible: true },
+          { property: 'total', label: 'Total', type: 'currency', format: 'BRL', visible: true },
+          { property: 'atualization', label: 'Atualization', type: 'date', visible: true }
+        ];
 
-      expect(component['isDisableColumn']('column 4')).toBe(true);
-    });
+        spyOn(component, <any>'isDisableColumn').and.returnValues(false, true, true, true);
 
-    it(`isDisableColumn: should return false if 'visibleColumns' equals 'maxColumns' and 'visibleColumns' contain 'property'`, () => {
-      component.visibleColumns = ['column 1', 'column 2'];
-      component.maxColumns = 2;
+        const checkboxOptions = [
+          { value: 'id', label: 'Code', disabled: false, visible: true },
+          { value: 'name', label: 'Name', disabled: true, visible: true },
+          { value: 'total', label: 'Total', disabled: true, visible: true },
+          { value: 'atualization', label: 'Atualization', disabled: true, visible: true }
+        ];
 
-      expect(component['isDisableColumn']('column 2')).toBe(false);
-    });
+        const result = component['mapTableColumnsToCheckboxOptions'](tableColumns);
 
-    it(`isDisableColumn: should return false if 'visibleColumns' is greater than 'maxColumns' and 'visibleColumns'
-      contain 'property'`, () => {
-      component.visibleColumns = ['column 1', 'column 2', 'column 3'];
-      component.maxColumns = 2;
+        expect(result).toEqual(checkboxOptions);
+      });
 
-      expect(component['isDisableColumn']('column 3')).toBe(false);
-    });
+      it(`mapTableColumnsToCheckboxOptions: should return empty array if 'tableColumns' is undefined`, () => {
+        const tableColumns = undefined;
 
-    it(`isDisableColumn: should return false if 'visibleColumns' is less than 'maxColumns'`, () => {
-      component.visibleColumns = ['column 1'];
-      component.maxColumns = 2;
+        const result = component['mapTableColumnsToCheckboxOptions'](tableColumns);
 
-      expect(component['isDisableColumn']('column 2')).toBe(false);
-    });
-
-    it(`mapTableColumnsToCheckboxOptions: should convert table columns to checkbox options and return it without detail columns`, () => {
-      const tableColumns = [
-        { property: 'id', label: 'Code', type: 'number' },
-        { property: 'initial', label: 'initial', type: 'detail' },
-        { property: 'name', label: 'Name' },
-        { property: 'total', label: 'Total', type: 'currency', format: 'BRL' },
-        { property: 'atualization', label: 'Atualization', type: 'date' }
-      ];
-
-      spyOn(component, <any>'isDisableColumn').and.returnValues(false, true, true, true);
-
-      const checkboxOptions = [
-        { value: 'id', label: 'Code', disabled: false },
-        { value: 'name', label: 'Name', disabled: true },
-        { value: 'total', label: 'Total', disabled: true },
-        { value: 'atualization', label: 'Atualization', disabled: true }
-      ];
-
-      const result = component['mapTableColumnsToCheckboxOptions'](tableColumns);
-
-      expect(result).toEqual(checkboxOptions);
-    });
-
-    it(`mapTableColumnsToCheckboxOptions: should return empty array if 'tableColumns' is undefined`, () => {
-      const tableColumns = undefined;
-
-      const result = component['mapTableColumnsToCheckboxOptions'](tableColumns);
-
-      expect(result).toEqual([]);
+        expect(result).toEqual([]);
+      });
     });
 
     describe(`onChangeColumns`, () => {
       it(`should set 'defaultColumns' with 'columns.currentValue' if 'defaultColumns' and ' currentValue' are different`, () => {
         component['defaultColumns'] = <any>['column 1'];
+        component['lastVisibleColumnsSelected'] = undefined;
 
         const columns = {
           firstChange: false,
           currentValue: ['column 3', 'column 4']
         };
 
-        spyOn(component, <any>'updateColumnsOptions');
+        spyOn(component, <any>'updateValues');
 
         component['onChangeColumns'](<any>columns);
 
         expect(component['defaultColumns']).toEqual(<any>columns.currentValue);
       });
 
-      it(`should set 'defaultColumns' with 'columns.currentValue' if 'firstChange' is true and 'currentValue' not is empty`, () => {
-        component['defaultColumns'] = <any>[];
+      it(`should set 'defaultColumns' with 'columns.currentValue' if 'lastVisibleColumnsSelected' is true and 'currentValue' not is empty`, () => {
+        component['defaultColumns'] = [];
+        component['lastVisibleColumnsSelected'] = undefined;
         const columns = {
           firstChange: true,
           currentValue: ['column 1']
         };
 
-        spyOn(component, <any>'updateColumnsOptions');
+        spyOn(component, <any>'updateValues');
 
         component['onChangeColumns'](<any>columns);
 
         expect(component['defaultColumns']).toEqual(<any>columns.currentValue);
       });
 
-      it(`should set 'defaultColumns' with empty array if 'firstChange' is true and 'currentValue' is undefined`, () => {
-        component['defaultColumns'] = <any>[];
+      it(`should set 'defaultColumns' with empty array if 'lastVisibleColumnsSelected' is true and 'currentValue' is undefined`, () => {
+        component['defaultColumns'] = [];
+        component['lastVisibleColumnsSelected'] = undefined;
 
         const columns = {
           firstChange: true,
           currentValue: undefined
         };
 
-        spyOn(component, <any>'updateColumnsOptions');
+        spyOn(component, <any>'updateValues');
 
         component['onChangeColumns'](<any>columns);
 
@@ -635,20 +1079,40 @@ describe('PoTableColumnManagerComponent:', () => {
       it(`shouldn't set 'defaultColumns' with 'columns.currentValue' if 'defaultColumns' and 'currentValue' is equal and 'firstChange'
       is false`, () => {
         component['defaultColumns'] = <any>['column 3', 'column 4'];
+        component['lastVisibleColumnsSelected'] = undefined;
 
         const columns = {
           firstChange: false,
           currentValue: ['column 3', 'column 4']
         };
 
-        spyOn(component, <any>'updateColumnsOptions');
+        spyOn(component, <any>'updateValues');
 
         component['onChangeColumns'](<any>columns);
 
         expect(component['defaultColumns']).not.toBe(<any>columns.currentValue);
       });
 
-      it(`should call 'updateColumnsOptions' with 'currentValue' if 'previousValue' and 'currentValue' are different`, () => {
+      it(`shouldn't set 'defaultColumns' if 'lastVisibleColumnsSelected' is true and 'currentValue' is undefined`, () => {
+        component['defaultColumns'] = [];
+        component['lastVisibleColumnsSelected'] = [
+          { property: 'name', label: 'Name' },
+          { property: 'total', label: 'Total' }
+        ];
+
+        const columns = {
+          firstChange: true,
+          currentValue: undefined
+        };
+
+        spyOn(component, <any>'updateValues');
+
+        component['onChangeColumns'](<any>columns);
+
+        expect(component['defaultColumns']).toEqual([]);
+      });
+
+      it(`should call 'updateValues' with 'currentValue' if 'previousValue' and 'currentValue' are different`, () => {
         const columns = {
           previousValue: [
             { property: 'name', label: 'Name' },
@@ -657,25 +1121,47 @@ describe('PoTableColumnManagerComponent:', () => {
           currentValue: [{ property: 'name', label: 'Name' }]
         };
 
-        spyOn(component, <any>'updateColumnsOptions');
+        spyOn(component, <any>'updateValues');
 
         component['onChangeColumns'](<any>columns);
 
-        expect(component['updateColumnsOptions']).toHaveBeenCalledWith(columns.currentValue);
+        expect(component['updateValues']).toHaveBeenCalledWith(columns.currentValue);
       });
 
-      it(`shouldn't call 'updateColumnsOptions' if 'previousValue' and ' currentValue' are equals`, () => {
+      it(`shouldn't call 'updateValues' if 'previousValue' and ' currentValue' are equals`, () => {
         const columns = {
           previousValue: [{ property: 'name', label: 'Name' }],
           currentValue: [{ property: 'name', label: 'Name' }]
         };
 
-        spyOn(component, <any>'updateColumnsOptions');
+        spyOn(component, <any>'updateValues');
 
         component['onChangeColumns'](<any>columns);
 
-        expect(component['updateColumnsOptions']).not.toHaveBeenCalled();
+        expect(component['updateValues']).not.toHaveBeenCalled();
       });
+    });
+
+    it(`updateValues: should update 'visibleColumns' and 'columnsOptions' and should call'getVisibleColumns',
+      'mapTableColumnsToCheckboxOptions', 'disableColumnsOptions' and 'checkChanges'`, () => {
+      const fakeCurrentValue = [{ property: 'name', label: 'Name' }];
+      const visible = ['name'];
+      const checkboxOptions = [{ value: 'name', label: 'Name', disabled: false }];
+      const columnsOptionsExpected = [{ value: 'id', label: 'Code', disabled: false }];
+
+      spyOn(component, <any>'getVisibleColumns').and.returnValue(visible);
+      spyOn(component, <any>'mapTableColumnsToCheckboxOptions').and.returnValue(checkboxOptions);
+      spyOn(component, <any>'disableColumnsOptions').and.returnValue(columnsOptionsExpected);
+      spyOn(component, <any>'checkChanges');
+
+      component['updateValues'](fakeCurrentValue);
+
+      expect(component['getVisibleColumns']).toHaveBeenCalled();
+      expect(component['mapTableColumnsToCheckboxOptions']).toHaveBeenCalled();
+      expect(component['disableColumnsOptions']).toHaveBeenCalled();
+      expect(component['checkChanges']).toHaveBeenCalled();
+      expect(component.visibleColumns).toEqual(visible);
+      expect(component.columnsOptions).toEqual(columnsOptionsExpected);
     });
 
     it('removeListeners: should call `resizeListener` if it`s defined', () => {
@@ -688,58 +1174,161 @@ describe('PoTableColumnManagerComponent:', () => {
       expect(component['resizeListener']).toHaveBeenCalled();
     });
 
-    describe('updateColumnsOptions:', () => {
-      const columns = [
-        { property: 'id', label: 'Code', type: 'number' },
-        { property: 'initial', label: 'initial', type: 'detail' },
-        { property: 'name', label: 'Name' },
-        { property: 'total', label: 'Total', type: 'currency', format: 'BRL' },
-        { property: 'atualization', label: 'Atualization', type: 'date' }
-      ];
-
-      it(`should call 'getVisibleColumns' with 'columns' to set 'visibleColumns'`, () => {
-        const visibleColumns = ['code', 'name'];
-        component.visibleColumns = undefined;
-
-        spyOn(component, <any>'getVisibleColumns').and.returnValue(visibleColumns);
-        spyOn(component, <any>'onChangeVisibleColumns');
-        spyOn(component, <any>'mapTableColumnsToCheckboxOptions');
-
-        component['updateColumnsOptions'](columns);
-
-        expect(component['getVisibleColumns']).toHaveBeenCalledWith(columns);
-        expect(component.visibleColumns).toEqual(visibleColumns);
-      });
-
-      it(`should call 'onChangeVisibleColumns' with 'visibleColumns'`, () => {
-        const visibleColumns = ['code', 'name'];
-        component.visibleColumns = undefined;
-
-        spyOn(component, <any>'getVisibleColumns').and.returnValue(visibleColumns);
-        spyOn(component, <any>'mapTableColumnsToCheckboxOptions');
-        spyOn(component, <any>'onChangeVisibleColumns');
-
-        component['updateColumnsOptions'](columns);
-
-        expect(component['onChangeVisibleColumns']).toHaveBeenCalledWith(visibleColumns);
-      });
-
-      it(`should call 'mapTableColumnsToCheckboxOptions' with 'columns' to set 'columnsOptions'`, () => {
-        const columnsOptions = [
-          { value: 'id', label: 'Code', disabled: false },
-          { value: 'name', label: 'Name', disabled: true },
-          { value: 'total', label: 'Total', disabled: true },
-          { value: 'atualization', label: 'Atualization', disabled: true }
+    describe('emitColumnFixed', () => {
+      it(`should emit visibleColumnsChange with new column and add fixed to option`, () => {
+        component.columns = [
+          {
+            property: 'Name',
+            visible: true
+          },
+          {
+            property: 'City',
+            visible: true
+          }
         ];
+        spyOn(component.visibleColumnsChange, 'emit');
 
-        spyOn(component, <any>'getVisibleColumns');
-        spyOn(component, <any>'onChangeVisibleColumns');
-        spyOn(component, <any>'mapTableColumnsToCheckboxOptions').and.returnValue(columnsOptions);
+        component.emitColumnFixed({
+          property: 'City',
+          value: 'City',
+          visible: true,
+          fixed: true
+        });
 
-        component['updateColumnsOptions'](columns);
+        expect(component.columns).toEqual([
+          {
+            property: 'City',
+            visible: true,
+            fixed: true
+          },
+          {
+            property: 'Name',
+            visible: true
+          }
+        ]);
 
-        expect(component['mapTableColumnsToCheckboxOptions']).toHaveBeenCalledWith(columns);
-        expect(component.columnsOptions).toEqual(columnsOptions);
+        expect(component.visibleColumnsChange.emit).toHaveBeenCalled();
+      });
+
+      it(`should emit visibleColumnsChange with new column and remove fixed option`, () => {
+        component.columns = [
+          {
+            property: 'Name',
+            visible: true,
+            fixed: true
+          },
+          {
+            property: 'Age',
+            visible: true,
+            fixed: true
+          },
+          {
+            property: 'City',
+            visible: true,
+            fixed: true
+          }
+        ];
+        spyOn(component.visibleColumnsChange, 'emit');
+
+        component.emitColumnFixed({
+          property: 'Age',
+          value: 'Age',
+          visible: true,
+          fixed: false
+        });
+
+        expect(component.columns).toEqual([
+          {
+            property: 'Name',
+            visible: true,
+            fixed: true
+          },
+          {
+            property: 'City',
+            visible: true,
+            fixed: true
+          },
+          {
+            property: 'Age',
+            visible: true,
+            fixed: false
+          }
+        ]);
+
+        expect(component.visibleColumnsChange.emit).toHaveBeenCalled();
+      });
+
+      it(`should emit changeFixedColumns with fixed column properties when a column is fixed`, () => {
+        component.columns = [
+          { property: 'Name', visible: true },
+          { property: 'City', visible: true }
+        ];
+        spyOn(component.changeFixedColumns, 'emit');
+
+        component.emitColumnFixed({ property: 'City', value: 'City', visible: true, fixed: true });
+
+        expect(component.changeFixedColumns.emit).toHaveBeenCalledWith(['City']);
+      });
+
+      it(`should emit changeFixedColumns with remaining fixed columns when a column is unfixed`, () => {
+        component.columns = [
+          { property: 'Name', visible: true, fixed: true },
+          { property: 'Age', visible: true, fixed: true },
+          { property: 'City', visible: true, fixed: true }
+        ];
+        spyOn(component.changeFixedColumns, 'emit');
+
+        component.emitColumnFixed({ property: 'Age', value: 'Age', visible: true, fixed: false });
+
+        expect(component.changeFixedColumns.emit).toHaveBeenCalledWith(['Name', 'City']);
+      });
+
+      it(`should emit changeFixedColumns with empty array when no columns are fixed`, () => {
+        component.columns = [
+          { property: 'Name', visible: true },
+          { property: 'City', visible: true }
+        ];
+        spyOn(component.changeFixedColumns, 'emit');
+
+        component.emitColumnFixed(null);
+
+        expect(component.changeFixedColumns.emit).toHaveBeenCalledWith([]);
+      });
+
+      it(`should not emit changeFixedColumns when hideActionFixedColumns is true`, () => {
+        component.columns = [
+          { property: 'Name', visible: true },
+          { property: 'City', visible: true }
+        ];
+        component.hideActionFixedColumns = true;
+        spyOn(component.changeFixedColumns, 'emit');
+
+        component.emitColumnFixed({ property: 'City', value: 'City', visible: true, fixed: true });
+
+        expect(component.changeFixedColumns.emit).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('stringify', () => {
+      it(`should return stringify value with no difference`, () => {
+        const columns: Array<PoTableColumn> = [{ icons: [{ value: 'value', tooltip: 'tooltip' }] }];
+        const result = '[{"icons":[{"value":"value","tooltip":"tooltip"}]}]';
+        const filter = component['stringify'](columns);
+        expect(filter).toEqual(result);
+      });
+
+      it('should return stringify value with difference by filtered key', () => {
+        const columns: Array<PoTableColumn> = [{ icons: [{ icon: 'icon', value: 'value', tooltip: 'tooltip' }] }];
+        const result = '[{"icons":[{"value":"value","tooltip":"tooltip"}]}]';
+        const filter = component['stringify'](columns);
+        expect(filter).toEqual(result);
+      });
+
+      it('should return stringify value with filter without searchService', () => {
+        const columns: Array<any> = [{ property: 'test' }, { searchService: 'service/test' }];
+        const result = '[{"property":"test"},{}]';
+        const filter = component['stringify'](columns);
+        expect(filter).toEqual(result);
       });
     });
   });

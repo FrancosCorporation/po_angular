@@ -1,12 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RouterModule } from '@angular/router';
 
-import * as UtilsFunctions from './../../utils/util';
-import { configureTestSuite } from './../../util-test/util-expect.spec';
+import { PoUtils as UtilsFunctions } from './../../utils/util';
 
 import { PoInfoBaseComponent } from './po-info-base.component';
-import { PoInfoComponent } from './po-info.component';
 import { PoInfoOrientation } from './po-info-orietation.enum';
+import { PoInfoComponent } from './po-info.component';
 
 describe('PoInfoComponent', () => {
   let component: PoInfoComponent;
@@ -14,14 +13,12 @@ describe('PoInfoComponent', () => {
 
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      imports: [RouterModule.forRoot([], { relativeLinkResolution: 'legacy' })],
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [RouterModule.forRoot([], {})],
       declarations: [PoInfoComponent]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoInfoComponent);
     component = fixture.componentInstance;
 
@@ -182,34 +179,6 @@ describe('PoInfoComponent', () => {
       fixture.detectChanges();
 
       expect(nativeElement.querySelector('.po-text-nowrap')).toBeTruthy();
-    });
-
-    it('should find `a.po-info-link` if `component.url` is truthy', () => {
-      component.value = 'John Doe';
-      component.url = 'http://po-ui.io';
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('a.po-info-link[target=_blank]')).toBeTruthy();
-    });
-
-    it('shouldn`t find `a.po-info-link` if `component.url` is falsy', () => {
-      component.value = 'John Doe';
-      component.url = '';
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('a.po-info-link')).toBeNull();
-    });
-
-    it('should find `a.po-info-link` and not find `a.po-info-link[target=_blank]` if URL is an internal link ', () => {
-      component.value = 'John Doe';
-      component.url = '/customers';
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('a.po-info-link[target=_blank]')).toBeNull();
-      expect(nativeElement.querySelector('a.po-info-link')).toBeTruthy();
     });
   });
 });

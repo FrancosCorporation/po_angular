@@ -4,15 +4,16 @@ import { PoModalComponent } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-widget-card',
-  templateUrl: './sample-po-widget-card.component.html'
+  templateUrl: './sample-po-widget-card.component.html',
+  standalone: false
 })
 export class SamplePoWidgetCardComponent implements OnInit {
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+
   help: string;
   label: string;
   technologies: Array<string> = ['Angular', 'Typescript', 'React', 'Babel', 'Jasmine', 'Vue'];
   value: string;
-
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
 
   ngOnInit() {
     this.showAngular();

@@ -1,4 +1,4 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { EventEmitter, Input, Output, Directive, output } from '@angular/core';
 
 import { convertToBoolean, uuid } from '../../../utils/util';
 
@@ -10,16 +10,58 @@ import { convertToBoolean, uuid } from '../../../utils/util';
  * Com este componente é possível atribuir um rótulo para auxiliar na identificação do conteúdo, ativar para que o mesmo seja exibido,
  * desabilitar para impossibilitar o acesso, bem como ocultar para indisponibilizar a aba.
  *
- * > Para controlar a navegação entre diversas abas, utilizar o componente [`po-tabs`](/documentation/po-tabs).
+ * > Para controlar a navegação entre diversas abas, utilizar o componente [`po-tabs`](/documentation/po-tabs) ou [`po-context-tabs`](/documentation/po-context-tabs).
  */
 @Directive()
 export abstract class PoTabBaseComponent {
+  /** Rótulo da aba. */
+  @Input('p-label') label: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Esconde o botão de fechar a aba.
+   *
+   * > Atenção: Propriedade disponível somente no `po-context-tabs`.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-close', transform: convertToBoolean }) hideClose: boolean = false;
+
+  /** ID da Tab */
+  @Input('id') id: string = uuid();
+
+  /** Método disparado ao clicar na aba. */
+  @Output('p-click') click = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao clicar no botão de fechar a aba.
+   *
+   * > Atenção: Propriedade disponível somente no `po-context-tabs`.
+   *
+   */
+  @Output('p-close-tab') closeTab = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento emitido quando a aba é ativada.
+   * Emite a instância do componente da aba que foi ativada.
+   */
+  activatedTab = output<PoTabBaseComponent>({ alias: 'p-activated-tab' });
+
   private _active?: boolean = false;
   private _disabled?: boolean = false;
   private _hide?: boolean = false;
-
-  // ID da aba
-  id?: string = uuid();
+  widthButton;
 
   /**
    * @optional
@@ -65,6 +107,8 @@ export abstract class PoTabBaseComponent {
    *
    * Oculta a aba.
    *
+   * > Atenção: Para correto funcionamento do componente, indicamos essa propriedade para esconder e exibir e não *ngIf.
+   *
    * @default `false`
    */
   @Input('p-hide') set hide(hide: boolean) {
@@ -74,12 +118,6 @@ export abstract class PoTabBaseComponent {
   get hide(): boolean {
     return this._hide;
   }
-
-  /** Rótulo da aba. */
-  @Input('p-label') label: string;
-
-  /** Método disparado ao clicar na aba. */
-  @Output('p-click') click = new EventEmitter();
 
   protected abstract setDisplayOnActive();
 }

@@ -7,7 +7,7 @@ import { throwError } from 'rxjs';
 
 import { PoFieldModule, PoI18nPipe, PoModalModule } from '@po-ui/ng-components';
 
-import * as utilsFunctions from './../../utils/util';
+import { PoUtils as utilsFunctions } from './../../utils/util';
 import { getObservable } from './../../util-test/util-expect.spec';
 
 import { PoModalPasswordRecoveryComponent } from './po-modal-password-recovery.component';
@@ -15,6 +15,8 @@ import { PoModalPasswordRecoveryErrorMessageComponent } from './po-modal-passwor
 import { PoModalPasswordRecoveryModalContent } from './enums/po-modal-password-recovery-modal-content.enum';
 import { PoModalPasswordRecoveryService } from './po-modal-password-recovery.service';
 import { PoModalPasswordRecoveryType } from './enums/po-modal-password-recovery-type.enum';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('PoModalPasswordRecoveryComponent:', () => {
   let component: PoModalPasswordRecoveryComponent;
@@ -22,15 +24,18 @@ describe('PoModalPasswordRecoveryComponent:', () => {
   let debugElement;
   const fakeSubscription = <any>{ unsubscribe: () => {} };
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [FormsModule, RouterTestingModule.withRoutes([]), PoFieldModule, PoModalModule],
-        declarations: [PoModalPasswordRecoveryErrorMessageComponent, PoModalPasswordRecoveryComponent],
-        providers: [PoI18nPipe, PoModalPasswordRecoveryService]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoModalPasswordRecoveryErrorMessageComponent, PoModalPasswordRecoveryComponent],
+      imports: [FormsModule, RouterTestingModule.withRoutes([]), PoFieldModule, PoModalModule],
+      providers: [
+        PoI18nPipe,
+        PoModalPasswordRecoveryService,
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting()
+      ]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoModalPasswordRecoveryComponent);
@@ -251,6 +256,7 @@ describe('PoModalPasswordRecoveryComponent:', () => {
         component.literals.closeButton,
         component['submitAction'],
         component.literals.resendEmailButton,
+        component.componentsSize,
         false
       );
     });
@@ -278,6 +284,7 @@ describe('PoModalPasswordRecoveryComponent:', () => {
         component.literals.continueButton,
         component['cancelAction'],
         component.literals.cancelButton,
+        component.componentsSize,
         true
       );
       expect(component.formModelChangesCheck).toHaveBeenCalledWith(component.smsCodeForm);
@@ -488,6 +495,7 @@ describe('PoModalPasswordRecoveryComponent:', () => {
         primarylabel: '',
         secondaryAction: jasmine.any(Function),
         secondaryLabel: '',
+        componentsSize: undefined,
         disabled: true
       };
 
@@ -496,6 +504,7 @@ describe('PoModalPasswordRecoveryComponent:', () => {
         fakeThis.primarylabel,
         fakeThis.secondaryAction,
         fakeThis.secondaryLabel,
+        fakeThis.componentsSize,
         fakeThis.disabled
       );
 
@@ -512,6 +521,7 @@ describe('PoModalPasswordRecoveryComponent:', () => {
         primarylabel: '',
         secondaryAction: () => {},
         secondaryLabel: '',
+        componentsSize: undefined,
         disabled: true
       };
 
@@ -523,6 +533,7 @@ describe('PoModalPasswordRecoveryComponent:', () => {
         fakeThis.primarylabel,
         fakeThis.secondaryAction,
         fakeThis.secondaryLabel,
+        fakeThis.componentsSize,
         fakeThis.disabled
       );
 
@@ -1047,7 +1058,7 @@ describe('PoModalPasswordRecoveryComponent:', () => {
       expect(expectedContent.innerHTML).not.toContain(component.emailModalPhrases.firstPhrase);
     });
 
-    it('should contain `po-field-container-error-text` class if `invalidEmail` and control are true', () => {
+    it('should contain `po-field-error-message` class if `invalidEmail` and control are true', () => {
       component.control = <any>{
         dirty: true
       };
@@ -1056,10 +1067,10 @@ describe('PoModalPasswordRecoveryComponent:', () => {
       component.recoveryModalElement.open();
       fixture.detectChanges();
 
-      expect(debugElement.querySelector('.po-field-container-error-text')).toBeTruthy();
+      expect(debugElement.querySelector('.po-field-error-message')).toBeTruthy();
     });
 
-    it('shouldn`t contain `po-field-container-error-text` class if `invalidEmail` is false', () => {
+    it('shouldn`t contain `po-field-error-message` class if `invalidEmail` is false', () => {
       component.control = <any>{
         dirty: true
       };
@@ -1068,10 +1079,10 @@ describe('PoModalPasswordRecoveryComponent:', () => {
       component.recoveryModalElement.open();
       fixture.detectChanges();
 
-      expect(debugElement.querySelector('.po-field-container-error-text')).toBeFalsy();
+      expect(debugElement.querySelector('.po-field-error-message')).toBeFalsy();
     });
 
-    it('shouldn`t contain `po-field-container-error-text` class if `showCustomCodeError` is false', () => {
+    it('shouldn`t contain `po-field-error-message` class if `showCustomCodeError` is false', () => {
       component.modalType = PoModalPasswordRecoveryModalContent.SMSCode;
       component.type = PoModalPasswordRecoveryType.Email;
       component.showCustomCodeError = false;
@@ -1079,10 +1090,10 @@ describe('PoModalPasswordRecoveryComponent:', () => {
       component.recoveryModalElement.open();
       fixture.detectChanges();
 
-      expect(debugElement.querySelector('.po-field-container-error-text')).toBeFalsy();
+      expect(debugElement.querySelector('.po-field-error-message')).toBeFalsy();
     });
 
-    it('should contain `po-field-container-error-text` class if `showCustomCodeError` is true', () => {
+    it('should contain `po-field-error-message` class if `showCustomCodeError` is true', () => {
       component.modalType = PoModalPasswordRecoveryModalContent.SMSCode;
       component.type = PoModalPasswordRecoveryType.Email;
       component.showCustomCodeError = true;
@@ -1090,7 +1101,7 @@ describe('PoModalPasswordRecoveryComponent:', () => {
       component.recoveryModalElement.open();
       fixture.detectChanges();
 
-      expect(debugElement.querySelector('.po-field-container-error-text')).toBeTruthy();
+      expect(debugElement.querySelector('.po-field-error-message')).toBeTruthy();
     });
   });
 });

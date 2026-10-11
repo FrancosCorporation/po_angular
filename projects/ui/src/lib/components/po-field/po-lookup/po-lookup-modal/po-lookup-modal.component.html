@@ -2,68 +2,105 @@
   p-click-out="false"
   p-hide-close="false"
   p-size="lg"
+  [p-components-size]="size"
   [p-primary-action]="isAdvancedFilter ? primaryActionAdvancedFilter : primaryAction"
   [p-secondary-action]="isAdvancedFilter ? secondaryActionAdvancedFilter : secondaryAction"
   [p-title]="isAdvancedFilter ? advancedFilterModalTitle : title"
 >
-  <div [hidden]="isAdvancedFilter">
+  <div [hidden]="isAdvancedFilter && advancedFilters.length > 0">
     <po-field-container class="po-lookup-header po-pull-right" [p-optional]="false">
       <div class="po-lookup-filter-content">
         <div class="po-field-icon-container-right">
-          <span #iconLookup class="po-icon po-field-icon po-icon-search" (click)="search()"> </span>
+          <po-icon
+            #iconLookup
+            p-icon="ICON_SEARCH"
+            class="po-field-icon po-icon-input"
+            [class.po-field-icon-aa]="size === 'small'"
+            (click)="search()"
+          >
+          </po-icon>
         </div>
 
         <input
           #inpsearch
           class="po-input po-input-icon-right"
+          [attr.p-size]="size"
           name="contentSearch"
           [(ngModel)]="searchValue"
           [placeholder]="literals.modalPlaceholder"
+          (keydown.enter)="search()"
           type="text"
         />
       </div>
 
-      <div *ngIf="advancedFilters && advancedFilters.length > 0" class="po-lookup-advanced-search">
-        <span
-          class="po-lookup-advanced-search-link"
-          tabindex="0"
-          (click)="onAdvancedFilter()"
-          (keydown.enter)="onAdvancedFilter()"
-          tabindex="0"
-        >
-          {{ literals.modalAdvancedSearch }}
-        </span>
-      </div>
+      @if (advancedFilters && advancedFilters.length > 0) {
+        <div class="po-lookup-advanced-search">
+          <span
+            class="po-lookup-advanced-search-link"
+            tabindex="0"
+            (click)="onAdvancedFilter()"
+            (keydown.enter)="onAdvancedFilter()"
+          >
+            {{ literals.modalAdvancedSearch }}
+          </span>
+        </div>
+      }
     </po-field-container>
 
     <!-- DISCLAIMER -->
-    <po-disclaimer-group
-      class="po-md-12"
-      *ngIf="!!disclaimerGroup"
-      [p-disclaimers]="disclaimerGroup?.disclaimers"
-      [p-title]="disclaimerGroup?.title"
-      (p-change)="onChangeDisclaimerGroup()"
-    >
-    </po-disclaimer-group>
-
-    <div class="po-row po-lookup-container-table" [style.height.px]="containerHeight">
-      <po-table
+    @if (!!disclaimerGroup) {
+      <po-disclaimer-group
         class="po-md-12"
-        p-selectable="true"
-        p-hide-detail="true"
-        p-single-select="true"
-        p-sort="true"
+        [p-disclaimers]="disclaimerGroup?.disclaimers"
+        [p-title]="disclaimerGroup?.title"
+        (p-change)="onChangeDisclaimerGroup()"
+      >
+      </po-disclaimer-group>
+    }
+
+    <div class="po-row po-lookup-container-table" [attr.data-multiple]="multiple">
+      <po-table
+        #poTable
+        class="po-md-12"
+        [p-components-size]="size"
+        [p-selectable]="true"
+        [p-hide-detail]="true"
+        [p-single-select]="!multiple"
+        [p-hide-action-fixed-columns]="true"
+        [p-sort]="true"
         [p-columns]="columns"
         [p-height]="tableHeight"
+        [p-hide-columns-manager]="hideColumnsManager"
         [p-items]="items"
         [p-literals]="tableLiterals"
         [p-loading]="isLoading"
         [p-show-more-disabled]="!hasNext"
+        [p-infinite-scroll]="infiniteScroll"
+        [p-spacing]="spacing"
+        [p-text-wrap]="textWrap"
+        [p-virtual-scroll]="virtualScroll"
+        (p-selected)="onSelect($event)"
+        (p-unselected)="onUnselect($event)"
+        (p-all-selected)="onAllSelected($event)"
+        (p-all-unselected)="onAllUnselected($event)"
         (p-show-more)="showMoreEvent()"
         (p-sort-by)="sortBy($event)"
+        (p-change-visible-columns)="changeVisibleColumns.emit($event)"
+        (p-restore-column-manager)="columnRestoreManager.emit($event)"
       >
       </po-table>
     </div>
+
+    <!-- DISCLAIMER -->
+    @if (multiple) {
+      <po-disclaimer-group
+        class="po-md-12"
+        [p-disclaimers]="selecteds"
+        (p-remove)="onUnselectFromDisclaimer($event.removedDisclaimer)"
+        (p-remove-all)="onAllUnselectedTag($event)"
+      >
+      </po-disclaimer-group>
+    }
   </div>
   <div [hidden]="!isAdvancedFilter">
     <ng-container #container> </ng-container>

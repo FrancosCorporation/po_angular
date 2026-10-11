@@ -1,56 +1,68 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { PoModalComponent, PoTableColumn, PoTableColumnSort, PoTableColumnLabel } from '@po-ui/ng-components';
+import { PoModalComponent, PoTableColumn, PoTableColumnLabel, PoTableColumnSort } from '@po-ui/ng-components';
 
-import { SamplePoTableComponentsService } from './sample-po-table-components.service';
 import { SamplePoTableComponentStatus } from './sample-po-table-components.enum';
+import { SamplePoTableComponentsService } from './sample-po-table-components.service';
 
 @Component({
   selector: 'sample-po-table-components',
   templateUrl: './sample-po-table-components.component.html',
   styleUrls: ['./sample-po-table-components.component.css'],
-  providers: [SamplePoTableComponentsService]
+  providers: [SamplePoTableComponentsService],
+  standalone: false
 })
-export class SamplePoTableComponentsComponent {
+export class SamplePoTableComponentsComponent implements OnInit {
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+
   extraInformation: any;
-  items: Array<any> = this.sampleComponents.getItems();
+  items: Array<any>;
   showMoreDisabled: boolean = false;
   title: any;
   isLoading: boolean = false;
 
   public readonly columns: Array<PoTableColumn> = [
     {
-      property: 'status',
+      property: 'component.status',
       type: 'label',
+      label: 'Status',
       width: '5%',
       labels: <Array<PoTableColumnLabel>>[
         {
           value: SamplePoTableComponentStatus.Stable,
-          color: 'color-11',
+          color: 'caption-tag-13',
           label: 'Stable',
+          textColor: 'white',
           tooltip: 'Published component'
         },
         {
           value: SamplePoTableComponentStatus.Experimental,
-          color: 'color-08',
+          color: 'caption-tag-08',
           label: 'Experimental',
+          textColor: 'white',
           tooltip: 'Component in homologation'
         },
         {
           value: SamplePoTableComponentStatus.RoadMap,
-          color: 'color-07',
+          color: 'caption-tag-03',
           label: 'Roadmap',
+          textColor: 'white',
           tooltip: 'Component in roadmap'
         }
       ]
     },
-    { property: 'component', type: 'link' },
-    { property: 'type', label: 'Type', type: 'columnTemplate', width: '10%' },
-    { property: 'description', color: this.experimentalColor.bind(this) },
     {
-      property: 'extra',
+      property: 'component.name',
+      label: 'Name',
+      type: 'link'
+    },
+    { property: 'component.type', label: 'Type', type: 'columnTemplate', width: '10%' },
+    { property: 'component.description', label: 'Descrição', color: this.experimentalColor.bind(this) },
+    {
+      property: 'component.extra',
       label: 'Extras',
+      width: '10%',
       type: 'link',
       tooltip: 'Additional details',
       action: (value, row) => {
@@ -59,21 +71,22 @@ export class SamplePoTableComponentsComponent {
       disabled: this.canShowExtras.bind(this)
     },
     {
-      property: 'favorite',
+      property: 'component.favorite',
       label: 'Actions',
       type: 'icon',
+      sortable: false,
       icons: [
         {
           action: this.favorite.bind(this),
           color: this.isFavorite.bind(this),
-          icon: 'po-icon-star',
+          icon: 'an an-star',
           tooltip: 'Favorite',
           value: 'favorite'
         },
         {
           action: this.goToDocumentation.bind(this),
           disabled: this.canGoToDocumentation.bind(this),
-          icon: 'po-icon-export',
+          icon: 'an an-arrow-square-out',
           tooltip: 'Click to go to documentation',
           value: 'documentation'
         }
@@ -81,12 +94,17 @@ export class SamplePoTableComponentsComponent {
     }
   ];
 
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+  constructor(
+    public sampleComponents: SamplePoTableComponentsService,
+    private router: Router
+  ) {}
 
-  constructor(public sampleComponents: SamplePoTableComponentsService, private router: Router) {}
+  ngOnInit(): void {
+    this.items = this.sampleComponents.getItems();
+  }
 
   experimentalColor(row) {
-    return row.status === SamplePoTableComponentStatus.Experimental ? 'color-08' : 'color-11';
+    return row?.component?.status === SamplePoTableComponentStatus.Experimental ? 'caption-tag-08' : 'caption-tag-13';
   }
 
   extras(value, row) {
@@ -97,7 +115,7 @@ export class SamplePoTableComponentsComponent {
   }
 
   goToDocumentation(row) {
-    this.router.navigate([row.link]);
+    this.router.navigate([row?.component?.link]);
   }
 
   showMore(sort: PoTableColumnSort) {
@@ -113,16 +131,20 @@ export class SamplePoTableComponentsComponent {
     this.items = this.getItems(sort);
   }
 
+  public showAlert(msg): void {
+    alert(msg);
+  }
+
   private canGoToDocumentation(row) {
-    return row.status !== SamplePoTableComponentStatus.Stable;
+    return row?.component?.status !== SamplePoTableComponentStatus.Stable;
   }
 
   private canShowExtras(row: any) {
-    return row.status !== SamplePoTableComponentStatus.Stable || row.extras.length === 0;
+    return row?.component?.status !== SamplePoTableComponentStatus.Stable || row?.component?.extras.length === 0;
   }
 
   private favorite(row) {
-    row.isFavorite = !row.isFavorite;
+    row.component.isFavorite = !row.component.isFavorite;
   }
 
   private getItems(sort: PoTableColumnSort) {
@@ -130,10 +152,6 @@ export class SamplePoTableComponentsComponent {
   }
 
   private isFavorite(row) {
-    return row.isFavorite ? 'color-08' : 'color-11';
-  }
-
-  public showAlert(msg): void {
-    alert(msg);
+    return row?.component?.isFavorite ? 'caption-tag-08' : 'caption-tag-13';
   }
 }

@@ -1,7 +1,7 @@
-import { HttpTestingController, HttpClientTestingModule } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
-
 import { PoLookupFilterService } from './po-lookup-filter.service';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('PoLookupFilterService', () => {
   let service: PoLookupFilterService;
@@ -9,8 +9,8 @@ describe('PoLookupFilterService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [PoLookupFilterService]
+      imports: [],
+      providers: [PoLookupFilterService, provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
     });
 
     service = TestBed.inject(PoLookupFilterService);
@@ -26,7 +26,7 @@ describe('PoLookupFilterService', () => {
   });
 
   describe('Methods:', () => {
-    it(`getFilteredItems: should return the request response and create request with url, page, pageSize, filter, 
+    it(`getFilteredItems: should return the request response and create request with url, page, pageSize, filter,
     headers and params correctly`, fakeAsync(() => {
       service['url'] = 'http://url.com';
       const page = 1;
@@ -35,20 +35,16 @@ describe('PoLookupFilterService', () => {
       const filterParams = { name: 'test' };
       const expectedResponse = { user: 'test' };
 
-      service
-        .getFilteredItems({ filter, page, pageSize, filterParams })
-        .subscribe(response => expect(response).toEqual(expectedResponse));
+      service.getFilteredItems({ filter, page, pageSize, filterParams }).subscribe(response => {
+        expect(response).toEqual(expectedResponse);
+      });
 
-      const req = httpMock.expectOne(httpRequest => {
-        return (
+      const req = httpMock.expectOne(
+        httpRequest =>
           httpRequest.url === service['url'] &&
           httpRequest.method === 'GET' &&
-          httpRequest.params.get('page') === <any>page &&
-          httpRequest.params.get('pageSize') === <any>pageSize &&
-          httpRequest.params.get('filter') === 'name' &&
-          httpRequest.params.get('name') === 'test'
-        );
-      });
+          httpRequest.urlWithParams === 'http://url.com?filter=name&page=1&pageSize=20&name=test'
+      );
 
       expect(req.request.headers.get('X-PO-No-Message')).toBe('true');
 
@@ -85,13 +81,12 @@ describe('PoLookupFilterService', () => {
         expect(response).toEqual(expectedResponse);
       });
 
-      const req = httpMock.expectOne(httpRequest => {
-        return (
+      const req = httpMock.expectOne(
+        httpRequest =>
           httpRequest.url === 'http://url.com/test%2Fencoding' &&
           httpRequest.method === 'GET' &&
           httpRequest.params.get('name') === 'test'
-        );
-      });
+      );
 
       expect(req.request.headers.get('X-PO-No-Message')).toBe('true');
 
@@ -113,11 +108,43 @@ describe('PoLookupFilterService', () => {
       httpMock.expectOne(httpRequest => httpRequest.params.get('name') === 'test').flush({});
     });
 
-    it('setUrl: should set `url` to the value of the parameter', () => {
+    it(`getObjectByValue: should call 'validateParams' with 'multiple' is true and one value and set its return as the request parameter`, () => {
+      service['url'] = 'http://url.com';
+      service['multiple'] = true;
+      const filterParams = { name: 'test' };
+      const value = 1;
+
+      spyOn(service, <any>'validateParams').and.returnValue(filterParams);
+
+      service.getObjectByValue(value, filterParams).subscribe(() => {
+        expect(service['validateParams']).toHaveBeenCalledWith(filterParams);
+      });
+
+      httpMock.expectOne(httpRequest => httpRequest.params.get('name') === 'test').flush({});
+    });
+
+    it(`getObjectByValue: should call 'validateParams' with 'multiple' is true and array of value and set its return as the request parameter`, () => {
+      service['url'] = 'http://url.com';
+      service['multiple'] = true;
+      const filterParams = { name: 'test' };
+      const value = [1, 2];
+
+      spyOn(service, <any>'validateParams').and.returnValue(filterParams);
+
+      service.getObjectByValue(value, filterParams).subscribe(() => {
+        expect(service['validateParams']).toHaveBeenCalledWith(filterParams);
+      });
+
+      httpMock.expectOne(httpRequest => httpRequest.params.get('name') === 'test').flush({ items: [] });
+    });
+
+    it('setConfig: should set `url` to the value of the parameter', () => {
       service['url'] = undefined;
       const paramValue = 'http://url.com.br';
+      const fieldValue = 'teste';
+      const multiple = false;
 
-      service.setUrl(paramValue);
+      service.setConfig(paramValue, fieldValue, multiple);
 
       expect(service['url']).toBe(paramValue);
     });

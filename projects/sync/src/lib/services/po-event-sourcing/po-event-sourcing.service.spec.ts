@@ -1,12 +1,12 @@
-import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { HttpResponse } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpResponse, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { Observable, of, Subscriber } from 'rxjs';
 import { PoStorageService } from '@po-ui/ng-storage';
 
-import * as utilsFunctions from '../../utils/utils';
+import { PoUtils as utilsFunctions } from '../../utils/utils';
 
 import { PoDataMessage, PoDataTransform } from '../../models';
 import { PoEventSourcingErrorResponse } from '../../models/po-event-sourcing-error-response.model';
@@ -26,14 +26,18 @@ import { PoSyncSchema } from './../po-sync/interfaces/po-sync-schema.interface';
 
 const EVENT_SOURCING_NAME: string = PoEventSourcingService['event_sourcing_name'];
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 class StorageServiceMock extends PoStorageService {
   constructor() {
     super();
   }
 }
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 class PoDataTransformMock extends PoDataTransform {
   getDateFieldName(): string {
     return undefined;
@@ -59,13 +63,15 @@ describe('PoEventSourcingService:', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
+      imports: [],
       providers: [
         PoEventSourcingService,
         { provide: PoStorageService, useClass: StorageServiceMock },
         { provide: PoSchemaService, useClass: PoSchemaService },
         { provide: PoSchemaDefinitionService, useClass: PoSchemaDefinitionService },
-        { provide: PoHttpClientService, useClass: PoHttpClientService }
+        { provide: PoHttpClientService, useClass: PoHttpClientService },
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting()
       ]
     });
 
@@ -268,19 +274,22 @@ describe('PoEventSourcingService:', () => {
         method: PoHttpRequestType.GET,
         body: file
       };
-      const newRequestData: PoHttpRequestData = {
-        url: 'url-request',
-        method: PoHttpRequestType.GET,
-        body: 'data:',
-        mimeType: 'text/html',
-        bodyType: 'File',
-        fileName: 'filename'
-      };
 
       const result = await eventSourcingService['serializeBody'](httpOperationDataMock);
 
       expect(typeof result.body).toBe('string');
-      expect(result).toEqual(newRequestData);
+
+      expect(result.body.startsWith('data:text/html;base64,')).toBe(true);
+
+      expect(result).toEqual(
+        jasmine.objectContaining({
+          url: 'url-request',
+          method: PoHttpRequestType.GET,
+          mimeType: 'text/html',
+          bodyType: 'File',
+          fileName: 'filename'
+        })
+      );
     });
 
     it('serializeBody: shouldn`t return a string base64 if body isn`t an instance of File', async () => {
@@ -458,9 +467,7 @@ describe('PoEventSourcingService:', () => {
       spyOn(eventSourcingService['poStorage'], 'getFirstItem').and.returnValues(<any>{ item: 'test' });
       spyOn(eventSourcingService, <any>'selectOperation');
 
-      spyOn(eventSourcingService['poSchemaService'], 'limitedCallWrap').and.callFake(callback => {
-        return callback();
-      });
+      spyOn(eventSourcingService['poSchemaService'], 'limitedCallWrap').and.callFake(callback => callback());
 
       eventSourcingService.stoppedQueueEventSourcing = false;
 
@@ -474,9 +481,7 @@ describe('PoEventSourcingService:', () => {
       spyOn(eventSourcingService['poStorage'], 'getFirstItem').and.returnValue(undefined);
       spyOn(eventSourcingService, <any>'selectOperation');
 
-      spyOn(eventSourcingService['poSchemaService'], 'limitedCallWrap').and.callFake(callback => {
-        return callback();
-      });
+      spyOn(eventSourcingService['poSchemaService'], 'limitedCallWrap').and.callFake(callback => callback());
 
       eventSourcingService.stoppedQueueEventSourcing = true;
 
@@ -490,9 +495,7 @@ describe('PoEventSourcingService:', () => {
       spyOn(eventSourcingService['poStorage'], 'getFirstItem').and.returnValues(<any>{ item: 'test' });
       spyOn(eventSourcingService, <any>'selectOperation');
 
-      spyOn(eventSourcingService['poSchemaService'], 'limitedCallWrap').and.callFake(callback => {
-        return callback();
-      });
+      spyOn(eventSourcingService['poSchemaService'], 'limitedCallWrap').and.callFake(callback => callback());
 
       eventSourcingService.stoppedQueueEventSourcing = true;
 
@@ -506,9 +509,7 @@ describe('PoEventSourcingService:', () => {
       spyOn(eventSourcingService['poStorage'], 'getFirstItem').and.returnValues(undefined);
       spyOn(eventSourcingService, <any>'selectOperation');
 
-      spyOn(eventSourcingService['poSchemaService'], 'limitedCallWrap').and.callFake(callback => {
-        return callback();
-      });
+      spyOn(eventSourcingService['poSchemaService'], 'limitedCallWrap').and.callFake(callback => callback());
 
       eventSourcingService.stoppedQueueEventSourcing = false;
 
@@ -743,12 +744,38 @@ describe('PoEventSourcingService:', () => {
       expect(eventSourcingService['poHttpClient']['createRequest']).toHaveBeenCalledWith(poHttpRequestData);
     });
 
-    it('createPoHttpRequestData: should return newRequestData', async () => {
+    it('createPoHttpRequestData: should return newRequestData if record.body', async () => {
+      const url = 'http://url.com/customers';
+      const method = PoHttpRequestType.POST;
+      const record = { body: { title: 'New note', text: 'test' } };
+      const headers = [{ name: 'test', value: 'teste1' }];
+
       const poHttpRequestData: PoHttpRequestData = {
-        url: 'http://url.com/customers',
-        method: PoHttpRequestType.POST,
-        headers: [{ name: 'test', value: 'teste1' }],
-        body: {}
+        url,
+        method,
+        body: record.body,
+        headers
+      };
+
+      spyOn(eventSourcingService, <any>'createFormData');
+
+      const result = await eventSourcingService['createPoHttpRequestData'](url, method, record, headers);
+
+      expect(result).toEqual(poHttpRequestData);
+      expect(eventSourcingService['createFormData']).not.toHaveBeenCalled();
+    });
+
+    it('createPoHttpRequestData: should return newRequestData if record.body is undefined', async () => {
+      const url = 'http://url.com/customers';
+      const method = PoHttpRequestType.POST;
+      const record = { title: 'New note', text: 'test' };
+      const headers = [{ name: 'test', value: 'teste1' }];
+
+      const poHttpRequestData: PoHttpRequestData = {
+        url,
+        method,
+        body: record,
+        headers
       };
 
       spyOn(eventSourcingService, <any>'createFormData');
@@ -792,6 +819,26 @@ describe('PoEventSourcingService:', () => {
       );
 
       expect(result).toEqual(expectedValue);
+    });
+
+    it('createPoHttpRequestData: should return body as empty object when record is undefined', async () => {
+      const url = 'http://url.com/customers';
+      const method = PoHttpRequestType.POST;
+      const headers = [{ name: 'test', value: 'teste1' }];
+
+      const poHttpRequestData: PoHttpRequestData = {
+        url,
+        method,
+        body: {},
+        headers
+      };
+
+      spyOn(eventSourcingService, <any>'createFormData');
+
+      const result = await eventSourcingService['createPoHttpRequestData'](url, method, undefined, headers);
+
+      expect(result).toEqual(poHttpRequestData);
+      expect(eventSourcingService['createFormData']).not.toHaveBeenCalled();
     });
 
     it('createFormData: should return a FormData', async () => {
@@ -1413,7 +1460,7 @@ describe('PoEventSourcingService:', () => {
       ];
 
       spyOn(eventSourcingService, <any>'createEventSourcingItem');
-      spyOn(Date.prototype, 'getTime').and.returnValue(<any>dateTime);
+      spyOn(Date.prototype, 'getTime').and.returnValue(dateTime);
 
       eventSourcingService['createEventSourcingList'](schemaCustumerMock.name, summaryEventList);
 

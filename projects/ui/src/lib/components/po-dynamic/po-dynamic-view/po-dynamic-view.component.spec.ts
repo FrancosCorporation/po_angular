@@ -1,28 +1,24 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { HttpClient, HttpHandler } from '@angular/common/http';
 import { SimpleChange } from '@angular/core';
 
 import { of } from 'rxjs';
 
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
-
 import { PoDynamicModule } from '../po-dynamic.module';
 import { PoDynamicViewComponent } from './po-dynamic-view.component';
-import { PoDynamicViewService } from './po-dynamic-view.service';
+import { PoDynamicViewService } from './services/po-dynamic-view.service';
 
 describe('PoDynamicViewComponent:', () => {
   let component: PoDynamicViewComponent;
   let fixture: ComponentFixture<PoDynamicViewComponent>;
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [PoDynamicModule],
       providers: [HttpClient, HttpHandler, PoDynamicViewService]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoDynamicViewComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -84,20 +80,34 @@ describe('PoDynamicViewComponent:', () => {
         expect(component['getVisibleFields']).toHaveBeenCalled();
         expect(component.visibleFields.length).toBe(returnedValue.length);
       });
+
+      it(`should call not 'getVisibleFields' if 'load' is true and initChanges is false`, () => {
+        const changes = { showAllValue: <any>{} };
+        component.load = 'url.test.com';
+        component.visibleFields = [];
+
+        spyOn(component, <any>'getVisibleFields');
+
+        component.ngOnChanges(changes);
+
+        expect(component['getVisibleFields']).not.toHaveBeenCalled();
+      });
     });
 
-    it('ngOnInit: should call `updateValuesAndFieldsOnLoad` if typeof `load` is truthy', () => {
+    it('ngOnInit: should call `updateValuesAndFieldsOnLoad` if typeof `load` is truthy', fakeAsync(() => {
       component.load = 'teste';
 
-      spyOn(component, <any>'updateValuesAndFieldsOnLoad');
+      spyOn(component, <any>'updateValuesAndFieldsOnLoad').and.returnValue(Promise.resolve());
 
       component.ngOnInit();
 
+      tick();
+
       expect(component['updateValuesAndFieldsOnLoad']).toHaveBeenCalled();
-    });
+    }));
 
     it(`getValuesAndFieldsFromLoad: should call 'dynamicViewService.onLoad' if 'component.load' is string`, async () => {
-      const expectedValue = { value: { name: 'teste 2' }, fields: [{ property: 'name', tag: true, inverse: true }] };
+      const expectedValue = { value: { name: 'teste 2' }, fields: [{ property: 'name', tag: true }] };
 
       component.load = 'teste';
 
@@ -110,9 +120,7 @@ describe('PoDynamicViewComponent:', () => {
     it(`getValuesAndFieldsFromLoad: should call 'component.load' if 'component.load' is function`, async () => {
       const expectedValue = { value: { rg: '6.111' } };
 
-      component.load = () => {
-        return expectedValue;
-      };
+      component.load = () => expectedValue;
 
       expect(await component['getValuesAndFieldsFromLoad']()).toEqual(expectedValue);
     });
@@ -164,11 +172,11 @@ describe('PoDynamicViewComponent:', () => {
 
     it(`setFieldOnLoad: should update field value if it is an existing field`, () => {
       const field = { property: 'name', tag: true };
-      const fakeFieldOnLoad = { ...field, inverse: true };
+      const fakeFieldOnLoad = { ...field };
 
       component.fields = [{ ...field }];
 
-      const expectedValue = <any>{ property: 'name', tag: true, inverse: true };
+      const expectedValue = <any>{ property: 'name', tag: true };
 
       component['setFieldOnLoad'](fakeFieldOnLoad);
 
@@ -181,8 +189,7 @@ describe('PoDynamicViewComponent:', () => {
 
       const fakeFieldOnLoad = {
         property: 'age',
-        tag: true,
-        inverse: true
+        tag: true
       };
 
       const expectedFields = [{ property: 'name' }, { ...fakeFieldOnLoad }];
@@ -193,7 +200,7 @@ describe('PoDynamicViewComponent:', () => {
     });
 
     it(`setFieldsOnLoad: should call 'setFieldOnLoad' if 'fields' is array`, () => {
-      const fakeField = { property: 'name', tag: true, inverse: true };
+      const fakeField = { property: 'name', tag: true };
       const fakeFieldsOnLoad = [{ ...fakeField }];
 
       spyOn(component, <any>'setFieldOnLoad');
@@ -205,7 +212,7 @@ describe('PoDynamicViewComponent:', () => {
 
     it(`setFieldsOnLoad: shouldn't call 'setFieldOnLoad' if 'fields' is undefined`, () => {
       const fakeFieldsOnLoad = undefined;
-      const fakeField = { property: 'name', tag: true, inverse: true };
+      const fakeField = { property: 'name', tag: true };
 
       spyOn(component, <any>'setFieldOnLoad');
 
@@ -227,7 +234,7 @@ describe('PoDynamicViewComponent:', () => {
 
     it(`updateValuesAndFieldsOnLoad: should call 'getValuesAndFieldsFromLoad', 'setValueOnLoad', 'setFieldsOnLoad'
     and 'getVisibleFields'`, async () => {
-      const fakeDataOnLoad = { value: { name: 'teste 2' }, fields: [{ property: 'name', tag: true, inverse: true }] };
+      const fakeDataOnLoad = { value: { name: 'teste 2' }, fields: [{ property: 'name', tag: true }] };
       spyOn(component, <any>'getValuesAndFieldsFromLoad').and.returnValue(fakeDataOnLoad);
       spyOn(component, <any>'setValueOnLoad');
       spyOn(component, <any>'setFieldsOnLoad');
@@ -239,6 +246,112 @@ describe('PoDynamicViewComponent:', () => {
       expect(component['setValueOnLoad']).toHaveBeenCalledWith(fakeDataOnLoad.value);
       expect(component['setFieldsOnLoad']).toHaveBeenCalledWith(fakeDataOnLoad.fields);
       expect(component['getVisibleFields']).toHaveBeenCalled();
+    });
+
+    describe('setFieldValue:', () => {
+      it(`should return the labels of the selected options if options exist and a match is found`, () => {
+        const field = {
+          value: ['value1'],
+          optionsMulti: true,
+          options: [
+            { value: 'value1', label: 'label1' },
+            { value: 'value2', label: 'label2' },
+            { value: 'value3', label: 'label3' }
+          ]
+        };
+
+        field.value = ['value1', 'value2'];
+        expect(component.setFieldValue(field)).toEqual(['label1', 'label2']);
+      });
+
+      it(`should return the field values if options exist but no match is found'`, () => {
+        const field = {
+          value: ['value1'],
+          optionsMulti: true,
+          options: [
+            { value: 'value1', label: 'label1' },
+            { value: 'value2', label: 'label2' },
+            { value: 'value3', label: 'label3' }
+          ]
+        };
+
+        field.value = ['value4'];
+        expect(component.setFieldValue(field)).toEqual(['value4']);
+      });
+
+      it(`should return the label of the selected option if options exist and a match is found`, () => {
+        const field = {
+          value: 'value1',
+          options: [
+            { value: 'value1', label: 'label1' },
+            { value: 'value2', label: 'label2' },
+            { value: 'value3', label: 'label3' }
+          ]
+        };
+
+        field.value = 'value2';
+        expect(component.setFieldValue(field)).toEqual('label2');
+      });
+
+      it(`should return the field value if options exist but no match is found'`, () => {
+        const field = {
+          value: 'value1',
+          options: [
+            { value: 'value1', label: 'label1' },
+            { value: 'value2', label: 'label2' },
+            { value: 'value3', label: 'label3' }
+          ]
+        };
+
+        field.value = 'value4';
+        expect(component.setFieldValue(field)).toEqual('value4');
+      });
+      it('should return the value of booleanTrue when the field value is true', () => {
+        const field = {
+          property: 'active',
+          type: 'boolean',
+          value: true,
+          booleanTrue: 'Ativo',
+          booleanFalse: 'Inativo'
+        };
+        expect(component.setFieldValue(field)).toEqual('Ativo');
+      });
+
+      it('should return the value of booleanFalse when the field value is false', () => {
+        const field = {
+          property: 'active',
+          type: 'boolean',
+          value: false,
+          booleanTrue: 'Ativo',
+          booleanFalse: 'Inativo'
+        };
+        expect(component.setFieldValue(field)).toEqual('Inativo');
+      });
+
+      it('should return "True" when the field value is true and booleanTrue is undefined', () => {
+        const field = {
+          property: 'active',
+          type: 'boolean',
+          value: true,
+          booleanFalse: 'Inativo'
+        };
+        expect(component.setFieldValue(field)).toEqual(true);
+      });
+
+      it('should return "False" when the field value is false and booleanFalse is undefined', () => {
+        const field = {
+          property: 'active',
+          type: 'boolean',
+          value: false,
+          booleanTrue: 'Ativo'
+        };
+        expect(component.setFieldValue(field)).toEqual(false);
+      });
+    });
+
+    it('containsLineBreak: should return true if the string contains a newline character', () => {
+      const value = 'Hello\nWorld';
+      expect(component['containsLineBreak'](value)).toBeTrue();
     });
   });
 
@@ -255,6 +368,18 @@ describe('PoDynamicViewComponent:', () => {
       expect(nativeElement.querySelector('po-tag')).toBeTruthy();
     });
 
+    it(`should create 'po-image' if have a 'image' property`, () => {
+      component.fields = [{ property: 'cpf', label: 'CPF', image: true }];
+
+      component.ngOnChanges({
+        fields: new SimpleChange(null, component.fields, true)
+      });
+
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('po-image')).toBeTruthy();
+    });
+
     it(`should create 'po-info' if haven't a 'tag' property`, () => {
       component.fields = [{ property: 'cpf', label: 'CPF' }];
 
@@ -267,13 +392,14 @@ describe('PoDynamicViewComponent:', () => {
       expect(nativeElement.querySelector('po-info')).toBeTruthy();
     });
 
-    it(`should create 'po-info' and 'po-tag' if have a one or more items with 'tag' property and one or more items
+    it(`should create 'po-info', 'po-tag' and 'po-image if have a one or more items with 'tag' property and one or more items
     without 'tag' property`, () => {
       component.fields = [
         { property: 'cpf', label: 'CPF' },
         { property: 'name', label: 'NAME', tag: true },
         { property: 'rg', label: 'RG' },
-        { property: 'address', label: 'ADDRESS', tag: true }
+        { property: 'address', label: 'ADDRESS', tag: true },
+        { property: 'image', label: 'IMAGE', image: true }
       ];
 
       component.ngOnChanges({
@@ -284,6 +410,7 @@ describe('PoDynamicViewComponent:', () => {
 
       expect(nativeElement.querySelector('po-info')).toBeTruthy();
       expect(nativeElement.querySelector('po-tag')).toBeTruthy();
+      expect(nativeElement.querySelector('po-image')).toBeTruthy();
     });
 
     it(`should create 'po-info' and 'po-divider' if haven't tag property and have a 'divider' property`, () => {
@@ -337,7 +464,14 @@ describe('PoDynamicViewComponent:', () => {
         { property: 'address', divider: 'Address data' }
       ];
 
-      component.fields = [...fieldsDivider, ...fieldsTag, ...fieldsInfo];
+      const fieldsImage = [
+        { property: 'image1', label: 'IMAGE1', image: true },
+        { property: 'image2', label: 'IMAGE2', image: true },
+        { property: 'image3', label: 'IMAGE3', image: true },
+        { property: 'image4', label: 'IMAGE4', image: true }
+      ];
+
+      component.fields = [...fieldsDivider, ...fieldsTag, ...fieldsInfo, ...fieldsImage];
 
       component.ngOnChanges({
         fields: new SimpleChange(null, component.fields, true)
@@ -348,14 +482,16 @@ describe('PoDynamicViewComponent:', () => {
       const infoElement = nativeElement.querySelectorAll('po-info');
       const tagElement = nativeElement.querySelectorAll('po-tag');
       const dividerElement = nativeElement.querySelectorAll('po-divider');
+      const imageElement = nativeElement.querySelectorAll('po-image');
 
       expect(infoElement.length).toBe(fieldsInfo.length + fieldsDivider.length);
       expect(dividerElement.length).toBe(fieldsDivider.length);
       expect(tagElement.length).toBe(fieldsTag.length);
+      expect(imageElement.length).toBe(fieldsImage.length);
     });
 
     it(`should create 'po-tag' with icon if properties 'tag' and 'icon' contain values.`, () => {
-      component.fields = [{ property: 'cpf', label: 'CPF', tag: true, icon: 'po-icon-ok' }];
+      component.fields = [{ property: 'cpf', label: 'CPF', tag: true, icon: 'an-check' }];
 
       component.ngOnChanges({
         fields: new SimpleChange(null, component.fields, true)
@@ -363,7 +499,7 @@ describe('PoDynamicViewComponent:', () => {
 
       fixture.detectChanges();
       expect(nativeElement.querySelector('po-tag')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-icon-ok')).toBeTruthy();
+      expect(nativeElement.querySelector('.an-check')).toBeTruthy();
     });
 
     it(`should create 'po-tag' without icon if 'tag' is true but 'icon' is not defined.`, () => {
@@ -376,7 +512,7 @@ describe('PoDynamicViewComponent:', () => {
       fixture.detectChanges();
 
       expect(nativeElement.querySelector('po-tag')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-icon-ok')).toBeFalsy();
+      expect(nativeElement.querySelector('.an-check')).toBeFalsy();
     });
 
     it(`should create 'po-tag' with a custom color if 'tag' and 'color' properties contain values.`, () => {
@@ -405,8 +541,8 @@ describe('PoDynamicViewComponent:', () => {
       expect(nativeElement.querySelector('.po-color-07')).toBeFalsy();
     });
 
-    it(`should create 'po-tag-inverse' with custom and inverse colors if 'color', 'tag' and 'inverse' properties contain values.`, () => {
-      component.fields = [{ property: 'cpf', label: 'CPF', tag: true, color: 'color-07', inverse: true }];
+    it(`should create 'po-tag' with a custom color  if only 'tag' and 'color' contain values.`, () => {
+      component.fields = [{ property: 'cpf', label: 'CPF', tag: true, color: 'color-07' }];
 
       component.ngOnChanges({
         fields: new SimpleChange(null, component.fields, true)
@@ -415,27 +551,12 @@ describe('PoDynamicViewComponent:', () => {
       fixture.detectChanges();
 
       expect(nativeElement.querySelector('po-tag')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-tag-inverse')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-text-color-07')).toBeTruthy();
-    });
-
-    it(`should create 'po-tag' with a custom color and without 'inverse' if only 'tag' and 'color' contain values.`, () => {
-      component.fields = [{ property: 'cpf', label: 'CPF', tag: true, color: 'color-07', inverse: false }];
-
-      component.ngOnChanges({
-        fields: new SimpleChange(null, component.fields, true)
-      });
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('po-tag')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-tag-inverse')).toBeFalsy();
       expect(nativeElement.querySelector('.po-text-color-07')).toBeFalsy();
       expect(nativeElement.querySelector('.po-color-07')).toBeTruthy();
     });
 
-    it(`should create 'po-tag-inverse' if 'tag' is 'default' and 'inverse'.`, () => {
-      component.fields = [{ property: 'cpf', label: 'CPF', tag: true, inverse: true }];
+    it(`should create 'po-tag' with a custom color and text-color if 'tag', 'color' and 'textColor' contain values.`, () => {
+      component.fields = [{ property: 'cpf', label: 'CPF', tag: true, color: 'color-07', textColor: 'white' }];
 
       component.ngOnChanges({
         fields: new SimpleChange(null, component.fields, true)
@@ -444,23 +565,8 @@ describe('PoDynamicViewComponent:', () => {
       fixture.detectChanges();
 
       expect(nativeElement.querySelector('po-tag')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-tag-inverse')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-tag-info-inverse')).toBeTruthy();
-    });
-
-    it(`shouldn't create 'po-tag-inverse' if 'tag' is 'default' and 'inverse' is false.`, () => {
-      component.fields = [{ property: 'cpf', label: 'CPF', tag: true, inverse: false }];
-
-      component.ngOnChanges({
-        fields: new SimpleChange(null, component.fields, true)
-      });
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('po-tag')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-tag-inverse')).toBeFalsy();
-      expect(nativeElement.querySelector('.po-tag-info-inverse')).toBeFalsy();
-      expect(nativeElement.querySelector('.po-tag-info')).toBeTruthy();
+      expect(nativeElement.querySelector('.po-color-07')).toBeTruthy();
+      expect(nativeElement.querySelector('po-tag span[style="color: white;"]')).toBeTruthy();
     });
   });
 });

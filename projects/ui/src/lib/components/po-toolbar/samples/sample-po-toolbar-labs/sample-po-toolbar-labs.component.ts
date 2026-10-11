@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { NgForm } from '@angular/forms';
 
 import {
@@ -11,9 +11,12 @@ import {
 
 @Component({
   selector: 'sample-po-toolbar-labs',
-  templateUrl: './sample-po-toolbar-labs.component.html'
+  templateUrl: './sample-po-toolbar-labs.component.html',
+  standalone: false
 })
 export class SamplePoToolbarLabsComponent implements OnInit {
+  private poNotification = inject(PoNotificationService);
+
   action: PoToolbarAction;
   actions: Array<PoToolbarAction>;
   actionsIcon: string;
@@ -31,12 +34,20 @@ export class SamplePoToolbarLabsComponent implements OnInit {
   ];
 
   public readonly iconOptions: Array<PoSelectOption> = [
-    { value: 'po-icon-chat', label: 'po-icon-chat' },
-    { value: 'po-icon-clock', label: 'po-icon-clock' },
-    { value: 'po-icon-exit', label: 'po-icon-exit' },
-    { value: 'po-icon-lock', label: 'po-icon-lock' },
-    { value: 'po-icon-settings', label: 'po-icon-settings' },
-    { value: 'po-icon-star', label: 'po-icon-star' }
+    { value: 'an an-chats', label: 'an an-chats' },
+    { value: 'an an-clock', label: 'an an-clock' },
+    { value: 'an an-sign-out', label: 'an an-sign-out' },
+    { value: 'an an-lock', label: 'an an-lock' },
+    { value: 'fa fa-calculator', label: 'fa fa-calculator' },
+    { value: 'far fa-comment-alt', label: 'far fa-comment-alt' }
+  ];
+
+  public readonly actionsIconOptions: Array<PoSelectOption> = [
+    { value: 'an an-clock', label: 'an an-clock' },
+    { value: 'an an-sign-out', label: 'an an-sign-out' },
+    { value: 'an an-lock', label: 'an an-lock' },
+    { value: 'an an-gear', label: 'an an-gear' },
+    { value: 'far fa-comment-alt', label: 'far fa-comment-alt' }
   ];
 
   public readonly toolbarActionTypes: Array<PoRadioGroupOption> = [
@@ -44,8 +55,6 @@ export class SamplePoToolbarLabsComponent implements OnInit {
     { label: 'Profile', value: 'profile' },
     { label: 'Notification', value: 'notification' }
   ];
-
-  constructor(private poNotification: PoNotificationService) {}
 
   ngOnInit() {
     this.restore();

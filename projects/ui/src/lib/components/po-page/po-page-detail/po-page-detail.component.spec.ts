@@ -3,8 +3,6 @@ import { ComponentFixture, fakeAsync, TestBed } from '@angular/core/testing';
 
 import { of } from 'rxjs';
 
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
-
 import { PoBreadcrumbModule } from '../../po-breadcrumb/po-breadcrumb.module';
 import { PoButtonModule } from '../../po-button';
 
@@ -18,7 +16,8 @@ import { PoPageHeaderComponent } from '../po-page-header/po-page-header.componen
 @Component({
   template: `
     <po-page-detail p-title="Unit Test" (p-back)="back()" (p-edit)="edit()" (p-remove)="remove()"> </po-page-detail>
-  `
+  `,
+  standalone: false
 })
 class ContainerComponent {
   back(): boolean {
@@ -44,8 +43,8 @@ describe('PoPageDetailComponent:', () => {
 
   event.initEvent('p-click', false, true);
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [PoBreadcrumbModule, PoButtonModule],
       declarations: [
         ContainerComponent,
@@ -54,10 +53,8 @@ describe('PoPageDetailComponent:', () => {
         PoPageDetailComponent,
         PoPageHeaderComponent
       ]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoPageDetailComponent);
     component = fixture.componentInstance;
 
@@ -95,13 +92,13 @@ describe('PoPageDetailComponent:', () => {
     it(`hasEditFn: should return 'po-icon-delete' if does't have a edit action and property is 'icon'`, () => {
       component.edit.observers.length = 0;
 
-      expect(component.hasEditFn('icon')).toBe('po-icon-delete');
+      expect(component.hasEditFn('icon')).toBe('ICON_DELETE');
     });
 
-    it(`hasEditFn: should return 'default' if have a edit action and property is 'type'`, () => {
+    it(`hasEditFn: should return 'secondary' if have a edit action and property is 'type'`, () => {
       component.edit.observers.push(<any>of({}));
 
-      expect(component.hasEditFn('type')).toBe('default');
+      expect(component.hasEditFn('type')).toBe('secondary');
     });
 
     it(`hasEditFn: should return 'primary' if does't have a edit action and property is 'type'`, () => {
@@ -141,23 +138,23 @@ describe('PoPageDetailComponent:', () => {
       component.remove.observers.length = 0;
       component.edit.observers.length = 0;
 
-      expect(component.hasEditOrRemoveFn('icon')).toBe('po-icon-arrow-left');
+      expect(component.hasEditOrRemoveFn('icon')).toBe('ICON_ARROW_LEFT');
     });
 
-    it(`hasEditOrRemoveFn: should return 'default' if have a edit action, doesn't have remove action
+    it(`hasEditOrRemoveFn: should return 'secondary' if have a edit action, doesn't have remove action
     and property is 'type'`, () => {
       component.edit.observers.push(<any>of({}));
       component.remove.observers.length = 0;
 
-      expect(component.hasEditOrRemoveFn('type')).toBe('default');
+      expect(component.hasEditOrRemoveFn('type')).toBe('secondary');
     });
 
-    it(`hasEditOrRemoveFn: should return 'default' if doesn't have a edit action, have remove action
+    it(`hasEditOrRemoveFn: should return 'secondary' if doesn't have a edit action, have remove action
     and property is 'type'`, () => {
       component.remove.observers.push(<any>of({}));
       component.edit.observers.length = 0;
 
-      expect(component.hasEditOrRemoveFn('type')).toBe('default');
+      expect(component.hasEditOrRemoveFn('type')).toBe('secondary');
     });
 
     it(`hasEditOrRemoveFn: should return 'primary' if doesn't have a edit action and remove action
@@ -212,60 +209,6 @@ describe('PoPageDetailComponent:', () => {
   });
 
   describe('Templates:', () => {
-    it('should have only one primary action and `Edit` button with `primary` applyed.', () => {
-      const editLabel = poPageDetailLiteralsDefault[poLocaleDefault].edit;
-
-      component.literals = poPageDetailLiteralsDefault[poLocaleDefault];
-
-      component.back.observers.push(<any>of({}));
-      component.remove.observers.push(<any>of({}));
-      component.edit.observers.push(<any>of({}));
-
-      fixture.detectChanges();
-
-      const primaryButtons = debugElement.querySelectorAll('po-button > button.po-button-primary');
-      const editButton = debugElement.querySelectorAll('po-button > button.po-button-primary > span + span')[0];
-
-      expect(editButton).toBeTruthy();
-      expect(editButton.innerHTML).toBe(editLabel);
-      expect(primaryButtons.length).toBe(1);
-    });
-
-    it('should have only one primary action and `Remove` button with `primary` applyed.', () => {
-      const removeLabel = poPageDetailLiteralsDefault[poLocaleDefault].remove;
-
-      component.literals = poPageDetailLiteralsDefault[poLocaleDefault];
-
-      component.back.observers.push(<any>of({}));
-      component.remove.observers.push(<any>of({}));
-
-      fixture.detectChanges();
-
-      const primaryButtons = debugElement.querySelectorAll('po-button > button.po-button-primary');
-      const removeButton = debugElement.querySelectorAll('po-button > button.po-button-primary > span + span')[0];
-
-      expect(removeButton).toBeTruthy();
-      expect(removeButton.innerHTML).toBe(removeLabel);
-      expect(primaryButtons.length).toBe(1);
-    });
-
-    it('should have only one primary action and `Back` button with `p-primary` applyed.', () => {
-      const backLabel = poPageDetailLiteralsDefault[poLocaleDefault].back;
-
-      component.literals = poPageDetailLiteralsDefault[poLocaleDefault];
-
-      component.back.observers.push(<any>of({}));
-
-      fixture.detectChanges();
-
-      const primaryButtons = debugElement.querySelectorAll('po-button > button.po-button-primary');
-      const backButton = debugElement.querySelectorAll('po-button > button.po-button-primary > span + span')[0];
-
-      expect(backButton).toBeTruthy();
-      expect(backButton.innerHTML).toBe(backLabel);
-      expect(primaryButtons.length).toBe(1);
-    });
-
     it('should show page header if `hasPageHeader` return true', () => {
       spyOn(component, 'hasPageHeader').and.returnValue(true);
       fixture.detectChanges();
@@ -278,45 +221,45 @@ describe('PoPageDetailComponent:', () => {
       expect(debugElement.querySelector('po-page-header')).toBeFalsy();
     });
 
-    it('should apply only `po-icon-edit` if have a back, remove and edit functions.', () => {
+    it('should apply only `an-pencil-simple` if have a back, remove and edit functions.', () => {
       component.back.observers.push(<any>of({}));
       component.remove.observers.push(<any>of({}));
       component.edit.observers.push(<any>of({}));
 
       fixture.detectChanges();
 
-      const editIcon = debugElement.querySelector('.po-icon-edit');
-      const removeIcon = debugElement.querySelector('.po-icon-delete');
-      const backIcon = debugElement.querySelector('.po-icon-arrow-left');
+      const editIcon = debugElement.querySelector('.an-pencil-simple');
+      const removeIcon = debugElement.querySelector('.an-trash');
+      const backIcon = debugElement.querySelector('.an-caret-left');
 
       expect(editIcon).toBeTruthy();
       expect(removeIcon).toBeNull();
       expect(backIcon).toBeNull();
     });
 
-    it('should apply only `po-icon-delete` if have back and remove functions and doesn`t have a edit function.', () => {
+    it('should apply only `an-trash` if have back and remove functions and doesn`t have a edit function.', () => {
       component.back.observers.push(<any>of({}));
       component.remove.observers.push(<any>of({}));
 
       fixture.detectChanges();
 
-      const editIcon = debugElement.querySelector('.po-icon-edit');
-      const removeIcon = debugElement.querySelector('.po-icon-delete');
-      const backIcon = debugElement.querySelector('.po-icon-arrow-left');
+      const editIcon = debugElement.querySelector('.an-pencil-simple');
+      const removeIcon = debugElement.querySelector('.an-trash');
+      const backIcon = debugElement.querySelector('.an-caret-left');
 
       expect(editIcon).toBeNull();
       expect(removeIcon).toBeTruthy();
       expect(backIcon).toBeNull();
     });
 
-    it('should apply only `po-icon-arrow-left` if have only back function and doesn`t have a edit and remove functions.', () => {
+    it('should apply only `an-caret-left` if have only back function and doesn`t have a edit and remove functions.', () => {
       component.back.observers.push(<any>of({}));
 
       fixture.detectChanges();
 
-      const editIcon = debugElement.querySelector('.po-icon-edit');
-      const removeIcon = debugElement.querySelector('.po-icon-delete');
-      const backIcon = debugElement.querySelector('.po-icon-arrow-left');
+      const editIcon = debugElement.querySelector('.an-pencil-simple');
+      const removeIcon = debugElement.querySelector('.an-trash');
+      const backIcon = debugElement.querySelector('.an-caret-left');
 
       expect(editIcon).toBeNull();
       expect(removeIcon).toBeNull();

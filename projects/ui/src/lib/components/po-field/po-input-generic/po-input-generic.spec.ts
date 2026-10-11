@@ -1,20 +1,24 @@
 import { AbstractControl } from '@angular/forms';
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { Component, ElementRef } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, EventEmitter, inject } from '@angular/core';
 
 import { configureTestSuite } from './../../../util-test/util-expect.spec';
 
 import { PoFieldModule } from './../po-field.module';
 import { PoInputGeneric } from './po-input-generic';
+import { of, Subscription } from 'rxjs';
 
 @Component({
   template: `
     <input type="text" #inp />
     <span #clean></span>
-  `
+  `,
+  standalone: false
 })
 class ContentProjectionComponent extends PoInputGeneric {
-  constructor(el: ElementRef) {
+  constructor() {
+    const el = inject(ElementRef);
+
     super(el);
   }
 
@@ -40,7 +44,8 @@ describe('PoInputGeneric:', () => {
   configureTestSuite(() => {
     TestBed.configureTestingModule({
       imports: [PoFieldModule],
-      declarations: [ContentProjectionComponent]
+      declarations: [ContentProjectionComponent],
+      providers: [ChangeDetectorRef]
     });
   });
 
@@ -55,53 +60,33 @@ describe('PoInputGeneric:', () => {
     expect(component).toBeTruthy();
   });
 
+  it('validateClassesForMask: should called if mask exists', (): void => {
+    const fakeThis = {
+      mask: '99999-999',
+      validateClassesForMask: () => {}
+    };
+    spyOn(fakeThis, 'validateClassesForMask');
+
+    component.validateInitMask.call(fakeThis);
+
+    expect(fakeThis.validateClassesForMask).toHaveBeenCalled();
+  });
+
   it('should call afterViewInit', () => {
     spyOn(component, 'afterViewInit');
     component.ngAfterViewInit();
     expect(component.afterViewInit).toHaveBeenCalled();
   });
 
-  it('should call verifyAutoFocus and setPaddingInput', () => {
-    spyOn(component, 'verifyAutoFocus');
-    spyOn(component, 'setPaddingInput');
-    component.afterViewInit();
-    expect(component.verifyAutoFocus).toHaveBeenCalled();
-    expect(component.setPaddingInput).toHaveBeenCalled();
-  });
-
-  it('should calc icons position with clean', fakeAsync(() => {
-    const fakeThis = {
-      clean: true,
-      inputEl: component.inputEl,
-      el: component.el
-    };
-
-    component.setPaddingInput.call(fakeThis);
-    tick(10);
-
-    expect(fakeThis.inputEl.nativeElement.style.paddingRight).toBe('36px');
-  }));
-
-  it('should calc icons position without clean', fakeAsync(() => {
-    const fakeThis = {
-      clean: false,
-      inputEl: component.inputEl,
-      el: component.el
-    };
-
-    component.setPaddingInput.call(fakeThis);
-    tick(10);
-
-    expect(fakeThis.inputEl.nativeElement.style.paddingRight).toBe('');
-  }));
-
   it('should call keydown from mask with keyCode different 229', () => {
     const fakeThis = {
       mask: '(999)',
+      passedWriteValue: true,
       objMask: {
         keydown: (value: any) => {}
       },
-      eventOnBlur: e => {}
+      eventOnBlur: e => {},
+      validateClassesForMask: (value: boolean) => {}
     };
     spyOn(fakeThis.objMask, 'keydown');
     component.onKeydown.call(fakeThis, fakeEvent);
@@ -111,6 +96,7 @@ describe('PoInputGeneric:', () => {
   it('should not call keydown from mask with keyCode different 229', () => {
     const fakeThis = {
       mask: '',
+      passedWriteValue: true,
       objMask: {
         keydown: (value: any) => {}
       },
@@ -126,6 +112,7 @@ describe('PoInputGeneric:', () => {
   it('should not call keydown when the mask is empty and keyCode is different of 229', () => {
     const fakeThis = {
       mask: '999',
+      passedWriteValue: true,
       objMask: {
         keydown: (value: any) => {}
       },
@@ -152,16 +139,24 @@ describe('PoInputGeneric:', () => {
         valueToModel: ''
       },
       callOnChange: () => {},
-      eventOnBlur: e => {}
+      errorAsyncProperties: {
+        errorAsync: value => of(true),
+        triggerMode: 'changeModel'
+      },
+      verifyErrorAsync: () => {}
+    };
+    const fakeEventLocal = {
+      target: {
+        value: '',
+        keyCode: 13
+      }
     };
 
     spyOn(fakeThis, 'callOnChange');
     spyOn(fakeThis.objMask, 'keyup');
-    spyOn(fakeThis, 'eventOnBlur');
-    component.onKeyup.call(fakeThis, fakeEvent);
+    component.onKeyup.call(fakeThis, fakeEventLocal);
     expect(fakeThis.callOnChange).toHaveBeenCalled();
     expect(fakeThis.objMask.keyup).toHaveBeenCalled();
-    expect(fakeThis.eventOnBlur).toHaveBeenCalled();
   });
 
   it('shouldn`t call keyup from mask with keyCode equal to 229', () => {
@@ -214,7 +209,12 @@ describe('PoInputGeneric:', () => {
       callOnChange: (v: any) => {},
       validMaxLength: component.validMaxLength,
       maxlength: 5,
-      inputEl: component.inputEl
+      inputEl: component.inputEl,
+      errorAsyncProperties: {
+        errorAsync: value => of(true),
+        triggerMode: 'changeModel'
+      },
+      verifyErrorAsync: () => {}
     };
     fakeEvent.target.value = '1234567890';
 
@@ -222,6 +222,36 @@ describe('PoInputGeneric:', () => {
     component.eventOnInput.call(fakeThis, fakeEvent);
     expect(fakeThis.callOnChange).toHaveBeenCalledWith('12345');
     expect(fakeThis.inputEl.nativeElement.value).toBe('12345');
+  });
+
+  it('should call "callOnChange" on eventInput without uppercase', () => {
+    const fakeThis = {
+      upperCase: false,
+      callOnChange: (v: any) => {},
+      validMaxLength: component.validMaxLength,
+      inputEl: component.inputEl
+    };
+    fakeEvent.target.value = 'teste';
+
+    spyOn(fakeThis, 'callOnChange');
+    component.eventOnInput.call(fakeThis, fakeEvent);
+    expect(fakeThis.callOnChange).toHaveBeenCalledWith('teste');
+    expect(fakeThis.inputEl.nativeElement.value).toBe('teste');
+  });
+
+  it('should call "callOnChange" on eventInput with uppercase', () => {
+    const fakeThis = {
+      upperCase: true,
+      callOnChange: (v: any) => {},
+      validMaxLength: component.validMaxLength,
+      inputEl: component.inputEl
+    };
+    fakeEvent.target.value = 'teste';
+
+    spyOn(fakeThis, 'callOnChange');
+    component.eventOnInput.call(fakeThis, fakeEvent);
+    expect(fakeThis.callOnChange).toHaveBeenCalledWith('TESTE');
+    expect(fakeThis.inputEl.nativeElement.value).toBe('TESTE');
   });
 
   it('should call mask.blur on eventInput with mask', () => {
@@ -279,7 +309,8 @@ describe('PoInputGeneric:', () => {
       inputEl: component.inputEl,
       valueBeforeChange: '1',
       getScreenValue: component.getScreenValue,
-      change: component.change
+      change: component.change,
+      verifyErrorAsync: () => {}
     };
 
     spyOn(fakeThis.change, 'emit');
@@ -321,6 +352,24 @@ describe('PoInputGeneric:', () => {
     expect(component.hasInvalidClass()).toBeTruthy();
   });
 
+  it('should return true in hasInvalidClass if showErrorMessageRequired and required is true', () => {
+    component.el.nativeElement.classList.add('ng-invalid');
+    component.el.nativeElement.classList.add('ng-dirty');
+    component.inputEl.nativeElement.value = '';
+    component.showErrorMessageRequired = true;
+    component.required = true;
+    expect(component.hasInvalidClass()).toBeTruthy();
+  });
+
+  it('should return true in hasInvalidClass if showErrorMessageRequired and hasValidatorRequired is true', () => {
+    component.el.nativeElement.classList.add('ng-invalid');
+    component.el.nativeElement.classList.add('ng-dirty');
+    component.inputEl.nativeElement.value = '';
+    component.showErrorMessageRequired = true;
+    component.hasValidatorRequired = true;
+    expect(component.hasInvalidClass()).toBeTruthy();
+  });
+
   it('should return false in hasInvalidClass', () => {
     component.el.nativeElement.classList.add('ng-invalid');
     component.el.nativeElement.classList.remove('ng-dirty');
@@ -346,12 +395,38 @@ describe('PoInputGeneric:', () => {
 
   it('should call callOnChange and controlChangeEmitter when input is cleaned', () => {
     component.clean = true;
+    component.errorAsyncProperties = {
+      errorAsync: value => of(true),
+      triggerMode: 'changeModel'
+    };
 
     spyOn(component, 'callOnChange');
     spyOn(component, 'controlChangeEmitter');
     component.clear('');
     expect(component.callOnChange).toHaveBeenCalled();
     expect(component.controlChangeEmitter).toHaveBeenCalled();
+  });
+
+  it('should call onTouched when input is cleaned', () => {
+    component['onTouched'] = jasmine.createSpy('onTouched');
+
+    component.clear('');
+
+    expect(component['onTouched']).toHaveBeenCalled();
+  });
+
+  it('should set valueBeforeChange to undefined when input is cleaned', () => {
+    component.valueBeforeChange = 'previous value';
+
+    component.clear('');
+
+    expect(component.valueBeforeChange).toBeUndefined();
+  });
+
+  it('should not throw error when onTouched is null and input is cleaned', () => {
+    component['onTouched'] = null;
+
+    expect(() => component.clear('')).not.toThrow();
   });
 
   it('should clean input when "value" to be null', () => {
@@ -363,10 +438,14 @@ describe('PoInputGeneric:', () => {
         _formatModel: false
       },
       change: component.change,
-      passedWriteValue: false
+      passedWriteValue: false,
+      modelLastUpdate: 'oldValue'
     };
+
     component.writeValueModel.call(fakeThis, '');
+
     expect(component.inputEl.nativeElement.value).toBe('');
+    expect(fakeThis.modelLastUpdate).toBe('');
     expect(fakeThis.passedWriteValue).toBeTruthy();
   });
 
@@ -418,23 +497,11 @@ describe('PoInputGeneric:', () => {
         mask: hasMask,
         objMask: { blur: (value: any) => {} },
         blur: component.blur,
-        controlChangeEmitter: () => {}
+        controlChangeEmitter: () => {},
+        onTouched: () => {},
+        getAdditionalHelpTooltip: () => false
       };
     }
-
-    it('afterViewInit: should call `setPaddingInput` if the `type` is not `password`.', () => {
-      spyOn(component, 'setPaddingInput');
-      component.type = 'text';
-      component.afterViewInit();
-      expect(component.setPaddingInput).toHaveBeenCalled();
-    });
-
-    it('afterViewInit: should not call `setPaddingInput` if the `type` is not `password`.', () => {
-      spyOn(component, 'setPaddingInput');
-      component.type = 'password';
-      component.afterViewInit();
-      expect(component.setPaddingInput).not.toHaveBeenCalled();
-    });
 
     it('focus: should call `focus` of input', () => {
       component.inputEl = {
@@ -491,6 +558,37 @@ describe('PoInputGeneric:', () => {
       expect(fakeThis.objMask.keydown).not.toHaveBeenCalled();
     });
 
+    it('onKeydown: should emit event when field is focused', () => {
+      const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      component.inputEl = {
+        nativeElement: {
+          focus: () => {}
+        }
+      };
+
+      spyOn(component.keydown, 'emit');
+      spyOnProperty(document, 'activeElement', 'get').and.returnValue(component.inputEl.nativeElement);
+
+      component.onKeyDown(fakeEvent);
+
+      expect(component.keydown.emit).toHaveBeenCalledWith(fakeEvent);
+    });
+
+    it('onKeydown: should not emit event when field is not focused', () => {
+      const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      component.inputEl = {
+        nativeElement: {
+          focus: () => {}
+        }
+      };
+
+      spyOn(component.keydown, 'emit');
+      spyOnProperty(document, 'activeElement', 'get').and.returnValue(document.createElement('div'));
+      component.onKeyDown(fakeEvent);
+
+      expect(component.keydown.emit).not.toHaveBeenCalled();
+    });
+
     it('onKeyup: should not call keyup from mask with keyCode and readonly.', () => {
       const fakeThis = {
         mask: '(999)',
@@ -524,7 +622,8 @@ describe('PoInputGeneric:', () => {
     it('verifyAutoFocus: shouldn`t call `focus` if autofocus is false', () => {
       const fakeThis = {
         autofocus: false,
-        focus: () => {}
+        focus: () => {},
+        getAdditionalHelpTooltip: () => false
       };
 
       spyOn(fakeThis, 'focus');
@@ -534,48 +633,98 @@ describe('PoInputGeneric:', () => {
       expect(fakeThis.focus).not.toHaveBeenCalled();
     });
 
-    it('eventOnBlur: should call `objMask.blur` when exists a `mask`.', () => {
-      const fakeThis = createFakeThis(true);
+    describe('eventOnBlur:', () => {
+      let setupTest;
 
-      spyOn(fakeThis.objMask, 'blur');
+      beforeEach(() => {
+        setupTest = (tooltip: string, displayHelp: boolean, additionalHelpEvent: any) => {
+          component.additionalHelpTooltip = tooltip;
+          component.displayAdditionalHelp = displayHelp;
+          component.additionalHelp = additionalHelpEvent;
+          spyOn(component, 'showAdditionalHelp');
+        };
+      });
 
-      component.eventOnBlur.call(fakeThis, fakeEvent);
+      it('should not call showAdditionalHelp when tooltip is not displayed', () => {
+        setupTest('Mensagem de apoio adicional.', false, { observed: false });
+        component.eventOnBlur(fakeEvent);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
 
-      expect(fakeThis.objMask.blur).toHaveBeenCalled();
-    });
+      it('should not call showAdditionalHelp when additionalHelp event is true', () => {
+        setupTest('Mensagem de apoio adicional.', true, { observed: true });
+        component.eventOnBlur(fakeEvent);
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
 
-    it('eventOnBlur: shouldn´t call `objMask.blur` when not exists a `mask`.', () => {
-      const fakeThis = createFakeThis(false);
+      it('should include additionalHelp when event is triggered', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        component.additionalHelp = new EventEmitter<any>();
 
-      spyOn(fakeThis.objMask, 'blur');
+        const result = component.setHelper('label', 'tooltip');
 
-      component.eventOnBlur.call(fakeThis, fakeEvent);
+        expect(result).toBeDefined();
+      });
 
-      expect(fakeThis.objMask.blur).not.toHaveBeenCalled();
-    });
+      it('should call `objMask.blur` when exists a `mask`.', () => {
+        const fakeThis = createFakeThis(true);
 
-    it('eventOnBlur: should call `blur.emit` and `controlChangeEmitter` when `event.type` is blur.', () => {
-      const fakeThis = createFakeThis(false);
+        spyOn(fakeThis.objMask, 'blur');
+        spyOn(fakeThis, <any>'onTouched');
 
-      spyOn(fakeThis.blur, 'emit');
-      spyOn(fakeThis, 'controlChangeEmitter');
+        component.eventOnBlur.call(fakeThis, fakeEvent);
 
-      component.eventOnBlur.call(fakeThis, { type: 'blur' });
+        expect(fakeThis['onTouched']).toHaveBeenCalled();
+        expect(fakeThis.objMask.blur).toHaveBeenCalled();
+      });
 
-      expect(fakeThis.blur.emit).toHaveBeenCalled();
-      expect(fakeThis.controlChangeEmitter).toHaveBeenCalled();
-    });
+      it('shouldn´t call `objMask.blur` when not exists a `mask`.', () => {
+        const fakeThis = createFakeThis(false);
 
-    it('eventOnBlur: shouldn`t call `blur.emit` and `controlChangeEmitter` when `event.type` is undefined.', () => {
-      const fakeThis = createFakeThis(false);
+        spyOn(fakeThis.objMask, 'blur');
+        spyOn(fakeThis, <any>'onTouched');
 
-      spyOn(fakeThis.blur, 'emit');
-      spyOn(fakeThis, 'controlChangeEmitter');
+        component.eventOnBlur.call(fakeThis, fakeEvent);
 
-      component.eventOnBlur.call(fakeThis, fakeEvent);
+        expect(fakeThis['onTouched']).toHaveBeenCalled();
+        expect(fakeThis.objMask.blur).not.toHaveBeenCalled();
+      });
 
-      expect(fakeThis.blur.emit).not.toHaveBeenCalled();
-      expect(fakeThis.controlChangeEmitter).not.toHaveBeenCalled();
+      it('should call `blur.emit` and `controlChangeEmitter` when `event.type` is blur.', () => {
+        const fakeThis = createFakeThis(false);
+
+        spyOn(fakeThis.blur, 'emit');
+        spyOn(fakeThis, 'controlChangeEmitter');
+        spyOn(fakeThis, <any>'onTouched');
+
+        component.eventOnBlur.call(fakeThis, { type: 'blur' });
+
+        expect(fakeThis['onTouched']).toHaveBeenCalled();
+        expect(fakeThis.blur.emit).toHaveBeenCalled();
+        expect(fakeThis.controlChangeEmitter).toHaveBeenCalled();
+      });
+
+      it('shouldn`t call `blur.emit` and `controlChangeEmitter` when `event.type` is undefined.', () => {
+        const fakeThis = createFakeThis(false);
+
+        spyOn(fakeThis.blur, 'emit');
+        spyOn(fakeThis, 'controlChangeEmitter');
+        spyOn(fakeThis, <any>'onTouched');
+
+        component.eventOnBlur.call(fakeThis, fakeEvent);
+
+        expect(fakeThis['onTouched']).toHaveBeenCalled();
+        expect(fakeThis.blur.emit).not.toHaveBeenCalled();
+        expect(fakeThis.controlChangeEmitter).not.toHaveBeenCalled();
+      });
+
+      it('shouldn´t throw error if onTouched is falsy', () => {
+        component['onTouched'] = null;
+
+        const fnError = () => component.eventOnBlur(fakeEvent);
+
+        expect(fnError).not.toThrow();
+      });
     });
 
     it('validateClassesForPattern: should add invalid classes if pattern validation failed.', () => {
@@ -597,6 +746,55 @@ describe('PoInputGeneric:', () => {
       expect(component.el.nativeElement.classList).not.toContain('ng-invalid');
     });
 
+    it('validateClassesForMask: should add invalid classes if maskValid validation failed.', (): void => {
+      const fakeThis = {
+        inputEl: {
+          nativeElement: {
+            value: undefined
+          }
+        },
+        el: {
+          nativeElement: {
+            classList: {
+              add: value => {},
+              get: 'ng-invalid-mask'
+            }
+          }
+        },
+        mask: '99999-999'
+      };
+
+      component.validateClassesForMask.call(fakeThis);
+
+      expect(fakeThis.el.nativeElement.classList.get).toContain('ng-invalid-mask');
+      expect(fakeThis.el.nativeElement.classList.get).toContain('ng-invalid-mask');
+    });
+
+    it('validateClassesForMask: should remove invalid classes if maskValid validation sucess.', (): void => {
+      const fakeThis = {
+        inputEl: {
+          nativeElement: {
+            value: '12345-678'
+          }
+        },
+        el: {
+          nativeElement: {
+            classList: {
+              add: value => {},
+              get: 'ng-invalid-mask',
+              remove: value => {}
+            }
+          }
+        },
+        mask: '99999-999'
+      };
+      spyOn(fakeThis.el.nativeElement.classList, 'remove');
+
+      component.validateClassesForMask.call(fakeThis);
+
+      expect(fakeThis.el.nativeElement.classList.remove).toHaveBeenCalledWith('ng-invalid-mask');
+    });
+
     it('controlChangeEmitter: should emit change with input value if input value changes', fakeAsync((): void => {
       const inputValue = 'value';
 
@@ -607,7 +805,8 @@ describe('PoInputGeneric:', () => {
           }
         },
         valueBeforeChange: '1',
-        change: component.change
+        change: component.change,
+        verifyErrorAsync: () => {}
       };
 
       spyOn(fakeThis.change, 'emit');
@@ -643,7 +842,10 @@ describe('PoInputGeneric:', () => {
         inputEl: '',
         mask: '',
         changeModel: component.changeModel,
-        passedWriteValue: false
+        passedWriteValue: false,
+        validateClassesForMask: () => {},
+        validateInitMask: () => {},
+        verifyErrorAsync: () => {}
       };
       spyOn(component.changeModel, 'emit');
       component.writeValueModel.call(fakeThis, value);
@@ -656,7 +858,8 @@ describe('PoInputGeneric:', () => {
         inputEl: '',
         mask: '',
         changeModel: component.changeModel,
-        passedWriteValue: false
+        passedWriteValue: false,
+        validateClassesForMask: () => {}
       };
       spyOn(component.changeModel, 'emit');
       component.writeValueModel.call(fakeThis, '');
@@ -669,7 +872,10 @@ describe('PoInputGeneric:', () => {
         inputEl: component.inputEl,
         mask: '',
         changeModel: component.changeModel,
-        passedWriteValue: false
+        passedWriteValue: false,
+        validateClassesForMask: () => {},
+        validateInitMask: () => {},
+        verifyErrorAsync: () => {}
       };
       component.writeValueModel.call(fakeThis, 'valor');
       expect(component.inputEl.nativeElement.value).toBe('valor');
@@ -685,7 +891,10 @@ describe('PoInputGeneric:', () => {
           _formatModel: false
         },
         changeModel: component.changeModel,
-        passedWriteValue: false
+        passedWriteValue: false,
+        validateClassesForMask: () => {},
+        validateInitMask: () => {},
+        verifyErrorAsync: () => {}
       };
       component.writeValueModel.call(fakeThis, 'valor');
       expect(component.inputEl.nativeElement.value).toBe('valor formatted');
@@ -702,13 +911,67 @@ describe('PoInputGeneric:', () => {
         },
         changeModel: component.changeModel,
         callUpdateModelWithTimeout: component.callUpdateModelWithTimeout,
-        passedWriteValue: false
+        passedWriteValue: false,
+        validateClassesForMask: () => {},
+        validateInitMask: () => {},
+        verifyErrorAsync: () => {}
       };
       const callUpdateModelWithTimeout = spyOn(fakeThis, <any>'callUpdateModelWithTimeout');
       component.writeValueModel.call(fakeThis, 'valor');
       expect(component.inputEl.nativeElement.value).toBe('valor formatted');
       expect(callUpdateModelWithTimeout).toHaveBeenCalled();
       expect(fakeThis.passedWriteValue).toBeTruthy();
+    });
+  });
+
+  describe('verifyErrorAsync', () => {
+    beforeEach(() => {
+      component['cd'] = { detectChanges: () => {} } as any;
+      component['inputEl'] = { nativeElement: { value: 'test' } } as ElementRef;
+      component['el'] = { nativeElement: document.createElement('div') } as ElementRef;
+
+      component.errorPattern = 'Erro de exemplo';
+      component.errorAsyncProperties = {
+        errorAsync: jasmine.createSpy('errorAsync').and.returnValue(of(true))
+      };
+
+      component['subscriptionValidator'] = new Subscription();
+    });
+
+    afterEach(() => {
+      component['subscriptionValidator'].unsubscribe();
+    });
+
+    it('should add ng-invalid and ng-dirty classes when error is true', () => {
+      spyOn(component['cd'], 'detectChanges');
+      component.verifyErrorAsync();
+
+      expect(component.errorAsyncProperties.errorAsync).toHaveBeenCalledWith('test');
+      expect(component['el'].nativeElement.classList.contains('ng-invalid')).toBeTrue();
+      expect(component['el'].nativeElement.classList.contains('ng-dirty')).toBeTrue();
+      expect(component['cd'].detectChanges).toHaveBeenCalled();
+    });
+
+    it('should remove ng-invalid class when error is false and isInvalid is false', () => {
+      spyOn(component['cd'], 'detectChanges');
+      component.errorAsyncProperties.errorAsync = jasmine.createSpy('errorAsync').and.returnValue(of(false));
+      component['el'].nativeElement.classList.add('ng-invalid');
+      component['el'].nativeElement.classList.add('ng-dirty');
+      component.isInvalid = false;
+
+      component.verifyErrorAsync();
+
+      expect(component.errorAsyncProperties.errorAsync).toHaveBeenCalledWith('test');
+      expect(component['el'].nativeElement.classList.contains('ng-invalid')).toBeFalse();
+      expect(component['cd'].detectChanges).toHaveBeenCalled();
+    });
+
+    it('must cancel the previous subscription from subscriptionValidator', () => {
+      const unsubscribeSpy = spyOn(component['subscriptionValidator'], 'unsubscribe');
+
+      component.verifyErrorAsync();
+
+      expect(unsubscribeSpy).toHaveBeenCalled();
     });
   });
 });

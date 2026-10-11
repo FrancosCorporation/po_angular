@@ -1,12 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { Observable } from 'rxjs';
 
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
-
 import { PoBreadcrumbFavoriteComponent } from './po-breadcrumb-favorite.component';
 import { PoBreadcrumbFavoriteService } from './po-breadcrumb-favorite.service';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('PoBreadcrumbFavoriteComponent', () => {
   let component: PoBreadcrumbFavoriteComponent;
@@ -20,14 +19,13 @@ describe('PoBreadcrumbFavoriteComponent', () => {
   const eventClick = document.createEvent('MouseEvents');
   eventClick.initEvent('click', false, true);
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      declarations: [PoBreadcrumbFavoriteComponent]
-    });
-  });
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [PoBreadcrumbFavoriteComponent],
+      imports: [],
+      providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoBreadcrumbFavoriteComponent);
     component = fixture.componentInstance;
     nativeElement = fixture.debugElement.nativeElement;
@@ -38,7 +36,9 @@ describe('PoBreadcrumbFavoriteComponent', () => {
 
     fixture.detectChanges();
 
-    component['service'] = fakeService({ isFavorite: true, url: 'test/123' }) as PoBreadcrumbFavoriteService;
+    Object.defineProperty(component, 'service', {
+      value: fakeService({ isFavorite: true, url: 'test/123' })
+    });
   });
 
   it('should be created', () => {

@@ -1,12 +1,13 @@
+import { Directive, EventEmitter, HostBinding, HostListener, input, Input, Output } from '@angular/core';
 import { AbstractControl, ControlValueAccessor, Validator } from '@angular/forms';
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
 
-import { convertToBoolean, convertToInt, uuid } from './../../../utils/util';
-import { InputBoolean } from '../../../decorators';
-import { requiredFailed } from '../validators';
+import { PoValidators } from '../validators';
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn, PoUtils } from './../../../utils/util';
 
-import { PoCheckboxGroupOption } from './interfaces/po-checkbox-group-option.interface';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
 import { PoCheckboxGroupOptionView } from './interfaces/po-checkbox-group-option-view.interface';
+import { PoCheckboxGroupOption } from './interfaces/po-checkbox-group-option.interface';
+import { PoHelperOptions } from '../../po-helper';
 
 const poCheckboxGroupColumnsDefaultLength: number = 6;
 const poCheckboxGroupColumnsTotalLength: number = 12;
@@ -42,18 +43,38 @@ const poCheckboxGroupColumnsTotalLength: number = 12;
  */
 @Directive()
 export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Validator {
-  checkboxGroupOptionsView: Array<PoCheckboxGroupOptionView>;
-  checkedOptions: any = {};
-  checkedOptionsList: any = [];
-  mdColumns: number = poCheckboxGroupColumnsDefaultLength;
-  propagateChange: any;
-  validatorChange: any;
+  // Propriedade interna que define se o ícone de ajuda adicional terá cursor clicável (evento) ou padrão (tooltip).
+  @Input() additionalHelpEventTrigger: string | undefined;
 
-  private _columns: number = poCheckboxGroupColumnsDefaultLength;
-  private _disabled?: boolean = false;
-  private _indeterminate?: boolean = false;
-  private _options?: Array<PoCheckboxGroupOption>;
-  private _required?: boolean = false;
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de ajuda adicional, com o texto desta propriedade sendo passado para o popover do componente `po-helper`.
+   * **Como boa prática, indica-se utilizar um texto com até 140 caracteres.**
+   * > Requer um recuo mínimo de 8px se o componente estiver próximo à lateral da tela.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Input('p-additional-help-tooltip') additionalHelpTooltip?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define que o popover (`p-helper` e/ou `p-error-limit`) será incluído no body da página e não
+   * dentro do componente. Essa opção pode ser necessária em cenários com containers que possuem scroll ou overflow
+   * escondido, garantindo o posicionamento correto do tooltip próximo ao elemento.
+   *
+   * > Quando utilizado com `p-helper`, leitores de tela como o NVDA podem não ler o conteúdo do popover.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-append-in-body', transform: convertToBoolean }) appendBox?: boolean = false;
 
   /**
    * @optional
@@ -66,79 +87,51 @@ export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Valid
    *
    * @default `false`
    */
-  @Input('p-auto-focus') @InputBoolean() autoFocus: boolean = false;
+  @Input({ alias: 'p-auto-focus', transform: convertToBoolean }) autoFocus: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   * Define se o título do campo será exibido de forma compacta.
+   *
+   * Quando habilitado (`true`), o modo compacto afeta o conjunto composto por:
+   * - `po-label`
+   * - `p-requirement (showRequired)`
+   * - `po-helper`
+   *
+   * Ou seja, todos os elementos relacionados ao título do campo
+   * (rótulo, indicador de obrigatoriedade e componente auxiliar) passam
+   * a seguir o comportamento de layout compacto.
+   *
+   * Também é possível definir esse comportamento de forma global,
+   * uma única vez, na folha de estilo geral da aplicação, por meio
+   * da customização dos tokens CSS:
+   *
+   * - `--field-container-title-justify`
+   * - `--field-container-title-flex`
+   *
+   * Exemplo:
+   *
+   * ```
+   * :root {
+   *   --field-container-title-justify: flex-start;
+   *   --field-container-title-flex: 0 1 auto;
+   * }
+   * ```
+   *
+   * Dessa forma, o layout compacto passa a ser o padrão da aplicação,
+   * sem a necessidade de definir a propriedade individualmente em cada campo.
+   *
+   * @default `false`
+   */
+  compactLabel = input<boolean, unknown>(false, { alias: 'p-compact-label', transform: convertToBoolean });
 
   /** Nome dos checkboxes */
   @Input('name') name: string;
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Possibilita definir a quantidade de colunas para exibição dos itens do *checkbox*.
-   * - É possível exibir as opções entre `1` e `4` colunas.
-   * - Para resolução `sm` a colunagem invariavelmente passa para `1` coluna.
-   * - Quando se trata de resolução `md` e o valor estabelecido para colunas for superior a `2`,
-   * o *grid system* será composto por `2` colunas.
-   * - Para evitar a quebra de linha, prefira a utilização de `1` coluna para opções com textos grandes.
-   *
-   * @default `2`
-   *
-   */
-  @Input('p-columns') set columns(value: number) {
-    const columns = convertToInt(value, poCheckboxGroupColumnsDefaultLength);
-
-    this._columns = this.getGridSystemColumns(columns, 4);
-    this.mdColumns = this.getGridSystemColumns(columns, 2);
-  }
-
-  get columns() {
-    return this._columns;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Desabilita todos os itens do checkbox.
-   *
-   * @default `false`
-   */
-  @Input('p-disabled') set disabled(value: boolean) {
-    this._disabled = convertToBoolean(value);
-
-    this.validateModel(this.checkIndeterminate());
-  }
-
-  get disabled(): boolean {
-    return this._disabled;
-  }
-
   /** Texto de apoio do campo */
   @Input('p-help') help?: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Caso exista a necessidade de usar o valor indeterminado (`null`) dentro da lista de opções, é necessário setar
-   * a propriedade `p-indeterminate` como `true`, por padrão essa propriedade vem desabilitada (`false`).
-   *
-   * Quando essa propriedade é setada como `true`, o *po-checkbox-group* passa a devolver um objeto completo para o
-   * `ngModel`, diferente do array que contém apenas os valores selecionados.
-   *
-   * @default `false`
-   */
-  @Input('p-indeterminate') set indeterminate(indeterminate: boolean) {
-    this._indeterminate = convertToBoolean(indeterminate);
-  }
-
-  get indeterminate() {
-    return this._indeterminate;
-  }
 
   /** Label do campo */
   @Input('p-label') label?: string;
@@ -157,6 +150,201 @@ export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Valid
    * @default `false`
    */
   @Input('p-optional') optional: boolean;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Exibe a mensagem setada se o campo estiver vazio e for requerido.
+   *
+   * > Necessário que a propriedade `p-required` esteja habilitada.
+   *
+   */
+  @Input('p-field-error-message') fieldErrorMessage: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Limita a exibição da mensagem de erro a duas linhas e exibe um tooltip com o texto completo.
+   *
+   * > Caso essa propriedade seja definida como `true`, a mensagem de erro será limitada a duas linhas
+   * e um tooltip será exibido ao passar o mouse sobre a mensagem para mostrar o conteúdo completo.
+   *
+   * @default `false`
+   */
+  @Input('p-error-limit') errorLimit: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as opções do componente de ajuda (po-helper) que será exibido ao lado do label quando a propriedade `p-label` for definida, ou, ao lado do componente na ausência da propriedade `p-label`.
+   * > Para mais informações acesse: https://po-ui.io/documentation/po-helper.
+   *
+   * > Ao configurar esta propriedade, o antigo ícone de ajuda adicional (`p-additional-help-tooltip` e `p-additional-help`) será ignorado.
+   */
+  poHelperComponent = input<PoHelperOptions | string>(undefined, { alias: 'p-helper' });
+
+  /**
+   * @optional
+   *
+   * @description
+   * Habilita a quebra automática do texto da propriedade `p-label`. Quando `p-label-text-wrap` for verdadeiro, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
+   *
+   * @default `false`
+   */
+  labelTextWrap = input<boolean>(false, { alias: 'p-label-text-wrap' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Função para atualizar o `ngModel` do componente, necessário quando não for utilizado dentro da tag form.
+   *
+   * Na versão 12.2.0 do Angular a verificação `strictTemplates` vem true como default. Portanto, para utilizar
+   * two-way binding no componente deve se utilizar da seguinte forma:
+   *
+   * ```
+   * <po-checkbox-group ... [ngModel]="checkboxgroupModel" (ngModelChange)="checkboxgroupModel = $event"> </po-checkbox-group>
+   * ```
+   *
+   */
+  @Output('ngModelChange') ngModelChange: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Evento disparado ao clicar no ícone de ajuda adicional.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Output('p-additional-help') additionalHelp = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao alterar valor do campo
+   */
+  @Output('p-change') change: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado sempre que o valor do model é alterado, seja por interação do usuário
+   * ou por atualização programática (ex: `setValue`, `patchValue`, carregamento assíncrono).
+   *
+   * Diferentemente do `p-change`, que é disparado apenas por interação do usuário,
+   * o `p-change-model` cobre todos os cenários de alteração de valor.
+   *
+   * Não emite quando o novo valor é idêntico ao anterior (deduplicação automática).
+   */
+  @Output('p-change-model') changeModel: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado quando uma tecla é pressionada enquanto o foco está no componente.
+   * Retorna um objeto `KeyboardEvent` com informações sobre a tecla.
+   */
+  @Output('p-keydown') keydown: EventEmitter<KeyboardEvent> = new EventEmitter<KeyboardEvent>();
+
+  checkboxGroupOptionsView: Array<PoCheckboxGroupOptionView>;
+  checkedOptions: any = {};
+  checkedOptionsList: any = [];
+  displayAdditionalHelp: boolean = false;
+  mdColumns: number = poCheckboxGroupColumnsDefaultLength;
+  modelLastUpdate: any;
+  propagateChange: any;
+  validatorChange: any;
+
+  private _columns: number = poCheckboxGroupColumnsDefaultLength;
+  private _disabled?: boolean = false;
+  private _indeterminate?: boolean = false;
+  private _options?: Array<PoCheckboxGroupOption>;
+  private _required?: boolean = false;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Possibilita definir a quantidade de colunas para exibição dos itens do *checkbox*.
+   * - É possível exibir as opções entre `1` e `4` colunas.
+   * - Para resolução `sm` a colunagem invariavelmente passa para `1` coluna.
+   * - Quando se trata de resolução `md` e o valor estabelecido para colunas for superior a `2`,
+   * o *grid system* será composto por `2` colunas.
+   * - Para evitar a quebra de linha, prefira a utilização de `1` coluna para opções com textos grandes.
+   *
+   * @default `2`
+   *
+   */
+  @Input('p-columns') set columns(value: number) {
+    const columns = PoUtils.convertToInt(value, poCheckboxGroupColumnsDefaultLength);
+
+    this._columns = this.getGridSystemColumns(columns, 4);
+    this.mdColumns = this.getGridSystemColumns(columns, 2);
+  }
+
+  get columns() {
+    return this._columns;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Desabilita todos os itens do checkbox.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-disabled', transform: convertToBoolean }) set disabled(value: boolean) {
+    this._disabled = value;
+
+    this.validateModel(this.checkIndeterminate());
+  }
+
+  get disabled(): boolean {
+    return this._disabled;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Caso exista a necessidade de usar o valor indeterminado (`null`) dentro da lista de opções, é necessário setar
+   * a propriedade `p-indeterminate` como `true`, por padrão essa propriedade vem desabilitada (`false`).
+   *
+   * Quando essa propriedade é setada como `true`, o *po-checkbox-group* passa a devolver um objeto completo para o
+   * `ngModel`, diferente do array que contém apenas os valores selecionados.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-indeterminate', transform: convertToBoolean }) set indeterminate(indeterminate: boolean) {
+    this._indeterminate = indeterminate;
+  }
+
+  get indeterminate() {
+    return this._indeterminate;
+  }
 
   /**
    * @optional
@@ -184,8 +372,8 @@ export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Valid
    *
    * @default `false`
    */
-  @Input('p-required') set required(required: boolean) {
-    this._required = convertToBoolean(required);
+  @Input({ alias: 'p-required', transform: convertToBoolean }) set required(required: boolean) {
+    this._required = required;
 
     this.validateModel(this.checkIndeterminate());
   }
@@ -195,22 +383,43 @@ export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Valid
   }
 
   /**
-   * @optional
+   * Define se a indicação de campo obrigatório será exibida.
    *
-   * @description
-   *
-   * Função para atualizar o `ngModel` do componente, necessário quando não for utilizado dentro da tag form.
+   * > Não será exibida a indicação se:
+   * - Não possuir `p-help` e/ou `p-label`.
    */
-  @Output('ngModelChange') ngModelChange: EventEmitter<any> = new EventEmitter<any>();
+  @Input('p-show-required') showRequired: boolean = false;
 
   /**
    * @optional
    *
    * @description
    *
-   * Evento disparado ao alterar valor do campo
+   * Define o tamanho dos checkboxes do componente:
+   * - `small`: 16x16 (disponível apenas para acessibilidade AA).
+   * - `medium`: 24x24.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   *
    */
-  @Output('p-change') change: EventEmitter<any> = new EventEmitter<any>();
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
 
   changeValue() {
     const value = this.checkIndeterminate();
@@ -222,6 +431,7 @@ export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Valid
     }
 
     this.change.emit(value);
+    this.controlChangeModelEmitter(value);
   }
 
   checkIndeterminate() {
@@ -229,7 +439,7 @@ export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Valid
   }
 
   checkOption(value: PoCheckboxGroupOption) {
-    if (!this._disabled && !value.disabled) {
+    if (!this._disabled && !value.disabled && !value.fixed) {
       this.checkOptionModel(value);
       this.changeValue();
     }
@@ -254,6 +464,19 @@ export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Valid
       this.checkedOptionsList = [];
       this.checkedOptions = {};
     }
+
+    if (optionsModel != null) {
+      this.controlChangeModelEmitter(this.checkIndeterminate());
+    }
+  }
+
+  controlChangeModelEmitter(value: any) {
+    const current = JSON.stringify(this.modelLastUpdate);
+    const incoming = JSON.stringify(value);
+    if (current !== incoming) {
+      this.changeModel.emit(value);
+      this.modelLastUpdate = Array.isArray(value) ? [...value] : value;
+    }
   }
 
   registerOnValidatorChange(fn: () => void) {
@@ -262,7 +485,7 @@ export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Valid
 
   validate(abstractControl: AbstractControl): { [key: string]: any } {
     if (
-      (!this.indeterminate && requiredFailed(this.required, this.disabled, abstractControl.value)) ||
+      (!this.indeterminate && PoValidators.requiredFailed(this.required, this.disabled, abstractControl.value)) ||
       this.isInvalidIndeterminate()
     ) {
       return {
@@ -335,8 +558,11 @@ export class PoCheckboxGroupBaseComponent implements ControlValueAccessor, Valid
   }
 
   private setCheckboxGroupOptionsView(optionsList: Array<PoCheckboxGroupOption>) {
-    this.checkboxGroupOptionsView = optionsList.map(option => {
-      return { ...option, id: uuid() };
-    });
+    this.checkboxGroupOptionsView = optionsList.map(option => ({ ...option, id: PoUtils.uuid() }));
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
   }
 }

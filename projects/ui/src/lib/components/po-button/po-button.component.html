@@ -1,18 +1,28 @@
 <button
   #button
-  class="po-button po-text-ellipsis"
-  type="button"
-  [class.po-button-danger]="type === 'danger'"
-  [class.po-button-link]="type === 'link'"
-  [class.po-button-primary]="type === 'primary'"
-  [class.po-button-sm]="small"
-  [class.po-clickable]="type === 'link'"
+  class="po-button"
+  [type]="type()"
+  [attr.p-kind]="kind"
+  [attr.p-danger]="danger"
   [disabled]="disabled || loading"
+  [attr.aria-label]="ariaLabel()"
+  [attr.aria-expanded]="ariaExpanded"
+  [attr.tabindex]="tabindex"
+  (blur)="onBlur()"
   (click)="onClick()"
 >
-  <div *ngIf="loading" class="po-button-loading-icon">
-    <po-loading-icon p-neutral-color></po-loading-icon>
+  @if (loading) {
+    <div class="po-button-loading-icon">
+      <po-loading-icon [p-size]="mapSizeToIcon(size)"></po-loading-icon>
+    </div>
+  }
+
+  <div class="po-button-container">
+    @if (icon()) {
+      <po-icon class="po-button-icon" [p-icon]="icon()"></po-icon>
+    }
+    @if (label()) {
+      <span class="po-button-label">{{ label() }}</span>
+    }
   </div>
-  <span *ngIf="icon" class="po-icon {{ icon }}" aria-hidden="true"></span>
-  <span *ngIf="label" class="po-button-label">{{ label }}</span>
 </button>

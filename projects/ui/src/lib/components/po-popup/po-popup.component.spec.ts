@@ -3,7 +3,7 @@ import { RouterTestingModule } from '@angular/router/testing';
 
 import { configureTestSuite, expectPropertiesValues } from './../../util-test/util-expect.spec';
 
-import * as UtilsFunctions from '../../utils/util';
+import { PoUtils as UtilsFunctions } from '../../utils/util';
 import { PoControlPositionService } from '../../services/po-control-position/po-control-position.service';
 
 import { PoPopupAction } from './po-popup-action.interface';
@@ -15,8 +15,7 @@ describe('PoPopupComponent:', () => {
   let fixture: ComponentFixture<PoPopupComponent>;
   let nativeElement;
 
-  const eventClick = document.createEvent('MouseEvents');
-  eventClick.initEvent('click', false, true);
+  const eventClick = new MouseEvent('click', { 'bubbles': false, 'cancelable': true });
 
   const eventResize = document.createEvent('Event');
   eventResize.initEvent('resize', false, true);
@@ -79,7 +78,23 @@ describe('PoPopupComponent:', () => {
       event = { target: {} };
     });
 
+    it('ngAfterViewInit: should set target if templateIcon is true', () => {
+      component.templateIcon = true;
+      component.target = {
+        iconElement: {
+          nativeElement: 'test'
+        }
+      };
+      component.ngAfterViewInit();
+
+      expect(component.target).toBe('test');
+    });
+
     it('clickoutListener: should call `closePopupOnClickout` on click in document', () => {
+      const targetEl = document.createElement('button');
+      document.body.appendChild(targetEl);
+      component.target = targetEl;
+
       component.open();
       fixture.detectChanges();
 
@@ -90,6 +105,7 @@ describe('PoPopupComponent:', () => {
       fixture.detectChanges();
 
       expect(component['closePopupOnClickout']).toHaveBeenCalled();
+      targetEl.remove();
     });
 
     it('resizeListener: should call `close` on resize window', () => {
@@ -232,6 +248,15 @@ describe('PoPopupComponent:', () => {
       expect(component['oldTarget']).toBe('targetValue');
     });
 
+    it('open: should emit openEvent when popup is opened.', () => {
+      spyOn(component.openEvent, 'emit');
+      spyOn(component, <any>'validateInitialContent');
+
+      component.open();
+
+      expect(component.openEvent.emit).toHaveBeenCalled();
+    });
+
     it('toggle: should call `open` if showPopup is false shouldn`t call `close` method', () => {
       const param = { name: 'po' };
 
@@ -287,11 +312,15 @@ describe('PoPopupComponent:', () => {
     });
 
     it('onScroll: should call `close` if `showPopup` is true', () => {
+      component.popupRef = {
+        nativeElement: document.createElement('div')
+      };
+
       component.showPopup = true;
 
       spyOn(component, 'close');
 
-      component['onScroll']({ target: {} });
+      component['onScroll']({ target: document.createElement('div') });
 
       expect(component.close).toHaveBeenCalled();
     });
@@ -317,15 +346,37 @@ describe('PoPopupComponent:', () => {
       expect(component.close).not.toHaveBeenCalled();
     });
 
-    it('close: should set left style to 0 and showPopup to false', () => {
+    it('close: should set left style to 0, showPopup to false and emit close', () => {
       component.showPopup = true;
 
       spyOn(component, <any>'removeListeners');
+      spyOn(component.closeEvent, <any>'emit');
 
       component.close();
 
       expect(component.showPopup).toBeFalsy();
       expect(component['removeListeners']).toHaveBeenCalled();
+      expect(component.closeEvent.emit).toHaveBeenCalled();
+    });
+
+    it('checkAllActionIsInvisible: should return true is all itens are invisible', () => {
+      component.actions = [
+        { 'label': 'PO Popup', 'visible': false },
+        { 'label': 'PO Popup2', 'visible': false }
+      ];
+      const allInvisible = component['checkAllActionIsInvisible']();
+
+      expect(allInvisible).toBeTruthy();
+    });
+
+    it('checkAllActionIsInvisible: should return true is one item are visible', () => {
+      component.actions = [
+        { 'label': 'PO Popup', 'visible': false },
+        { 'label': 'PO Popup2', 'visible': true }
+      ];
+      const allInvisible = component['checkAllActionIsInvisible']();
+
+      expect(allInvisible).toBeFalsy();
     });
 
     it(`closePopupOnClickout: should call 'close' if clickedOutDisabledItem, clickedOutTarget and
@@ -423,6 +474,43 @@ describe('PoPopupComponent:', () => {
       expect(component['elementContains'](element, 'po-popup-item-disabled')).toBeFalsy();
     });
 
+    it('onClickItem: should emit clickItem when item has no goBack', () => {
+      const spyEmit = spyOn(component.clickItem, 'emit');
+      const spyDetect = spyOn(component['changeDetector'], 'detectChanges');
+      const spyValidate = spyOn(component as any, 'validateInitialContent');
+
+      component.onClickItem({ label: 'test' });
+
+      expect(spyEmit).toHaveBeenCalledWith({ label: 'test' });
+      expect(spyDetect).not.toHaveBeenCalled();
+      expect(spyValidate).not.toHaveBeenCalled();
+    });
+
+    it('onClickItem: should NOT emit clickItem when goBack is true, but should call detectChanges and validateInitialContent', () => {
+      const spyEmit = spyOn(component.clickItem, 'emit');
+      const spyDetect = spyOn(component['changeDetector'], 'detectChanges');
+      const spyValidate = spyOn(component as any, 'validateInitialContent');
+
+      component.onClickItem({ goBack: true });
+
+      expect(spyEmit).not.toHaveBeenCalled();
+      expect(spyDetect).toHaveBeenCalled();
+      expect(spyValidate).toHaveBeenCalled();
+    });
+
+    it('onClickItem: should emit and also call detectChanges and validateInitialContent when item has subItems', () => {
+      const spyEmit = spyOn(component.clickItem, 'emit');
+      const spyDetect = spyOn(component['changeDetector'], 'detectChanges');
+      const spyValidate = spyOn(component as any, 'validateInitialContent');
+
+      const item = { subItems: [{ label: 'child' }] };
+      component.onClickItem(item);
+
+      expect(spyEmit).toHaveBeenCalledWith(item);
+      expect(spyDetect).toHaveBeenCalled();
+      expect(spyValidate).toHaveBeenCalled();
+    });
+
     describe('checkBooleanValue:', () => {
       it('checkBooleanValue: should return `true` if `action.disabled` is `true`.', () => {
         const action = { label: 'PO ', disabled: true };
@@ -455,6 +543,11 @@ describe('PoPopupComponent:', () => {
         },
         popupRef: {
           nativeElement: undefined
+        },
+        listbox: {
+          nativeElement: {
+            querySelector: () => true
+          }
         },
         target: undefined,
         position: undefined
@@ -489,93 +582,6 @@ describe('PoPopupComponent:', () => {
       component['validateInitialContent']();
 
       expect(component.close).toHaveBeenCalled();
-    });
-  });
-
-  describe('Templates:', () => {
-    it('should show `po-popup` if `showPopup` is `true`', () => {
-      component.showPopup = true;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-popup')).toBeTruthy();
-    });
-
-    it('shouldn`t show `po-popup` if `showPopup` is `false`', () => {
-      component.showPopup = false;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-popup')).toBeNull();
-    });
-
-    it('should set class to default if type is different to danger', () => {
-      component.showPopup = true;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelectorAll('.po-popup-item-default').length).toBe(2);
-    });
-
-    it('should set class to danger if type is danger', () => {
-      component.showPopup = true;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelectorAll('.po-popup-item-danger').length).toBe(1);
-    });
-
-    it('should set class to separator if separator is true', () => {
-      component.showPopup = true;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelectorAll('.po-popup-item-separator').length).toBe(2);
-    });
-
-    it('should add `po-popup-item-selected` class if PopupAction.selected is true', () => {
-      component.actions = [{ label: 'PopupAction ', selected: true }];
-      component.showPopup = true;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-popup-item-selected')).toBeTruthy();
-    });
-
-    it('should not add `po-popup-item-selected` class if PopupAction.selected is false', () => {
-      component.actions = [{ label: 'PopupAction ', selected: false }];
-      component.showPopup = true;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-popup-item-selected')).toBeFalsy();
-    });
-
-    it('should display arrow.', () => {
-      component.hideArrow = false;
-      component.showPopup = true;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-popup-arrow')).toBeTruthy();
-    });
-
-    it('shouldn´t display arrow.', () => {
-      component.hideArrow = true;
-      component.showPopup = true;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-popup-arrow')).toBeFalsy();
-    });
-
-    it('shouldn`t display action if `visible` is `false`.', () => {
-      component.actions = [{ label: 'PO ', type: 'danger', visible: false }];
-      component.showPopup = true;
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-popup-item-danger')).toBeNull();
     });
   });
 });

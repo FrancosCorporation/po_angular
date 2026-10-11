@@ -1,20 +1,32 @@
 import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
+  DoCheck,
   ElementRef,
   forwardRef,
+  Injector,
   OnDestroy,
   OnInit,
+  Renderer2,
   ViewChild,
-  AfterViewInit,
-  Injector
+  inject,
+  SimpleChanges,
+  OnChanges
 } from '@angular/core';
-import { NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
-
+import { NG_VALIDATORS, NG_VALUE_ACCESSOR, NgControl } from '@angular/forms';
 import { Subscription } from 'rxjs';
 
+import { getDefaultSizeFn, setHelperSettings, uuid } from '../../../utils/util';
+
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { PoTableColumnSpacing } from '../../po-table';
 import { PoLookupBaseComponent } from './po-lookup-base.component';
 import { PoLookupFilterService } from './services/po-lookup-filter.service';
 import { PoLookupModalService } from './services/po-lookup-modal.service';
+import { PoHelperComponent } from '../../po-helper';
 
 /* istanbul ignore next */
 const providers = [
@@ -22,15 +34,20 @@ const providers = [
   PoLookupModalService,
   {
     provide: NG_VALUE_ACCESSOR,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoLookupComponent),
     multi: true
   },
   {
     provide: NG_VALIDATORS,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoLookupComponent),
     multi: true
+  },
+  {
+    provide: NgControl,
+    useExisting: forwardRef(() => PoLookupComponent),
+    multi: false
   }
 ];
 
@@ -47,12 +64,59 @@ const providers = [
  *
  * - Caso o po-lookup contenha o [(ngModel)] sem o atributo name, ocorrerá um erro de angular.
  * Então será necessário informar o atributo name ou o atributo [ngModelOptions]="{standalone: true}".
- * ```
- * <po-lookup
- *   [(ngModel)]="pessoa.nome"
- *   [ngModelOptions]="{standalone: true}">
- * </po-lookup>
- * ```
+ *   ```
+ *   <po-lookup
+ *     [(ngModel)]="pessoa.nome"
+ *     [ngModelOptions]="{standalone: true}">
+ *   </po-lookup>
+ *   ```
+ *
+ * - Ao utilizar a propriedade `p-advanced-filters`, a janela de busca avançada é construída
+ * a partir do `po-dynamic-form`. Em aplicações que não importam o `PoModule`, como projetos
+ * *standalone* ou que utilizam módulos específicos, é necessário importar o `PoDynamicModule`
+ * no componente ou módulo onde o `po-lookup` é utilizado, caso contrário será lançado o erro
+ * `NG0201: No provider found for _TitleCasePipe` ao abrir a busca avançada.
+ *   ```
+ *   import { PoDynamicModule, PoFieldModule } from '@po-ui/ng-components';
+ *
+ *   @Component({
+ *     standalone: true,
+ *     imports: [PoFieldModule, PoDynamicModule]
+ *   })
+ *   export class MyComponent {}
+ *   ```
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            |  Descrição                                            | Valor Padrão                                     |
+ * |----------------------------------------|-------------------------------------------------------|--------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                  |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                       |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                       |
+ * | `--text-color-placeholder`             | Cor do texto no placeholder                           | `var(--color-neutral-light-30)`                  |
+ * | `--color`                              | Cor principal do lookup                               | `var(--color-neutral-dark-70)`                   |
+ * | `--border-radius`                      | Contém o valor do raio dos cantos do elemento&nbsp;   | `var(--border-radius-md)`                        |
+ * | `--background`                         | Cor de background                                     | `var(--color-neutral-light-05)`                  |
+ * | `--text-color`                         | Cor do texto                                          | `var(--color-neutral-dark-90)`                   |
+ * | `--color-clear`                        | Cor principal do icone clear                          | `var(--color-action-default)`                    |
+ * | **Icon**                               |                                                       |                                                  |
+ * | `--color-icon`                         | Cor principal do icone pesquisar                      | `var(--color-action-default)`                    |
+ * | **Hover**                              |                                                       |                                                  |
+ * | `--color-hover`                        | Cor principal no estado hover                         | `var(--color-brand-01-dark)`                             |
+ * | `--background-hover`                   | Cor de background no estado hover                     | `var(--color-brand-01-lightest)`                 |
+ * | **Focused**                            |                                                       |                                                  |
+ * | `--color-focused`                      | Cor principal no estado de focus                      | `var(--color-action-default)`                    |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                      |
+ * | **Disabled**                           |                                                       |                                                  |
+ * | `--color-disabled`                     | Cor principal no estado disabled                      | `var(--color-action-disabled)`                   |
+ * | `--background-disabled`                | Cor de background no estado disabled                  | `var(--color-neutral-light-20)`                  |
+ * | `--text-color-disabled`                | Cor do texto quando campo está desabilitado           | `var(--color-action-disabled)`                   |
+ * | **Error**                              |                                                       |                                                  |
+ * | `--color-error`                        | Cor de background no estado de requerido              | `var(--color-feedback-negative-base)`            |
  *
  * @example
  *
@@ -79,39 +143,90 @@ const providers = [
  *  <file name="sample-po-lookup.service.ts"> </file>
  * </example>
  *
+ * <example name="po-lookup-advanced-filter" title="PO Lookup - Advanced Filter">
+ *  <file name="sample-po-lookup-advanced-filter/sample-po-lookup-advanced-filter.component.html"> </file>
+ *  <file name="sample-po-lookup-advanced-filter/sample-po-lookup-advanced-filter.component.ts"> </file>
+ *  <file name="sample-po-lookup.service.ts"> </file>
+ * </example>
+ *
  * <example name="po-lookup-sw-films" title="PO Lookup - Star Wars films">
  *  <file name="sample-po-lookup-sw-films/sample-po-lookup-sw-films.component.html"> </file>
  *  <file name="sample-po-lookup-sw-films/sample-po-lookup-sw-films.component.ts"> </file>
  *  <file name="sample-po-lookup-sw-films/sample-po-lookup-sw-films.service.ts"> </file>
  * </example>
+ *
+ * <example name="po-lookup-multiple" title="PO Lookup - Multiple">
+ *  <file name="sample-po-lookup-multiple/sample-po-lookup-multiple.component.html"> </file>
+ *  <file name="sample-po-lookup-multiple/sample-po-lookup-multiple.component.ts"> </file>
+ *  <file name="sample-po-lookup-multiple/sample-po-lookup-multiple.service.ts"> </file>
+ * </example>
+ *
+ * <example name="po-lookup-mask" title="PO Lookup - Mask">
+ *  <file name="sample-po-lookup-mask/sample-po-lookup-mask.component.html"> </file>
+ *  <file name="sample-po-lookup-mask/sample-po-lookup-mask.component.ts"> </file>
+ *  <file name="sample-po-lookup-mask/sample-po-lookup-mask.service.ts"> </file>
+ * </example>
  */
 @Component({
   selector: 'po-lookup',
   templateUrl: './po-lookup.component.html',
-  providers
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  providers,
+  standalone: false
 })
-export class PoLookupComponent extends PoLookupBaseComponent implements AfterViewInit, OnDestroy, OnInit {
-  private modalSubscription: Subscription;
+export class PoLookupComponent
+  extends PoLookupBaseComponent
+  implements AfterViewInit, OnDestroy, OnInit, DoCheck, OnChanges
+{
+  private readonly renderer = inject(Renderer2);
+  private readonly cd = inject(ChangeDetectorRef);
+  private readonly el = inject(ElementRef);
 
-  @ViewChild('inp', { read: ElementRef, static: true }) inputEl: ElementRef;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
+  initialized = false;
+  timeoutResize;
+  visibleElement = false;
+  heightGroupButtons = 44;
+
+  disclaimers = [];
+  visibleDisclaimers = [];
+
+  id = `po-lookup[${uuid()}]`;
+
+  private modalSubscription: Subscription;
+  private isCalculateVisibleItems: boolean = true;
 
   get autocomplete() {
     return this.noAutocomplete ? 'off' : 'on';
   }
 
-  constructor(
-    poLookupFilterService: PoLookupFilterService,
-    private poLookupModalService: PoLookupModalService,
-    injector: Injector
-  ) {
-    super(poLookupFilterService, injector);
+  constructor() {
+    const languageService = inject(PoLanguageService);
+    const poLookupFilterService = inject(PoLookupFilterService);
+    const poLookupModalService = inject(PoLookupModalService);
+    const injector = inject(Injector);
+
+    super(poLookupFilterService, injector, poLookupModalService, languageService);
   }
 
   ngAfterViewInit() {
     super.ngAfterViewInit();
+
     if (this.autoFocus) {
       this.focus();
     }
+    this.initialized = true;
+  }
+
+  ngDoCheck() {
+    const inputWidth = this.inputEl?.nativeElement.offsetWidth;
+    // Permite que os disclaimers sejam calculados na primeira vez que o componente torna-se visível,
+    // evitando com isso, problemas com Tabs ou Divs que iniciem escondidas.
+    if ((inputWidth && !this.visibleElement && this.initialized) || (inputWidth && this.isCalculateVisibleItems)) {
+      this.debounceResize();
+      this.visibleElement = true;
+    }
+    this.cd.markForCheck();
   }
 
   ngOnDestroy() {
@@ -122,8 +237,14 @@ export class PoLookupComponent extends PoLookupBaseComponent implements AfterVie
 
   ngOnInit() {
     super.ngOnInit();
+    this.initializeListeners();
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
+  }
   /**
    * Função que atribui foco ao componente.
    *
@@ -147,45 +268,295 @@ export class PoLookupComponent extends PoLookupBaseComponent implements AfterVie
     }
   }
 
+  emitAdditionalHelp() {
+    if (this.label && this.isAdditionalHelpEventTriggered()) {
+      this.additionalHelp.emit();
+    }
+  }
+
+  getAdditionalHelpTooltip() {
+    return this.isAdditionalHelpEventTriggered() ? null : this.additionalHelpTooltip;
+  }
+
   openLookup(): void {
     if (this.isAllowedOpenModal()) {
-      const { advancedFilters, service, columns, filterParams, literals } = this;
+      const {
+        advancedFilters,
+        service,
+        columns,
+        filterParams,
+        hideColumnsManager,
+        literals,
+        infiniteScroll,
+        multiple,
+        fieldLabel,
+        fieldValue,
+        size,
+        spacing,
+        textWrap,
+        virtualScroll,
+        changeVisibleColumns,
+        columnRestoreManager
+      } = this;
+
+      const selectedItems = this.checkSelectedItems();
 
       this.poLookupModalService.openModal({
         advancedFilters,
         service,
         columns,
         filterParams,
+        hideColumnsManager,
         title: this.label,
-        literals
+        literals,
+        infiniteScroll,
+        multiple,
+        selectedItems,
+        fieldLabel,
+        fieldValue,
+        size,
+        spacing,
+        textWrap,
+        virtualScroll,
+        changeVisibleColumns,
+        columnRestoreManager
       });
 
       if (!this.modalSubscription) {
-        this.modalSubscription = this.poLookupModalService.selectValueEvent.subscribe(element => {
-          this.selectModel(element);
+        this.modalSubscription = this.poLookupModalService.selectValueEvent.subscribe(selectedOptions => {
+          if (selectedOptions.length > 1 || this.disclaimers.length) {
+            this.setDisclaimers(selectedOptions);
+            this.updateVisibleItems();
+          }
+
+          this.selectModel(selectedOptions);
         });
       }
     }
   }
 
-  setViewValue(value: any, object: any): void {
-    if (this.fieldFormat) {
-      this.setInputValueWipoieldFormat(object);
+  checkSelectedItems() {
+    if (this.multiple) {
+      if (!this.disclaimers.length && this.valueToModel?.length) {
+        return [{ value: this.valueToModel[0], label: this.oldValue, ...this.selectedOptions[0] }];
+      }
+
+      return this.disclaimers;
     } else {
+      return this.valueToModel;
+    }
+  }
+
+  setDisclaimers(selectedOptions: Array<any>) {
+    this.disclaimers = selectedOptions.map(selectedOption => ({
+      value: selectedOption[this.fieldValue],
+      label: selectedOption[this.fieldLabel],
+      ...selectedOption
+    }));
+
+    this.visibleDisclaimers = [...this.disclaimers];
+    this.cd.markForCheck();
+  }
+
+  setViewValue(value: any, object: any): void {
+    if (this.inputEl && this.fieldFormat) {
+      this.setInputValueWipoieldFormat(object);
+    } else if (this.inputEl) {
       this.inputEl.nativeElement.value = this.valueToModel || this.valueToModel === 0 ? value : '';
     }
+    this.cd.markForCheck();
   }
 
   getViewValue(): string {
     return this.inputEl.nativeElement.value;
   }
 
+  getErrorPattern() {
+    return this.fieldErrorMessage && this.hasInvalidClass() ? this.fieldErrorMessage : '';
+  }
+
+  hasInvalidClass() {
+    return (
+      this.el.nativeElement.classList.contains('ng-invalid') && this.el.nativeElement.classList.contains('ng-dirty')
+    );
+  }
+
+  onBlur(): void {
+    this.onTouched?.();
+  }
+
   searchEvent() {
+    this.onBlur();
+
     const value = this.getViewValue();
 
-    if (this.oldValue.toString() !== value) {
+    if (this.oldValue?.toString() !== value) {
       this.searchById(value);
     }
+  }
+
+  closeDisclaimer(value) {
+    this.disclaimers = this.disclaimers.filter(disclaimer => disclaimer.value !== value);
+    this.valueToModel = this.valueToModel.filter(model => model !== value);
+
+    this.updateVisibleItems();
+    this.callOnChange(this.valueToModel.length ? this.valueToModel : undefined);
+  }
+
+  updateVisibleItems() {
+    if (this.disclaimers && this.disclaimers.length > 0) {
+      this.visibleDisclaimers = [].concat(this.disclaimers);
+    }
+
+    this.debounceResize();
+
+    if (!this.inputEl.nativeElement.offsetWidth) {
+      this.isCalculateVisibleItems = true;
+    }
+  }
+
+  debounceResize() {
+    if (!this.autoHeight) {
+      clearTimeout(this.timeoutResize);
+      this.debounce(this.calculateVisibleItems.bind(this), 200);
+    }
+  }
+
+  debounce(func: () => void, delay: number) {
+    this.timeoutResize = setTimeout(func, delay);
+  }
+
+  getInputWidth() {
+    return this.inputEl.nativeElement.offsetWidth - (this.clean ? 80 : 40);
+  }
+
+  getDisclaimersWidth() {
+    const disclaimers = this.inputEl.nativeElement.querySelectorAll('po-disclaimer');
+    return Array.from(disclaimers).map(disclaimer => disclaimer['offsetWidth']);
+  }
+
+  calculateVisibleItems() {
+    const disclaimersWidth = this.getDisclaimersWidth();
+    const inputWidth = this.getInputWidth();
+    const extraDisclaimerSize = 38;
+    const disclaimersVisible = disclaimersWidth[0];
+
+    const newDisclaimers = [];
+    const disclaimers = this.disclaimers;
+
+    if (inputWidth > 0) {
+      let sum = 0;
+      let i = 0;
+      for (i = 0; i < disclaimers.length; i++) {
+        sum += disclaimersWidth[i];
+        newDisclaimers.push(disclaimers[i]);
+
+        if (sum > inputWidth) {
+          sum -= disclaimersWidth[i];
+          this.isCalculateVisibleItems = false;
+          break;
+        }
+      }
+
+      if (disclaimersVisible || !disclaimers.length) {
+        if (i === disclaimers.length) {
+          this.isCalculateVisibleItems = false;
+          return;
+        }
+
+        if (sum + extraDisclaimerSize > inputWidth) {
+          newDisclaimers.splice(-2, 2);
+          const label = '+' + (disclaimers.length + 1 - i).toString();
+          newDisclaimers.push({ value: '', label: label });
+        } else {
+          newDisclaimers.splice(-1, 1);
+          const label = '+' + (disclaimers.length - i).toString();
+          newDisclaimers.push({ value: '', label: label });
+        }
+      }
+    }
+
+    this.visibleDisclaimers = [...newDisclaimers];
+  }
+
+  onKeyDown(event: KeyboardEvent): void {
+    const isFieldFocused = document.activeElement === this.inputEl.nativeElement;
+
+    if (isFieldFocused) {
+      this.keydown.emit(event);
+    }
+  }
+
+  /**
+   *
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * // Exemplo com p-label e p-helper
+   * <po-lookup
+   *  #lookup
+   *  ...
+   *  p-label="Label do lookup"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, lookup)"
+   * ></po-lookup>
+   * ```
+   * ```
+   * ...
+   * onKeyDown(event: KeyboardEvent, inp: PoLookupComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  showAdditionalHelp(): boolean {
+    this.displayAdditionalHelp = !this.displayAdditionalHelp;
+    const helper = this.poHelperComponent();
+    const isHelpEvt = this.isAdditionalHelpEventTriggered();
+    if (!this.label && (helper || this.additionalHelpTooltip || isHelpEvt)) {
+      if (isHelpEvt) {
+        this.additionalHelp.emit();
+      }
+      if (typeof helper !== 'string' && typeof helper?.eventOnClick === 'function') {
+        console.trace('Chamando eventOnClick do helper');
+        helper.eventOnClick();
+        return;
+      }
+      if (this.helperEl?.helperIsVisible()) {
+        this.helperEl?.closeHelperPopover();
+        return;
+      }
+      this.helperEl?.openHelperPopover();
+      return;
+    }
+    return this.displayAdditionalHelp;
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.isAdditionalHelpEventTriggered() ? this.additionalHelp : undefined
+    );
+  }
+
+  protected getDefaultSpacing(): PoTableColumnSpacing {
+    return this.size === PoFieldSize.Small || getDefaultSizeFn(PoTableColumnSpacing) === PoTableColumnSpacing.Small
+      ? PoTableColumnSpacing.ExtraSmall
+      : PoTableColumnSpacing.Medium;
+  }
+
+  private isAdditionalHelpEventTriggered(): boolean {
+    return (
+      this.additionalHelpEventTrigger === 'event' ||
+      (this.additionalHelpEventTrigger === undefined && this.additionalHelp.observed)
+    );
   }
 
   private isAllowedOpenModal(): boolean {
@@ -195,6 +566,7 @@ export class PoLookupComponent extends PoLookupBaseComponent implements AfterVie
 
     return !!(this.service && !this.disabled);
   }
+
   private formatFields(objectSelected, properties) {
     let formatedField;
     if (Array.isArray(properties)) {
@@ -227,5 +599,11 @@ export class PoLookupComponent extends PoLookupBaseComponent implements AfterVie
 
     this.oldValue = isEmpty ? '' : fieldFormated;
     this.inputEl.nativeElement.value = isEmpty ? '' : fieldFormated;
+  }
+
+  private initializeListeners(): void {
+    this.resizeListener = this.renderer.listen('window', 'resize', () => {
+      this.updateVisibleItems();
+    });
   }
 }

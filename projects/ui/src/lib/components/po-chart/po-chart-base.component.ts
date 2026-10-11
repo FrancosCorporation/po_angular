@@ -1,14 +1,18 @@
-import { EventEmitter, Input, Output, Directive, OnChanges, SimpleChanges } from '@angular/core';
+import { Directive, EventEmitter, Input, OnInit, Output } from '@angular/core';
 
-import { convertToInt, isTypeof } from '../../utils/util';
+import { poChartLiteralsDefault } from '../po-chart/interfaces/po-chart-literals-default.interface';
+import { PoChartDataLabel } from '../po-chart/interfaces/po-chart-serie-data-label.interface';
+import { PoChartLiterals } from '../po-chart/interfaces/po-chart-literals.interface';
+import { PoChartRadarOptions } from './interfaces/po-chart-radar-options.interface';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { PoChartOptions } from '../po-chart/interfaces/po-chart-options.interface';
+import { poLocaleDefault } from '../../services/po-language/po-language.constant';
+import { PoChartSerie } from '../po-chart/interfaces/po-chart-serie.interface';
+import { PoChartType } from '../po-chart/enums/po-chart-type.enum';
+import { PoPopupAction } from '../po-popup';
 
-import { PoChartGaugeSerie } from './po-chart-types/po-chart-gauge/po-chart-gauge-series.interface';
-import { PoChartType } from './enums/po-chart-type.enum';
-import { PoChartOptions } from './interfaces/po-chart-options.interface';
-import { PoChartSerie } from './interfaces/po-chart-serie.interface';
-
-const poChartDefaultHeight = 400;
 const poChartMinHeight = 200;
+const poChartDefaultHeight = 400;
 
 /**
  * @description
@@ -16,61 +20,188 @@ const poChartMinHeight = 200;
  * O `po-chart` é um componente para renderização de dados através de gráficos, com isso facilitando a compreensão e tornando a
  * visualização destes dados mais agradável.
  *
- * Através de suas principais propriedades é possível definir atributos, tais como tipo de gráfico, altura, título, opções para os eixos, entre outros.
+ * Através de suas principais propriedades é possível definir atributos, tais como tipo de gráfico, altura, título, cores customizadas, opções para os eixos, entre outros.
  *
  * O componente permite utilizar em conjunto séries do tipo linha e coluna.
  *
  * Além disso, também é possível definir uma ação que será executada ao clicar em determinado elemento do gráfico
  * e outra que será executada ao passar o *mouse* sobre o elemento.
  *
- * #### Boas práticas
+ * #### Guia de uso para Gráficos
  *
- * - Para que o gráfico não fique ilegível e incompreensível, evite uma quantia excessiva de séries.
+ * > Veja nosso [guia de uso para gráficos](/guides/guide-charts) para auxiliar na construção do seu gráfico,
+ * informando em qual caso utilizar, o que devemos evitar e boas práticas relacionada a cores.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                              | Descrição                                                               | Valor Padrão                                      |
+ * |------------------------------------------|-------------------------------------------------------------------------|---------------------------------------------------|
+ * | **Chart (po-chart)**                     |                                                                         |                                                   |
+ * | `--background-color-grid`                | Cor de background dos gráficos                                          | `var(--color-neutral-light-00)`                   |
+ * | `--color-description-chart`              | Cor da descrição dos gráficos                                           | `var(--color-neutral-dark-70)`                    |
+ * | `--font-family-description-chart`        | Fonte da descrição dos gráficos                                         | `var(--font-family-theme)`                        |
+ * | `--font-size-description-chart`          | Tamanho da fonte da descrição dos gráficos                              | `var(--font-size-sm)`                             |
+ * | `--font-weight-description-chart`        | Peso da fonte da descrição dos gráficos                                 | `var(--font-weight-normal)`                       |
+ * | **Header (po-chart .po-chart-header )**  |                                                                         |                                                   |
+ * | `--background-color`                     | Cor de background do cabeçalho                                          | `var(--color-neutral-light-00)`                   |
+ * | `--color`                                | Cor da fonte do cabeçalho                                               | `var(--color-neutral-dark-70)`                    |
+ * | `--font-family`                          | Família tipográfica usada                                               | `var(--font-family-theme)`                        |
+ * | `--font-size-title`                      | Tamanho da fonte                                                        | `var(--font-size-default)`                        |
+ * | `--font-size-icons`                      | Tamanho dos ícones                                                      | `var(--font-size-md)`                             |
+ * | `--font-weight`                          | Peso da fonte                                                           | `var(--font-weight-bold)`                         |
+ * | **Chart (po-chart .po-chart)**           |                                                                         |                                                   |
+ * | `--color-grid`                           | Cor da linha dos gráficos que possuem eixo                              | `var(--color-neutral-light-20)`                   |
+ * | `--font-family-grid`                     | Família tipográfica usada nos valores dos eixos                         | `var(--font-family-theme)`                        |
+ * | `--font-size-grid`                       | Tamanho da fonte usada nos valores dos eixos                            | `var(--font-size-xs)`                             |
+ * | `--font-weight-grid`                     | Peso da fonte usada nos valores dos eixos                               | `var(--font-weight-normal)`                       |
+ * | `--color-legend`                         | Cor da fonte da legenda                                                 | `var(--color-neutral-dark-70)`                    |
+ * | `--color-legend-scroll-icon-active`      | Cor do ícone de scroll da legenda no estado ativo, pro tipo `scroll`    | `var(--color-action-default)`                     |
+ * | `--color-legend-scroll-icon-inactive`    | Cor do ícone de scroll da legenda no estado inativo, pro tipo `scroll`  | `var(--color-action-disabled)`                    |
+ * | `--border-radius-bar`                    | Tamanho da borda nos graficos `Bar` e `Column`                          | `var(--border-radius-none)`                       |
+ * | `--border-color`                         | Cor da borda do gráfico nos Gráficos `Donut` e `Pie`                    | `var(--color-neutral-light-00)`                   |
+ * | `--color-hightlight-value`               | Cor do valor de destaque nos Gráficos `Donut` e `Gauge`                 | `var(--color-neutral-dark-70)`                    |
+ * | `--font-family-hightlight-value`         | Família tipográfica do valor de destaque nos Gráficos `Donut` e `Gauge` | `var(--font-family-theme)`                        |
+ * | `--font-weight-hightlight-value`         | Peso da fonte do valor de destaque nos Gráficos `Donut` e `Gauge`       | `var(--font-weight-bold)`                         |
+ * | `--color-base-gauge`                     | Cor da base do gráfico `Gauge`                                          | `var(--color-neutral-light-20)`                   |
+ * | `--color-gauge-pointer-color`            | Cor do ponteiro do gráfico `Gauge`                                      | `var(--color-neutral-dark-70)`                    |
+ * | `--color-chart-line-point-fill`          | Cor de dentro do círculo dos gráficos `Line` e `Area`                   | `var(--color-neutral-light-00)`                   |
+ * | `--border-color-radar`                   | Cor do eixo da grid do gráfico `Radar`                                  | `var(--color-neutral-light-30)`                   |
+ * | `--color-background-zebra`               | Cor das áreas alternadas (efeito zebrado) da grid do gráfico `Radar`    | `var(--color-neutral-light-10)`                   |
+ * | `--color-background-line`                | Cor das áreas entre as faixas zebradas da grade do `Radar`              | `none`                                            |
+ * | **Wrapper (.po-chart-container-gauge)**  |                                                                         |                                                   |
+ * | `--background-color-container-gauge`     | Cor de background do container do gauge                                 | `var(--color-neutral-light-00)`                   |
  */
 @Directive()
-export abstract class PoChartBaseComponent implements OnChanges {
-  private _options: PoChartOptions;
-  private _categories: Array<string>;
-  private _height: number;
-  private _series: Array<PoChartSerie> | PoChartGaugeSerie;
-  private _type: PoChartType;
+export abstract class PoChartBaseComponent implements OnInit {
+  private _literals?: PoChartLiterals;
+  private setHeightGauge = false;
+  private readonly language: string;
 
-  // manipulação das séries tratadas internamente para preservar 'p-series';
-  chartSeries: Array<PoChartSerie | PoChartGaugeSerie> = [];
-  chartType: PoChartType;
+  @Input('t-id') id: string = 'myChart';
 
-  private defaultType: PoChartType;
+  /** Define o título do gráfico. */
+  @Input('p-title') title?: string;
+
+  /**
+   * @description
+   *
+   * Define os elementos do gráfico que serão criados dinamicamente.
+   */
+  @Input('p-series') series: Array<PoChartSerie>;
+
+  /**
+   * @description
+   *
+   * Define o valor do gráfico do tipo `Gauge` quando utliza as propriedades `From` `To`.
+   */
+  @Input('p-value-gauge-multiple') valueGaugeMultiple?: number;
 
   /**
    * @optional
    *
    * @description
    *
-   * Define a altura do gráfico.
+   * Define os valores utilizados na construção das categorias do gráfico.
    *
-   * > O valor mínimo aceito nesta propriedade é 200.
+   * Para gráficos dos tipos *bar*, *area*, *column* e *line*, representa os nomes das categorias exibidas no eixo.
    *
-   * @default `400px`
+   * Para gráficos do tipo *radar*, representa a configuração dos indicadores, formato (shape), áreas de divisão (splitArea)
+   * e demais opções específicas do gráfico `Radar`.
+   *
+   * > Caso nenhum valor seja informado, será utilizado um hífen como categoria
+   *   correspondente para cada série.
+   *
+   * > Gráficos do tipo bar dimensionam sua área considerando a largura do maior texto
+   *   da categoria, sendo recomendável utilizar rótulos curtos para facilitar a leitura.
    */
-  @Input('p-height') set height(value: number) {
-    const intValue = convertToInt(value);
-    let height: number;
+  @Input('p-categories') categories?: Array<string> | PoChartRadarOptions;
 
-    if (isTypeof(value, 'number')) {
-      height = intValue <= poChartMinHeight ? poChartMinHeight : intValue;
-    } else {
-      height = this.setDefaultHeight();
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Essa propriedade permite que o desenvolvedor adicione ações customizadas no popup do header, oferecendo mais flexibilidade e controle sobre as interações do componente.
+   */
+  @Input('p-custom-actions') customActions?: Array<PoPopupAction>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Objeto com as configurações usadas no `po-chart`.
+   *
+   * É possível, por exemplo, definir as configurações de exibição das legendas,
+   * configurar os eixos(*axis*) para os gráficos dos tipos `area`, `line`, `column`, `bar` e `radar` da seguinte forma:
+   *
+   * ```
+   *  chartOptions: PoChartOptions = {
+   *    legend: true,
+   *    axis: {
+   *      minRange: 0,
+   *      maxRange: 100,
+   *      gridLines: 5,
+   *    },
+   *  };
+   * ```
+   */
+  @Input('p-options') options?: PoChartOptions;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite configurar as propriedades de exibição dos rótulos das séries no gráfico.
+   *
+   * Essa configuração possibilita fixar os valores das séries diretamente no gráfico, alterando o comportamento visual:
+   * - Os valores das séries permanecem visíveis, sem a necessidade de hover.
+   * - O *tooltip* não será exibido.
+   * - Os marcadores (*bullets*) terão seu estilo ajustado.
+   * - As outras séries ficarão com opacidade reduzida ao passar o mouse sobre a série ativa.
+   *
+   * > Disponível para gráficos do tipo `line`, `area`, `column`, `bar` e `radar`.
+   *
+   * #### Exemplo de utilização:
+   * ```typescript
+   * dataLabel: PoChartDataLabel = {
+   *   fixed: true,
+   * };
+   * ```
+   */
+  @Input('p-data-label') dataLabel?: PoChartDataLabel;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a altura do gráfico em px.
+   *
+   * > No caso do tipo `Gauge`, o valor padrão é `300` e esse é seu valor minimo aceito. Nos outros tipos, o valor mínimo aceito nesta propriedade é 200.
+   *
+   * @default `400`
+   */
+  @Input('p-height')
+  set height(value: number) {
+    let heightGauge = null;
+    this.setHeightGauge = true;
+    if (this.type === PoChartType.Gauge) {
+      heightGauge = 300;
     }
-
-    this._height = height;
-
-    this.getSvgContainerSize();
-    this.rebuildComponentRef();
+    this._height = Math.max(value ?? heightGauge ?? poChartDefaultHeight, heightGauge ?? poChartMinHeight);
   }
 
   get height(): number {
-    return this._height || this.setDefaultHeight();
+    return this._height;
   }
+
+  private _height: number = poChartDefaultHeight;
 
   /**
    * @optional
@@ -89,86 +220,48 @@ export abstract class PoChartBaseComponent implements OnChanges {
    *
    * > Veja os valores válidos no *enum* `PoChartType`.
    */
-  @Input('p-type') set type(value: PoChartType) {
-    // O Valor default definido em `p-series` de acordo com a primeira série passada.
-    this._type = (<any>Object).values(PoChartType).includes(value) ? value : undefined;
-
-    this.rebuildComponentRef();
-  }
-
-  get type(): PoChartType {
-    return this._type;
-  }
-
-  /**
-   * @description
-   *
-   * Define os elementos do gráfico que serão criados dinamicamente.
-   */
-  @Input('p-series') set series(value: Array<PoChartSerie> | PoChartGaugeSerie) {
-    this._series = value || [];
-    if (Array.isArray(this._series) && this._series.length) {
-      this.setTypeDefault(this._series[0]);
-    } else {
-      this.transformObjectToArrayObject(this.series as PoChartGaugeSerie);
-      this.rebuildComponentRef();
-    }
-  }
-
-  get series() {
-    return this._series;
-  }
+  @Input('p-type') type: PoChartType;
 
   /**
    * @optional
    *
    * @description
    *
-   * Define os nomes das categorias que serão plotadas nos eixos Y do grid do gráfico.
+   * Objeto com as literais usadas no `po-chart`.
    *
-   * > Caso não seja especificado um valor para a categoria, será plotado um hífen na categoria referente a cada valor de série.
-   */
-  @Input('p-categories') set categories(value: Array<string>) {
-    if (Array.isArray(value)) {
-      this._categories = value;
-    }
-  }
-
-  get categories() {
-    return this._categories;
-  }
-
-  /** Define o título do gráfico. */
-  @Input('p-title') title?: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Objeto com as configurações usadas no `po-chart`.
-   *
-   * É possível definir as configurações dos eixos(*axis*) para os gráfico do tipo `Line`, `Column` e `Bar` da seguinte forma:
+   * Para utilizar basta passar a literal que deseja customizar:
    *
    * ```
-   *  chartOptions: PoChartOptions = {
-   *    axis: {
-   *      minRange: 0,
-   *      maxRange: 100,
-   *      gridLines: 5,
-   *    },
+   *  const customLiterals: PoChartLiterals = {
+   *    downloadCSV: 'Obter CSV',
    *  };
    * ```
-   * > Para gráficos dos tipos `Column` e `Bar`, não será aceito valor negativo para a cofiguração `axis.minRange`.
+   *
+   * E para carregar a literal customizada, basta apenas passar o objeto para o componente.
+   *
+   * ```
+   * <po-chart
+   *   [p-literals]="customLiterals">
+   * </po-chart>
+   * ```
+   *
+   * > O objeto padrão de literais será traduzido de acordo com o idioma do
+   * [`PoI18nService`](/documentation/po-i18n) ou do browser.
    */
-  @Input('p-options') set options(value: PoChartOptions) {
+  @Input('p-literals') set literals(value: PoChartLiterals) {
     if (value instanceof Object && !(value instanceof Array)) {
-      this._options = value;
+      this._literals = {
+        ...poChartLiteralsDefault[poLocaleDefault],
+        ...poChartLiteralsDefault[this.language],
+        ...value
+      };
+    } else {
+      this._literals = poChartLiteralsDefault[this.language];
     }
   }
 
-  get options() {
-    return this._options;
+  get literals() {
+    return this._literals || poChartLiteralsDefault[this.language];
   }
 
   /**
@@ -180,10 +273,11 @@ export abstract class PoChartBaseComponent implements OnChanges {
    *
    * O evento emitirá o seguinte parâmetro:
    * - *donut* e *pie*: um objeto contendo a categoria e valor da série.
-   * - *line*, *column* e *bar*: um objeto contendo o nome da série, valor e categoria do eixo do gráfico.
+   * - *radar*: um objeto contendo o nome da série e os valores.
+   * - *area*, *line*, *column* e *bar*: um objeto contendo o nome da série, valor e categoria do eixo do gráfico.
    */
   @Output('p-series-click')
-  seriesClick = new EventEmitter<PoChartSerie | PoChartGaugeSerie>();
+  seriesClick: EventEmitter<any> = new EventEmitter<any>();
 
   /**
    * @optional
@@ -194,62 +288,19 @@ export abstract class PoChartBaseComponent implements OnChanges {
    *
    * O evento emitirá o seguinte parâmetro de acordo com o tipo de gráfico:
    * - *donut* e *pie*: um objeto contendo a categoria e valor da série.
-   * - *line*, *column* e *bar*: um objeto contendo a categoria, valor da série e categoria do eixo do gráfico.
+   * - *radar*: um objeto contendo o nome da série e os valores.
+   * - *area*, *line*, *column* e *bar*: um objeto contendo a categoria, valor da série e categoria do eixo do gráfico.
    */
   @Output('p-series-hover')
-  seriesHover = new EventEmitter<PoChartSerie | PoChartGaugeSerie>();
+  seriesHover: EventEmitter<any> = new EventEmitter<any>();
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (
-      (changes.series && Array.isArray(this.series) && this.series.length) ||
-      (changes.type && Array.isArray(this.series) && this.series.length)
-    ) {
-      this.validateSerieAndAddType(this.series);
+  constructor(languageService: PoLanguageService) {
+    this.language = languageService.getShortLanguage();
+  }
+
+  ngOnInit(): void {
+    if (this.type === PoChartType.Gauge && !this.setHeightGauge) {
+      this._height = 300;
     }
   }
-
-  onSeriesClick(event: any): void {
-    this.seriesClick.emit(event);
-  }
-
-  onSeriesHover(event: any): void {
-    this.seriesHover.emit(event);
-  }
-
-  private setDefaultHeight() {
-    return this.type === PoChartType.Gauge ? poChartMinHeight : poChartDefaultHeight;
-  }
-
-  private transformObjectToArrayObject(serie: PoChartGaugeSerie) {
-    this.chartSeries = typeof serie === 'object' && Object.keys(serie).length ? [{ ...serie }] : [];
-  }
-
-  private setTypeDefault(serie: PoChartSerie) {
-    const data = serie.data ?? serie.value;
-    const serieType = (<any>Object).values(PoChartType).includes(serie.type) ? serie.type : undefined;
-
-    this.defaultType = serieType ? serieType : Array.isArray(data) ? PoChartType.Column : PoChartType.Pie;
-  }
-
-  private validateSerieAndAddType(series: Array<PoChartSerie>): void {
-    const isTypeCircular = this.defaultType === PoChartType.Pie || this.defaultType === PoChartType.Donut;
-
-    this.chartSeries = series
-      .filter(serie =>
-        isTypeCircular ? typeof serie.data === 'number' || typeof serie.value === 'number' : Array.isArray(serie.data)
-      )
-      .map((serie, index) => {
-        if (index === 0) {
-          this.chartType = (<any>Object).values(PoChartType).includes(serie.type)
-            ? serie.type
-            : this.type || this.defaultType;
-        }
-
-        return { ...serie, type: serie.type || this.chartType };
-      });
-  }
-
-  // válido para gráficos do tipo circular e que será refatorado.
-  protected abstract getSvgContainerSize(): void;
-  abstract rebuildComponentRef(): void;
 }

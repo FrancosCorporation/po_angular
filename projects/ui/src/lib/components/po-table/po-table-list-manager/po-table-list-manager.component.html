@@ -1,0 +1,83 @@
+@if (existedFixedItem()) {
+  <section class="po-table-list-manager-section">
+    <p class="po-table-list-manager-title-group-items">{{ literals.fixedColumns }}</p>
+    @for (option of checkboxGroupOptionsView; track trackByFn($index)) {
+      @if (isFixed(option)) {
+        <li
+          class="po-table-list-manager-container"
+          [class.po-checkbox-group-item-disabled]="option.disabled || disabled"
+        >
+          <ng-container *ngTemplateOutlet="listItemsManagerDefault; context: { $implicit: option }"></ng-container>
+        </li>
+      }
+    }
+  </section>
+}
+
+<section class="po-table-list-manager-section">
+  <p class="po-table-list-manager-title-group-items">{{ literals.otherColumns }}</p>
+  @for (option of checkboxGroupOptionsView; track trackByFn($index)) {
+    @if (!isFixed(option)) {
+      <li class="po-table-list-manager-container" [class.po-checkbox-group-item-disabled]="option.disabled || disabled">
+        @if (!isFixed(option)) {
+          <ng-container *ngTemplateOutlet="listItemsManagerDefault; context: { $implicit: option }"></ng-container>
+        }
+      </li>
+    }
+  }
+</section>
+
+<ng-template #listItemsManagerDefault let-option>
+  <div class="po-table-list-manager-item">
+    <div class="po-table-list-manager-item-switch">
+      <po-switch
+        name="switch"
+        (p-change)="clickSwitch(option)"
+        (keydown)="onKeyDown($event, option)"
+        [p-disabled]="option.disabled || disabled || isFixed(option)"
+        [p-value]="checkedOptions[option.value]"
+        [p-hide-label-status]="true"
+        [p-size]="componentsSize"
+      >
+      </po-switch>
+      <span
+        class="po-table-list-manager-item-text"
+        [class.po-table-list-manager-item-text-aa]="componentsSize === 'small'"
+      >
+        {{ option.label }}
+      </span>
+    </div>
+
+    <div class="po-table-list-manager-item-buttons">
+      @if (!hideActionFixedColumns) {
+        <po-button
+          [p-icon]="isFixed(option) ? 'ICON_PUSH_PIN_SLASH' : 'ICON_PUSH_PIN'"
+          (p-click)="emitFixed(option)"
+          [p-disabled]="!option.visible || checksIfHasFiveFixed(option)"
+          [p-size]="componentsSize"
+        >
+        </po-button>
+      }
+
+      <po-button
+        [p-tooltip]="literals.up"
+        p-tooltip-position="left"
+        p-icon="ICON_ARROW_UP"
+        [p-disabled]="verifyArrowDisabled(option, 'up') || isFixed(option)"
+        [p-size]="componentsSize"
+        (p-click)="emitChangePosition(option, 'up')"
+      >
+      </po-button>
+
+      <po-button
+        [p-tooltip]="literals.down"
+        p-tooltip-position="top"
+        p-icon="ICON_ARROW_DOWN"
+        [p-disabled]="verifyArrowDisabled(option, 'down') || isFixed(option)"
+        [p-size]="componentsSize"
+        (p-click)="emitChangePosition(option, 'down')"
+      >
+      </po-button>
+    </div>
+  </div>
+</ng-template>

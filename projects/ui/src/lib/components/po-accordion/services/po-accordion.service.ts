@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 
 import { Subject } from 'rxjs';
 
+import { PoAccordionItemComponent } from '../po-accordion-item/po-accordion-item.component';
+
 /**
  * @docsPrivate
  *
@@ -10,9 +12,11 @@ import { Subject } from 'rxjs';
  * Serviço para poder notificar o componente `po-accordion` quando um `po-accordion-item` for
  * expandido/colapsado.
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoAccordionService {
-  private subjectChild = new Subject<any>();
+  private readonly subjectChild = new Subject<PoAccordionItemComponent>();
 
   // Recebe o accordionItem
   receiveFromChildAccordionClicked() {
@@ -20,7 +24,7 @@ export class PoAccordionService {
   }
 
   // Envia accordionItem colapsado/expadido do accordion
-  sendToParentAccordionItemClicked(accordionItem: object) {
+  sendToParentAccordionItemClicked(accordionItem: PoAccordionItemComponent) {
     this.subjectChild.next(accordionItem);
   }
 }

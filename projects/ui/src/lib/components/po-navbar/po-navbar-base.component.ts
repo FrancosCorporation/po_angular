@@ -1,8 +1,8 @@
-import { Input, Directive } from '@angular/core';
+import { Directive, Input } from '@angular/core';
 
-import { convertToBoolean } from '../../utils/util';
-import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { convertToBoolean } from '../../utils/util';
 import { PoMenuComponent } from '../po-menu';
 
 import { PoNavbarIconAction } from './interfaces/po-navbar-icon-action.interface';
@@ -29,17 +29,27 @@ export const poNavbarLiteralsDefault = {
  *
  * O componente `po-navbar` é um cabeçalho fixo que permite apresentar uma lista de links para facilitar a navegação pelas
  * páginas da aplicação. Também possui ícones com ações.
+ *
+ * Quando utilizado em uma resolução menor que `768px`, o componente utilizará o menu corrente da aplicação para
+ * incluir seus itens.
+ *
+ * Ao utilizar Navbar com Menu e ambos tiverem logo, será mantido o logo do Navbar.
  */
 @Directive()
 export abstract class PoNavbarBaseComponent {
+  // Menu que esta sendo exibido na pagina corrente.
+  applicationMenu: PoMenuComponent;
+
   private _iconActions: Array<PoNavbarIconAction> = [];
   private _items: Array<PoNavbarItem> = [];
   private _literals: PoNavbarLiterals;
   private _logo: string;
   private _shadow: boolean = false;
-  private language: string = poLocaleDefault;
+  private readonly language: string = poLocaleDefault;
 
   /**
+   * @deprecated v23.x.x
+   *
    * @optional
    *
    * @description
@@ -55,6 +65,8 @@ export abstract class PoNavbarBaseComponent {
   }
 
   /**
+   * @deprecated v23.x.x
+   *
    * @optional
    *
    * @description
@@ -70,6 +82,8 @@ export abstract class PoNavbarBaseComponent {
   }
 
   /**
+   * @deprecated v23.x.x
+   *
    * @optional
    *
    * @description
@@ -111,6 +125,8 @@ export abstract class PoNavbarBaseComponent {
   }
 
   /**
+   * @deprecated v23.x.x
+   *
    * @optional
    *
    * @description
@@ -120,7 +136,7 @@ export abstract class PoNavbarBaseComponent {
   @Input('p-logo') set logo(value: string) {
     this._logo = value;
 
-    if (this.menu) {
+    if (this.applicationMenu) {
       this.validateMenuLogo();
     }
   }
@@ -129,33 +145,24 @@ export abstract class PoNavbarBaseComponent {
   }
 
   /**
+   * @deprecated v23.x.x
+   *
    * @optional
    *
    * @description
    *
-   * Caso já possua um menu na aplicação o mesmo deve ser repassado para essa propriedade para que quando entre em modo
-   * responsivo os items do `po-navbar` possam ser adicionados no primeiro item do menu definido.
+   * Define o texto alternativo para a logomarca.
    *
-   * > Ao utilizar menu e navbar com logo mantém apenas a logo do navbar.
+   * > **Importante**
+   * > Caso esta propriedade não seja definida o texto padrão será "Logomarca início".
    *
-   * Exemplo:
-   *
-   * ```
-   * <po-navbar
-   *  [p-items]="items"
-   *  [p-icon-actions]="iconActions"
-   *  [p-menu]="userMenu">
-   * </po-navbar>
-   * <div class="po-wrapper">
-   *  <po-menu #userMenu
-   *   [p-menus]="[{ label: 'Item 1', link: '/' }]">
-   *  </po-menu>
-   * </div>
-   * ```
+   * @default `Logomarca início`
    */
-  @Input('p-menu') menu?: PoMenuComponent;
+  @Input('p-logo-alt') logoAlt?: string;
 
   /**
+   * @deprecated v23.x.x
+   *
    * @optional
    *
    * @description
@@ -175,6 +182,5 @@ export abstract class PoNavbarBaseComponent {
   constructor(languageService: PoLanguageService) {
     this.language = languageService.getShortLanguage();
   }
-
   protected abstract validateMenuLogo(): void;
 }

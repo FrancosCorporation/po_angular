@@ -4,9 +4,9 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 
-import { changeBrowserInnerWidth, configureTestSuite } from '../../../util-test/util-expect.spec';
+import { changeBrowserInnerWidth } from '../../../util-test/util-expect.spec';
 
-import * as UtilsFunction from '../../../utils/util';
+import { PoUtils as UtilsFunction } from '../../../utils/util';
 
 import { PoBreadcrumbModule } from '../../po-breadcrumb/po-breadcrumb.module';
 import { PoButtonModule } from '../../po-button/po-button.module';
@@ -19,30 +19,25 @@ import { PoPageContentComponent } from '../po-page-content/po-page-content.compo
 import { PoPageHeaderComponent } from '../po-page-header/po-page-header.component';
 import { PoPageListComponent } from './po-page-list.component';
 
-let routerStub;
-let eventClick;
-let eventResize;
-let eventInput;
-let eventSubmit;
-
-routerStub = {
+const routerStub = {
   navigate: jasmine.createSpy('navigate')
 };
 
-eventClick = document.createEvent('Event');
+const eventClick = document.createEvent('Event');
 eventClick.initEvent('click', false, true);
 
-eventResize = document.createEvent('Event');
+const eventResize = document.createEvent('Event');
 eventResize.initEvent('resize', false, true);
 
-eventInput = document.createEvent('Event');
+const eventInput = document.createEvent('Event');
 eventInput.initEvent('input', true, false);
 
-eventSubmit = document.createEvent('Event');
+const eventSubmit = document.createEvent('Event');
 eventSubmit.initEvent('submit', true, false);
 
 @Component({
-  template: ` <po-page-list p-title="Unit Test" [p-actions]="actions"> </po-page-list> `
+  template: ` <po-page-list p-title="Unit Test" [p-actions]="actions"> </po-page-list> `,
+  standalone: false
 })
 class MobileComponent {
   public actions: Array<{}> = [
@@ -68,8 +63,8 @@ describe('PoPageListComponent - Mobile:', () => {
   let fixture: ComponentFixture<PoPageListComponent>;
   let mobileFixture: ComponentFixture<MobileComponent>;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [
         FormsModule,
         RouterTestingModule.withRoutes([]),
@@ -86,10 +81,8 @@ describe('PoPageListComponent - Mobile:', () => {
         PoPageContentComponent
       ],
       providers: [{ provide: Router, useValue: routerStub }]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoPageListComponent);
     component = fixture.componentInstance;
 
@@ -128,7 +121,8 @@ describe('PoPageListComponent - Mobile:', () => {
 });
 
 @Component({
-  template: ` <po-page-list p-title="Unit Test" [p-filter]="filter" [p-actions]="actions"> </po-page-list> `
+  template: ` <po-page-list p-title="Unit Test" [p-filter]="filter" [p-actions]="actions"> </po-page-list> `,
+  standalone: false
 })
 class DesktopComponent {
   public model = '123';
@@ -157,8 +151,8 @@ describe('PoPageListComponent - Desktop:', () => {
   let desktopFixture: ComponentFixture<DesktopComponent>;
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [
         FormsModule,
         ReactiveFormsModule,
@@ -176,10 +170,8 @@ describe('PoPageListComponent - Desktop:', () => {
         PoPageContentComponent
       ],
       providers: [{ provide: Router, useValue: routerStub }]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoPageListComponent);
     component = fixture.componentInstance;
 
@@ -456,13 +448,13 @@ describe('PoPageListComponent - Desktop:', () => {
     });
 
     it('should show only one icon in button actions.', () => {
-      component.actions[0].icon = 'po-icon-news';
-      component.actions[1].icon = 'po-icon-news';
-      component.actions[2].icon = 'po-icon-news';
+      component.actions[0].icon = 'an-newspaper';
+      component.actions[1].icon = 'an-newspaper';
+      component.actions[2].icon = 'an-newspaper';
 
       fixture.detectChanges();
 
-      const icons = nativeElement.querySelectorAll('.po-icon-news');
+      const icons = nativeElement.querySelectorAll('.an-newspaper');
 
       expect(icons.length).toBe(1);
     });
@@ -498,6 +490,16 @@ describe('PoPageListComponent - Desktop:', () => {
       expect(filterActionSpy).toHaveBeenCalledBefore(changeDetectorSpy);
       expect(filterActionSpy).toHaveBeenCalledWith('test filter');
       expect(changeDetectorSpy).toHaveBeenCalled();
+    });
+
+    it('clearInputSearch: should call and clear input', () => {
+      component.filterInput = <any>{
+        nativeElement: { value: 'test filter' }
+      };
+
+      component.clearInputSearch();
+
+      expect(component.filterInput.nativeElement.value).toBe(null);
     });
 
     it('callAction: should open an external URL in a new tab in the browser by calling Utils`s openExternalLink method', () => {

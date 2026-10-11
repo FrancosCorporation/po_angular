@@ -1,25 +1,39 @@
-import { Directive } from '@angular/core';
-import { fakeAsync, tick } from '@angular/core/testing';
+import { Component, Directive } from '@angular/core';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 
-import * as UtilFunctions from './../../../utils/util';
 import { expectPropertiesValues } from '../../../util-test/util-expect.spec';
-import { PoLanguageService } from './../../../services/po-language/po-language.service';
 import { poLocaleDefault } from './../../../services/po-language/po-language.constant';
+import { PoLanguageService } from './../../../services/po-language/po-language.service';
 
+import { PoThemeA11yEnum } from '../../../services';
 import { PoPageDefaultBaseComponent, poPageDefaultLiteralsDefault } from './po-page-default-base.component';
 
 @Directive()
 class PoPageDefaultComponent extends PoPageDefaultBaseComponent {
   setDropdownActions() {}
+
+  getVisibleActions() {}
 }
+
+@Component({
+  selector: 'po-page-default-test-host',
+  template: '',
+  standalone: false
+})
+class PoPageDefaultTestHostComponent extends PoPageDefaultComponent {}
 
 describe('PoPageDefaultBaseComponent:', () => {
   let languageService: PoLanguageService;
   let component: PoPageDefaultComponent;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [PoPageDefaultTestHostComponent]
+    }).compileComponents();
+
     languageService = new PoLanguageService();
-    component = new PoPageDefaultComponent(languageService);
+
+    component = TestBed.runInInjectionContext(() => new PoPageDefaultComponent(languageService));
   });
 
   it('should be created', () => {
@@ -69,8 +83,6 @@ describe('PoPageDefaultBaseComponent:', () => {
       });
 
       it('should accept custom literals.', () => {
-        spyOn(UtilFunctions, <any>'browserLanguage').and.returnValue(poLocaleDefault);
-
         const customLiterals = poPageDefaultLiteralsDefault[poLocaleDefault];
 
         // Custom some literals
@@ -105,6 +117,36 @@ describe('PoPageDefaultBaseComponent:', () => {
       expect(component.poPageContent.recalculateHeaderSize).toHaveBeenCalled();
     }));
 
+    it('p-subtitle: should call recalculateHeaderSize when set subtitle', fakeAsync(() => {
+      component.poPageContent = <any>{
+        recalculateHeaderSize: () => {}
+      };
+
+      spyOn(component.poPageContent, 'recalculateHeaderSize');
+
+      component.subtitle = 'sub teste';
+
+      tick();
+
+      expect(component.subtitle).toBe('sub teste');
+      expect(component.poPageContent.recalculateHeaderSize).toHaveBeenCalled();
+    }));
+
+    it('p-breadcrumb: should call recalculateHeaderSize when set breadcrumb', fakeAsync(() => {
+      component.poPageContent = <any>{
+        recalculateHeaderSize: () => {}
+      };
+
+      spyOn(component.poPageContent, 'recalculateHeaderSize');
+
+      component.breadcrumb = { items: [{ label: 'Home' }] };
+
+      tick();
+
+      expect(component.breadcrumb.items.length).toBe(1);
+      expect(component.poPageContent.recalculateHeaderSize).toHaveBeenCalled();
+    }));
+
     it('p-actions: should update property `p-actions` to empty if is invalid values.', () => {
       const invalidValues = [undefined, null, '', true, false, 0, 1, 'string', [], {}];
 
@@ -115,6 +157,254 @@ describe('PoPageDefaultBaseComponent:', () => {
       const validValues = [[{ label: 'Share', icon: 'po-icon-share' }]];
 
       expectPropertiesValues(component, 'actions', validValues, validValues);
+    });
+
+    describe('p-page-header-type:', () => {
+      it('should set `pageHeaderType` to `primary` when receiving `primary`.', () => {
+        component.pageHeaderType = 'primary';
+        expect(component.pageHeaderType).toBe('primary');
+      });
+
+      it('should set `pageHeaderType` to `secondary` when receiving `secondary`.', () => {
+        component.pageHeaderType = 'secondary';
+        expect(component.pageHeaderType).toBe('secondary');
+      });
+
+      it('should set `pageHeaderType` to `tertiary` when receiving `tertiary`.', () => {
+        component.pageHeaderType = 'tertiary';
+        expect(component.pageHeaderType).toBe('tertiary');
+      });
+
+      it('should default `pageHeaderType` to `primary` with invalid values.', () => {
+        const invalidValues = ['invalid', '', null, undefined, 'other'];
+
+        invalidValues.forEach(value => {
+          component.pageHeaderType = value;
+          expect(component.pageHeaderType).toBe('primary');
+        });
+      });
+    });
+
+    describe('p-page-actions-layout:', () => {
+      it('should set `pageActionsLayout` to `default` when receiving `default`.', () => {
+        component.pageActionsLayout = 'default';
+        expect(component.pageActionsLayout).toBe('default');
+      });
+
+      it('should set `pageActionsLayout` to `dropdown` when receiving `dropdown`.', () => {
+        component.pageActionsLayout = 'dropdown';
+        expect(component.pageActionsLayout).toBe('dropdown');
+      });
+
+      it('should set `pageActionsLayout` to `mixed` when receiving `mixed`.', () => {
+        component.pageActionsLayout = 'mixed';
+        expect(component.pageActionsLayout).toBe('mixed');
+      });
+
+      it('should default `pageActionsLayout` to `default` with invalid values.', () => {
+        const invalidValues = ['invalid', '', null, undefined, 'other'];
+
+        invalidValues.forEach(value => {
+          component.pageActionsLayout = value;
+          expect(component.pageActionsLayout).toBe('default');
+        });
+      });
+    });
+
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
+    describe('p-helper:', () => {
+      it('should keep type when PoHelperOptions has type defined', () => {
+        const options = { title: 'Help', content: 'Content', type: 'help' as const };
+        const result = component['transformPageHelper'](options);
+        expect(result).toEqual(options);
+      });
+
+      it('should accept string value and transform to PoHelperOptions with type info', () => {
+        const result = component['transformPageHelper']('Simple text');
+        expect(result).toEqual({ content: 'Simple text', type: 'info' });
+      });
+
+      it('should default type to "info" when PoHelperOptions has no type', () => {
+        const result = component['transformPageHelper']({ title: 'Help', content: 'Content' });
+        expect((result as any).type).toBe('info');
+      });
+
+      it('should transform string values with HTML to PoHelperOptions with type info', () => {
+        const result = component['transformPageHelper']('<b>bold</b> text');
+        expect(result).toEqual({ content: '<b>bold</b> text', type: 'info' });
+      });
+
+      it('should handle undefined value', () => {
+        const result = component['transformPageHelper'](undefined);
+        expect(result).toBeUndefined();
+      });
+
+      it('should handle null value', () => {
+        const result = component['transformPageHelper'](null);
+        expect(result).toBeNull();
+      });
+    });
+
+    describe('p-refresh:', () => {
+      let fixtureHost: ComponentFixture<PoPageDefaultTestHostComponent>;
+      let hostComponent: PoPageDefaultTestHostComponent;
+
+      beforeEach(() => {
+        fixtureHost = TestBed.createComponent(PoPageDefaultTestHostComponent);
+        hostComponent = fixtureHost.componentInstance;
+        fixtureHost.detectChanges();
+      });
+
+      it('should have refresh input with undefined as default value', () => {
+        expect(hostComponent.refresh()).toBeUndefined();
+      });
+
+      it('should accept a function value', () => {
+        const fn = () => {};
+        fixtureHost.componentRef.setInput('p-refresh', fn);
+        expect(hostComponent.refresh()).toBe(fn);
+      });
+
+      it('should accept null value', () => {
+        fixtureHost.componentRef.setInput('p-refresh', null);
+        expect(hostComponent.refresh()).toBeNull();
+      });
+    });
+
+    describe('refreshCustomAction:', () => {
+      let fixtureHost: ComponentFixture<PoPageDefaultTestHostComponent>;
+      let hostComponent: PoPageDefaultTestHostComponent;
+
+      beforeEach(() => {
+        fixtureHost = TestBed.createComponent(PoPageDefaultTestHostComponent);
+        hostComponent = fixtureHost.componentInstance;
+        fixtureHost.detectChanges();
+      });
+
+      it('should return undefined when refresh is null', () => {
+        fixtureHost.componentRef.setInput('p-refresh', null);
+        expect((hostComponent as any).refreshCustomAction()).toBeUndefined();
+      });
+
+      it('should return undefined when refresh is not a function', () => {
+        fixtureHost.componentRef.setInput('p-refresh', 'not a function');
+        expect((hostComponent as any).refreshCustomAction()).toBeUndefined();
+      });
+
+      it('should return PoHelperCustomAction when refresh is a valid function', () => {
+        const fn = () => {};
+        fixtureHost.componentRef.setInput('p-refresh', fn);
+
+        const result = (hostComponent as any).refreshCustomAction();
+
+        expect(result).toBeDefined();
+        expect(result.icon).toBe('ICON_REFRESH');
+        expect(result.action).toBe(fn);
+      });
+
+      it('should return ariaLabel based on language (pt)', () => {
+        hostComponent['language'] = 'pt';
+        const fn = () => {};
+        fixtureHost.componentRef.setInput('p-refresh', fn);
+
+        const result = (hostComponent as any).refreshCustomAction();
+        expect(result.ariaLabel).toBe('Atualizar');
+      });
+
+      it('should return ariaLabel based on language (en)', () => {
+        hostComponent['language'] = 'en';
+        const fn = () => {};
+        fixtureHost.componentRef.setInput('p-refresh', fn);
+
+        const result = (hostComponent as any).refreshCustomAction();
+        expect(result.ariaLabel).toBe('Refresh');
+      });
+
+      it('should return ariaLabel based on language (es)', () => {
+        hostComponent['language'] = 'es';
+        const fn = () => {};
+        fixtureHost.componentRef.setInput('p-refresh', fn);
+
+        const result = (hostComponent as any).refreshCustomAction();
+        expect(result.ariaLabel).toBe('Actualizar');
+      });
+
+      it('should return ariaLabel based on language (ru)', () => {
+        hostComponent['language'] = 'ru';
+        const fn = () => {};
+        fixtureHost.componentRef.setInput('p-refresh', fn);
+
+        const result = (hostComponent as any).refreshCustomAction();
+        expect(result.ariaLabel).toBe('Обновить');
+      });
+
+      it('should fallback to EN ariaLabel for unsupported language', () => {
+        hostComponent['language'] = 'zw';
+        const fn = () => {};
+        fixtureHost.componentRef.setInput('p-refresh', fn);
+
+        const result = (hostComponent as any).refreshCustomAction();
+        expect(result.ariaLabel).toBe('Refresh');
+      });
     });
   });
 });

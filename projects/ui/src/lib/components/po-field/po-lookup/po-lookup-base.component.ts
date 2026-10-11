@@ -1,35 +1,72 @@
-import { AbstractControl, ControlValueAccessor, NgControl, Validator, FormControl } from '@angular/forms';
 import {
+  AfterViewInit,
+  Directive,
+  ElementRef,
   EventEmitter,
+  HostBinding,
+  HostListener,
+  Inject,
+  InjectOptions,
+  Injector,
+  input,
   Input,
+  OnChanges,
   OnDestroy,
   OnInit,
   Output,
-  Directive,
-  Injector,
-  AfterViewInit,
-  Inject,
-  InjectFlags
+  SimpleChanges,
+  ViewChild
 } from '@angular/core';
-
+import { AbstractControl, ControlValueAccessor, NgControl, UntypedFormControl, Validator } from '@angular/forms';
 import { Subscription } from 'rxjs';
+import { finalize } from 'rxjs/operators';
+import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
 
-import { convertToBoolean, isTypeof } from '../../../utils/util';
-import { requiredFailed } from '../validators';
-
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import {
+  convertToBoolean,
+  getDefaultSizeFn,
+  isTypeof,
+  mapInputSizeToLoadingIcon,
+  validateSizeFn,
+  PoUtils
+} from '../../../utils/util';
+import { PoTableColumnSpacing } from '../../po-table/enums/po-table-spacing.enum';
+import { PoValidators } from '../validators';
 import { PoLookupAdvancedFilter } from './interfaces/po-lookup-advanced-filter.interface';
 import { PoLookupColumn } from './interfaces/po-lookup-column.interface';
 import { PoLookupFilter } from './interfaces/po-lookup-filter.interface';
-import { PoLookupFilterService } from './services/po-lookup-filter.service';
 import { PoLookupLiterals } from './interfaces/po-lookup-literals.interface';
-import { InputBoolean } from '../../../decorators';
-import { finalize } from 'rxjs/operators';
+import { PoLookupFilterService } from './services/po-lookup-filter.service';
+import { PoLookupModalService } from './services/po-lookup-modal.service';
+import { PoHelperOptions } from '../../po-helper';
+import { PoThemeA11yEnum } from '../../../services';
+
+export const poLookupLiteralsDefault = {
+  en: <PoLookupLiterals>{
+    search: 'Search',
+    clean: 'Clean'
+  },
+  es: <PoLookupLiterals>{
+    search: 'Buscar',
+    clean: 'Limpiar'
+  },
+  pt: <PoLookupLiterals>{
+    search: 'Pesquisar',
+    clean: 'Apagar'
+  },
+  ru: <PoLookupLiterals>{
+    search: 'Поиск',
+    clean: 'чистый'
+  }
+};
 
 /**
  * @description
  *
  * Componente utilizado para abrir uma janela de busca com uma tabela que lista dados de um serviço. Nesta janela é possível buscar e
- * selecionar o registro que será enviado para o campo. O `po-lookup` permite que o usuário digite um valor e pressione a tecla *TAB* para
+ * selecionar um ou mais registros que serão enviados para o campo. O `po-lookup` permite que o usuário digite um valor e pressione a tecla *TAB* para
  * buscar um registro.
  *
  * > Caso o campo seja iniciado ou preenchido com um valor inexistente na busca, o mesmo será limpado.
@@ -43,27 +80,47 @@ import { finalize } from 'rxjs/operators';
  */
 @Directive()
 export abstract class PoLookupBaseComponent
-  implements ControlValueAccessor, OnDestroy, OnInit, Validator, AfterViewInit {
-  private _disabled?: boolean = false;
-  private _fieldLabel: string;
-  private _filterService: PoLookupFilter | string;
-  private _noAutocomplete: boolean;
-  private _required?: boolean = false;
+  implements ControlValueAccessor, OnDestroy, OnInit, Validator, AfterViewInit, OnChanges
+{
+  private _literals?: PoLookupLiterals;
+  private readonly language: string;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+  private _spacing: PoTableColumnSpacing;
 
-  protected getSubscription: Subscription;
-  protected keysDescription: Array<any>;
-  protected oldValue: string = '';
-  protected valueToModel;
-  protected oldValueToModel = null;
+  @ViewChild('inp', { read: ElementRef, static: false }) inputEl: ElementRef;
+  // Propriedade interna que define se o ícone de ajuda adicional terá cursor clicável (evento) ou padrão (tooltip).
+  @Input() additionalHelpEventTrigger: string | undefined;
 
-  private onChangePropagate: any = null;
-  // tslint:disable-next-line
-  private onTouched: any = null;
-  private validatorChange: any;
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de ajuda adicional, com o texto desta propriedade sendo passado para o popover do componente `po-helper`.
+   * **Como boa prática, indica-se utilizar um texto com até 140 caracteres.**
+   * > Requer um recuo mínimo de 8px se o componente estiver próximo à lateral da tela.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Input('p-additional-help-tooltip') additionalHelpTooltip?: string;
 
-  private control!: AbstractControl;
-
-  service: any;
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define que o popover (`p-helper` e/ou `p-error-limit`) será incluído no body da página e não
+   * dentro do componente. Essa opção pode ser necessária em cenários com containers que possuem scroll ou overflow
+   * escondido, garantindo o posicionamento correto do tooltip próximo ao elemento.
+   *
+   * > Quando utilizado com `p-helper`, leitores de tela como o NVDA podem não ler o conteúdo do popover.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-append-in-body', transform: convertToBoolean }) appendBox?: boolean = false;
 
   /**
    * @optional
@@ -76,7 +133,7 @@ export abstract class PoLookupBaseComponent
    *
    * @default `false`
    */
-  @Input('p-auto-focus') @InputBoolean() autoFocus: boolean = false;
+  @Input({ alias: 'p-auto-focus', transform: convertToBoolean }) autoFocus: boolean = false;
 
   /**
    * Label do campo.
@@ -130,13 +187,33 @@ export abstract class PoLookupBaseComponent
    * > O objeto padrão de literais será traduzido de acordo com o idioma do
    * [`PoI18nService`](/documentation/po-i18n) ou do browser.
    */
-  @Input('p-literals') literals?: PoLookupLiterals;
+  @Input('p-literals') set literals(value: PoLookupLiterals) {
+    if (value instanceof Object && !(value instanceof Array)) {
+      this._literals = {
+        ...poLookupLiteralsDefault[poLocaleDefault],
+        ...poLookupLiteralsDefault[this.language],
+        ...value
+      };
+    } else {
+      this._literals = poLookupLiteralsDefault[this.language];
+    }
+  }
+
+  get literals() {
+    return this._literals || poLookupLiteralsDefault[this.language];
+  }
 
   /** Texto de apoio do campo. */
   @Input('p-help') help?: string;
 
   /** Mensagem que aparecerá enquanto o campo não estiver preenchido. */
-  @Input('p-placeholder') placeholder?: string = '';
+  @Input('p-placeholder') set placeholder(value: string) {
+    this._placeholder = value || '';
+  }
+
+  get placeholder() {
+    return this._placeholder;
+  }
 
   /** Nome e Id do componente. */
   @Input('name') name: string;
@@ -207,6 +284,416 @@ export abstract class PoLookupBaseComponent
   @Input('p-columns') columns?: Array<PoLookupColumn>;
 
   /**
+   * @optional
+   *
+   * @description
+   *
+   * Define se a indicação de campo opcional será exibida.
+   *
+   * > Não será exibida a indicação se:
+   * - O campo conter `p-required`;
+   * - Não possuir `p-help` e/ou `p-label`.
+   *
+   * @default `false`
+   */
+  @Input('p-optional') optional: boolean;
+
+  /**
+   *
+   * @optional
+   *
+   * @description
+   *
+   * Lista de objetos dos campos que serão criados na busca avançada.
+   *
+   * > Caso não seja passado um objeto ou então ele esteja em branco o link de busca avançada ficará escondido.
+   *
+   * > A busca avançada é construída a partir do `po-dynamic-form`. Em aplicações que não importam o `PoModule`,
+   * como projetos *standalone* ou que utilizam módulos específicos, é necessário importar o `PoDynamicModule`
+   * no componente ou módulo onde o `po-lookup` é utilizado, caso contrário será lançado o erro
+   * `NG0201: No provider found for _TitleCasePipe` ao abrir a busca avançada.
+   *
+   * Exemplo de URL com busca avançada:
+   *
+   * ```
+   * url + ?page=1&pageSize=20&name=Tony%20Stark&nickname=Homem%20de%20Ferro
+   * ```
+   *
+   * Caso algum parâmetro seja uma lista, a concatenação é feita utilizando vírgula.
+   * Exemplo:
+   *
+   * ```
+   * url + ?page=1&pageSize=20&name=Tony%20Stark,Peter%20Parker,Gohan
+   * ```
+   *
+   * Também é possível definir um valor inicial para os campos da busca avançada através da propriedade `initValue`,
+   * que será atribuído ao campo na primeira abertura da janela de busca avançada. Após o usuário aplicar o filtro,
+   * os campos são preenchidos com os valores filtrados:
+   *
+   * ```
+   * advancedFilters: Array<PoLookupAdvancedFilter> = [
+   *   { property: 'nickname', label: 'Apelido' },
+   *   { property: 'active', label: 'Ativo', initValue: false, options: [
+   *     { label: 'Sim', value: true },
+   *     { label: 'Não', value: false }
+   *   ]}
+   * ];
+   * ```
+   *
+   */
+  @Input('p-advanced-filters') advancedFilters: Array<PoLookupAdvancedFilter>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite que o gerenciador de colunas, responsável pela definição de quais colunas serão exibidas, seja escondido.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-columns-manager', transform: convertToBoolean })
+  hideColumnsManager: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Ativa a funcionalidade de scroll infinito para a tabela exibida no retorno da consulta.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-infinite-scroll', transform: convertToBoolean }) infiniteScroll: boolean = false;
+
+  /** Exibe um ícone que permite limpar o campo. */
+  @Input({ alias: 'p-clean', transform: convertToBoolean }) clean: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite a seleção de múltiplos itens.
+   *
+   * > Quando habilitado o valor do campo passará a ser uma lista de valores, por exemplo: `[ 12345, 67890 ]`
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-multiple', transform: convertToBoolean }) multiple: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define que a altura do componente será auto ajustável, possuindo uma altura minima porém a altura máxima será de acordo
+   * com o número de itens selecionados e a extensão dos mesmos, mantendo-os sempre visíveis.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-auto-height', transform: convertToBoolean }) autoHeight: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Exibe a mensagem setada se o campo estiver vazio e for requerido.
+   *
+   * > Necessário que a propriedade `p-required` esteja habilitada.
+   *
+   */
+  @Input('p-field-error-message') fieldErrorMessage: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Limita a exibição da mensagem de erro a duas linhas e exibe um tooltip com o texto completo.
+   *
+   * > Caso essa propriedade seja definida como `true`, a mensagem de erro será limitada a duas linhas
+   * e um tooltip será exibido ao passar o mouse sobre a mensagem para mostrar o conteúdo completo.
+   *
+   * @default `false`
+   */
+  @Input('p-error-limit') errorLimit: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho do componente:
+   * - `small`: altura do input como 32px (disponível apenas para acessibilidade AA).
+   * - `medium`: altura do input como 44px.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o espaçamento interno das células, impactando diretamente na altura das linhas do table dentro do modal. Os
+   * valores permitidos são definidos pelo enum **PoTableColumnSpacing**.
+   *
+   * > Em nível de acessibilidade **AA**, caso o valor de `p-spacing` não seja definido, o valor padrão será `extraSmall`
+   * > nos seguintes cenários:
+   * > - Quando o valor de `p-size` for `small`;
+   * > - Quando o valor padrão dos componentes for configurado como `small` no
+   * > [serviço de tema](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  @Input('p-spacing') set spacing(value: string) {
+    const isExtraSmall = value === PoTableColumnSpacing.ExtraSmall;
+    const isA11yAAA = PoUtils.getA11yLevel() === PoThemeA11yEnum.AAA;
+
+    if (Object.values(PoTableColumnSpacing).includes(value as PoTableColumnSpacing)) {
+      if (isA11yAAA && isExtraSmall) {
+        this._spacing = PoTableColumnSpacing.Medium;
+      } else {
+        this._spacing = value as PoTableColumnSpacing;
+      }
+    } else {
+      this._spacing = this.getDefaultSpacing();
+    }
+  }
+
+  get spacing() {
+    return this._spacing ?? this.getDefaultSpacing();
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita ou desabilita a quebra automática de texto. Quando ativada, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
+   *
+   * Esta propriedade aplica-se ao texto contido nas células da tabela.
+   *
+   * > Incompatível com `virtual-scroll`, que requer altura fixa nas linhas.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-text-wrap', transform: convertToBoolean }) textWrap?: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita o `virtual-scroll` na tabela para melhorar a performance com grandes volumes de dados.
+   * A altura da tabela já é pré-definida, portanto o `virtual-scroll` será ativado automaticamente.
+   *
+   * > Incompatível com `p-text-wrap` e `master-detail`, pois o `virtual-scroll` exige altura fixa nas linhas.
+   *
+   * @default `true`
+   */
+  @Input({ alias: 'p-virtual-scroll', transform: convertToBoolean }) virtualScroll?: boolean = true;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as opções do componente de ajuda (po-helper) que será exibido ao lado do label quando a propriedade `p-label` for definida, ou, ao lado do componente na ausência da propriedade `p-label`.
+   * > Para mais informações acesse: https://po-ui.io/documentation/po-helper.
+   *
+   * > Ao configurar esta propriedade, o antigo ícone de ajuda adicional (`p-additional-help-tooltip` e `p-additional-help`) será ignorado.
+   */
+  poHelperComponent = input<PoHelperOptions | string>(undefined, { alias: 'p-helper' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita a quebra automática do texto da propriedade `p-label`. Quando `p-label-text-wrap` for verdadeiro, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
+   *
+   * @default `false`
+   */
+  labelTextWrap = input<boolean>(false, { alias: 'p-label-text-wrap' });
+
+  /**
+   * @optional
+   *
+   * @description
+   * Define se o título do campo será exibido de forma compacta.
+   *
+   * Quando habilitado (`true`), o modo compacto afeta o conjunto composto por:
+   * - `po-label`
+   * - `p-requirement (showRequired)`
+   * - `po-helper`
+   *
+   * Ou seja, todos os elementos relacionados ao título do campo
+   * (rótulo, indicador de obrigatoriedade e componente auxiliar) passam
+   * a seguir o comportamento de layout compacto.
+   *
+   * Também é possível definir esse comportamento de forma global,
+   * uma única vez, na folha de estilo geral da aplicação, por meio
+   * da customização dos tokens CSS:
+   *
+   * - `--field-container-title-justify`
+   * - `--field-container-title-flex`
+   *
+   * Exemplo:
+   *
+   * ```
+   * :root {
+   *   --field-container-title-justify: flex-start;
+   *   --field-container-title-flex: 0 1 auto;
+   * }
+   * ```
+   *
+   * Dessa forma, o layout compacto passa a ser o padrão da aplicação,
+   * sem a necessidade de definir a propriedade individualmente em cada campo.
+   *
+   * @default `false`
+   */
+  compactLabel = input<boolean, unknown>(false, { alias: 'p-compact-label', transform: convertToBoolean });
+
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Evento disparado ao clicar no ícone de ajuda adicional.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Output('p-additional-help') additionalHelp = new EventEmitter<any>();
+
+  /**
+   * Evento será disparado quando ocorrer algum erro na requisição de busca do item.
+   * Será passado por parâmetro o objeto de erro retornado.
+   */
+  @Output('p-error') onError: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado quando uma tecla é pressionada enquanto o foco está no componente.
+   * Retorna um objeto `KeyboardEvent` com informações sobre a tecla.
+   */
+  @Output('p-keydown') keydown: EventEmitter<KeyboardEvent> = new EventEmitter<KeyboardEvent>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento será disparado quando ocorrer alguma seleção.
+   * Será passado por parâmetro o objeto com o valor selecionado.
+   */
+  @Output('p-selected') selected: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   *  Evento que será disparado ao alterar o model.
+   *  Por parâmetro será passado o novo valor.
+   */
+  @Output('p-change') change: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado sempre que o valor do model é alterado, seja por interação do usuário
+   * ou por atualização programática (ex: `setValue`, `patchValue`, carregamento assíncrono).
+   *
+   * Diferentemente do `p-change`, que é disparado apenas por interação do usuário,
+   * o `p-change-model` cobre todos os cenários de alteração de valor.
+   *
+   * Não emite quando o novo valor é idêntico ao anterior (deduplicação automática).
+   */
+  @Output('p-change-model') changeModel: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado ao fechar o popover do gerenciador de colunas após alterar as colunas visíveis.
+   *
+   * O componente envia como parâmetro um array de string com as colunas visíveis atualizadas.
+   * Por exemplo: ["idCard", "name", "hireStatus", "age"].
+   */
+  @Output('p-change-visible-columns') changeVisibleColumns = new EventEmitter<Array<string>>();
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado ao clicar no botão de restaurar padrão no gerenciador de colunas.
+   *
+   * O componente envia como parâmetro um array de string com as colunas configuradas inicialmente.
+   * Por exemplo: ["idCard", "name", "hireStatus", "age"].
+   */
+  @Output('p-restore-column-manager') columnRestoreManager = new EventEmitter<Array<string>>();
+
+  displayAdditionalHelp: boolean = false;
+  service: any;
+  modelLastUpdate: any;
+
+  protected selectedOptions = [];
+  protected getSubscription: Subscription;
+  protected keysDescription: Array<any>;
+  protected oldValue: string = '';
+  protected valueToModel;
+  protected oldValueToModel = null;
+  // eslint-disable-next-line
+  protected onTouched: any = null;
+  protected resizeListener: () => void;
+  protected isExpandedHeight: boolean = false;
+
+  private _disabled?: boolean = false;
+  private _fieldLabel: string;
+  private _filterService: PoLookupFilter | string;
+  private _loading: boolean = false;
+  private _noAutocomplete: boolean;
+  private _placeholder: string = '';
+  private _required?: boolean = false;
+  private readonly _autoHeight: boolean = false;
+
+  private readonly autoHeightInitialValue: boolean;
+  private onChangePropagate: any = null;
+  private validatorChange: any;
+
+  private control!: AbstractControl;
+
+  private readonly injectOptions: InjectOptions = {
+    self: true
+  };
+
+  /**
    * Serviço responsável por buscar os dados da tabela na janela. Pode ser informado um serviço que implemente a interface
    * `PoLookupFilter` ou uma URL.
    *
@@ -218,20 +705,34 @@ export abstract class PoLookupBaseComponent
    *
    * Caso utilizar ordenação, a coluna ordenada será enviada através do parâmetro `order`, por exemplo:
    * - Coluna decrescente:
-   * ```
-   *  url + ?page=1&pageSize=20&filter=Peter&order=-name
-   * ```
+   *   ```
+   *    url + ?page=1&pageSize=20&filter=Peter&order=-name
+   *   ```
    *
    * - Coluna ascendente:
-   * ```
-   *  url + ?page=1&pageSize=20&filter=Peter&order=name
-   * ```
+   *   ```
+   *    url + ?page=1&pageSize=20&filter=Peter&order=name
+   *   ```
    *
    * Se for definido a propriedade `p-filter-params`, o mesmo também será concatenado. Por exemplo, para o
    * parâmetro `{ age: 23 }` a URL ficaria:
    *
    * ```
    * url + ?page=1&pageSize=20&age=23&filter=Peter
+   * ```
+   *
+   * Ao iniciar o campo com valor, os registros serão buscados da seguinte forma:
+   * ```
+   * model = 1234;
+   *
+   * GET url/1234
+   * ```
+   *
+   * Caso estiver com múltipla seleção habilitada:
+   * ```
+   * model = [1234, 5678]
+   *
+   * GET url?${fieldValue}=1234,5678
    * ```
    *
    * > Esta URL deve retornar e receber os dados no padrão de [API do PO UI](https://po-ui.io/guides/api) e utiliza os valores
@@ -266,8 +767,8 @@ export abstract class PoLookupBaseComponent
    *
    * @default `false`
    */
-  @Input('p-no-autocomplete') set noAutocomplete(value: boolean) {
-    this._noAutocomplete = convertToBoolean(value);
+  @Input({ alias: 'p-no-autocomplete', transform: convertToBoolean }) set noAutocomplete(value: boolean) {
+    this._noAutocomplete = value;
   }
 
   get noAutocomplete() {
@@ -279,26 +780,13 @@ export abstract class PoLookupBaseComponent
    *
    * @description
    *
-   * Define se a indicação de campo opcional será exibida.
-   *
-   * > Não será exibida a indicação se:
-   * - O campo conter `p-required`;
-   * - Não possuir `p-help` e/ou `p-label`.
+   * Define que o campo será obrigatório.
+   * > Esta propriedade é desconsiderada quando o input está desabilitado `(p-disabled)`.
    *
    * @default `false`
    */
-  @Input('p-optional') optional: boolean;
-
-  /**
-   * @optional
-   * @description
-   *
-   * Indica que o campo será obrigatório. Esta propriedade é desconsiderada quando o campo está desabilitado (p-disabled).
-   *
-   * @default `false`
-   */
-  @Input('p-required') set required(required: boolean) {
-    this._required = convertToBoolean(required);
+  @Input({ alias: 'p-required', transform: convertToBoolean }) set required(required: boolean) {
+    this._required = required;
 
     this.validateModel(this.valueToModel);
   }
@@ -308,6 +796,14 @@ export abstract class PoLookupBaseComponent
   }
 
   /**
+   * Define se a indicação de campo obrigatório seré exibida.
+   *
+   * > Não será exibida a indicação se:
+   * - Não possuir `p-help` e/ou `p-label`.
+   */
+  @Input('p-show-required') showRequired: boolean = false;
+
+  /**
    * @description
    *
    * Indica que o campo será desabilitado.
@@ -315,8 +811,10 @@ export abstract class PoLookupBaseComponent
    * @default false
    * @optional
    */
-  @Input('p-disabled') set disabled(disabled: boolean) {
-    this._disabled = <any>disabled === '' ? true : convertToBoolean(disabled);
+  @HostBinding('attr.p-disabled')
+  @Input({ alias: 'p-disabled', transform: convertToBoolean })
+  set disabled(disabled: boolean) {
+    this._disabled = disabled;
   }
 
   get disabled(): boolean {
@@ -324,58 +822,35 @@ export abstract class PoLookupBaseComponent
   }
 
   /**
-   *
    * @optional
    *
    * @description
+   * Exibe um ícone de carregamento no lado direito do campo para sinalizar que uma operação está em andamento.
    *
-   * Lista de objetos dos campos que serão criados na busca avançada.
-   *
-   * > Caso não seja passado um objeto ou então ele esteja em branco o link de busca avançada ficará escondido.
-   *
-   * Exemplo de URL com busca avançada:
-   *
-   * ```
-   * url + ?page=1&pageSize=20&name=Tony%20Stark&nickname=Homem%20de%20Ferro
-   * ```
-   *
-   * Caso algum parâmetro seja uma lista, a concatenação é feita utilizando vírgula.
-   * Exemplo:
-   *
-   * ```
-   * url + ?page=1&pageSize=20&name=Tony%20Stark,Peter%20Parker,Gohan
-   * ```
-   *
+   * @default `false`
    */
-  @Input('p-advanced-filters') advancedFilters: Array<PoLookupAdvancedFilter>;
+  @HostBinding('attr.p-loading')
+  @Input({ alias: 'p-loading', transform: convertToBoolean })
+  set loading(value: boolean) {
+    this._loading = value;
+  }
 
-  /**
-   * Evento será disparado quando ocorrer algum erro na requisição de busca do item.
-   * Será passado por parâmetro o objeto de erro retornado.
-   */
-  @Output('p-error') onError: EventEmitter<any> = new EventEmitter<any>();
+  get loading(): boolean {
+    return this._loading;
+  }
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento será disparado quando ocorrer alguma seleção.
-   * Será passado por parâmetro o objeto com o valor selecionado.
-   */
-  @Output('p-selected') selected: EventEmitter<any> = new EventEmitter<any>();
+  get isDisabled(): boolean {
+    return this.disabled || this.loading;
+  }
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   *  Evento que será disparado ao alterar o model.
-   *  Por parâmetro será passado o novo valor.
-   */
-  @Output('p-change') change: EventEmitter<any> = new EventEmitter<any>();
-
-  constructor(private defaultService: PoLookupFilterService, @Inject(Injector) private injector: Injector) {}
+  constructor(
+    private readonly defaultService: PoLookupFilterService,
+    @Inject(Injector) private readonly injector: Injector,
+    public poLookupModalService: PoLookupModalService,
+    languageService: PoLanguageService
+  ) {
+    this.language = languageService.getShortLanguage();
+  }
 
   ngOnDestroy() {
     if (this.getSubscription) {
@@ -391,22 +866,25 @@ export abstract class PoLookupBaseComponent
     this.setControl();
   }
 
-  private setControl() {
-    const ngControl: NgControl = this.injector.get(NgControl, null, InjectFlags.Self);
+  cleanModel() {
+    this.cleanViewValue();
+    this.callOnChange(undefined);
+  }
 
-    if (ngControl) {
-      this.control = ngControl.control as FormControl;
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes.columns?.currentValue) {
+      this.columns = changes.columns.currentValue;
+      this.poLookupModalService?.setChangeColumns(this.columns);
+    }
+
+    if (changes.multiple && isTypeof(this.filterService, 'string')) {
+      this.service.setConfig(this.filterService, this.fieldValue, this.multiple);
     }
   }
 
-  private initializeColumn(): void {
-    if (this.fieldLabel) {
-      this.keysDescription = [this.fieldLabel];
-    } else {
-      this.keysDescription = [];
-
-      this.keysDescription = this.columns.filter(element => element.fieldLabel).map(element => element.property);
-    }
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
   }
 
   // Função implementada do ControlValueAccessor
@@ -433,9 +911,14 @@ export abstract class PoLookupBaseComponent
 
   // Seleciona o valor do model.
   selectValue(valueSelected: any) {
-    this.valueToModel = valueSelected[this.fieldValue];
-
-    this.callOnChange(this.valueToModel);
+    this.valueToModel = valueSelected;
+    if (this.multiple) {
+      this.callOnChange(this.valueToModel);
+    } else if (this.valueToModel) {
+      this.callOnChange(this.valueToModel[this.fieldValue]);
+    } else {
+      this.callOnChange(undefined);
+    }
     this.selected.emit(valueSelected);
   }
 
@@ -446,21 +929,41 @@ export abstract class PoLookupBaseComponent
     }
 
     if (this.oldValueToModel !== this.valueToModel) {
-      this.change.emit(this.valueToModel);
+      this.change.emit(value);
     }
 
     // Armazenar o valor antigo do model
     this.oldValueToModel = this.valueToModel;
+
+    setTimeout(() => {
+      if (this.autoHeight) {
+        this.updateLookupInputHeight();
+      }
+    });
+
+    this.controlChangeModelEmitter(value);
   }
 
-  searchById(value: string) {
+  controlChangeModelEmitter(value: any) {
+    if (this.modelLastUpdate !== value) {
+      this.changeModel.emit(value);
+      this.modelLastUpdate = value;
+    }
+  }
+
+  //Transforma o tamanho do input para o tamanho do ícone de loading correspondente
+  mapSizeToIcon(size: string): string {
+    return mapInputSizeToLoadingIcon(size);
+  }
+
+  searchById(value) {
     let checkedValue = value;
 
     if (typeof checkedValue === 'string') {
       checkedValue = checkedValue.trim();
     }
 
-    if (checkedValue !== '') {
+    if (checkedValue !== '' && checkedValue !== '.') {
       const oldDisable = this.disabled;
       this.disabled = true;
 
@@ -484,10 +987,13 @@ export abstract class PoLookupBaseComponent
         )
         .subscribe(
           element => {
-            if (element) {
-              this.oldValue = element[this.fieldLabel];
-              this.selectValue(element);
-              this.setViewValue(this.getFormattedLabel(element), element);
+            if (element?.length || (!Array.isArray(element) && element)) {
+              if (Array.isArray(element) && element.length > 1) {
+                this.setDisclaimers(element);
+                this.updateVisibleItems();
+              }
+
+              this.selectModel(Array.isArray(element) ? element : [element]);
             } else {
               this.cleanModel();
             }
@@ -503,7 +1009,7 @@ export abstract class PoLookupBaseComponent
   }
 
   validate(abstractControl: AbstractControl): { [key: string]: any } {
-    if (requiredFailed(this.required, this.disabled, abstractControl.value)) {
+    if (PoValidators.requiredFailed(this.required, this.disabled, abstractControl.value)) {
       return {
         required: {
           valid: false
@@ -513,31 +1019,23 @@ export abstract class PoLookupBaseComponent
   }
 
   writeValue(value: any): void {
-    if (value && value instanceof Object) {
-      // Esta condição é executada quando é retornado o objeto selecionado do componente Po Lookup Modal.
-      this.oldValue = value[this.fieldLabel];
-      this.valueToModel = value[this.fieldValue];
-      this.setViewValue(this.getFormattedLabel(value), value);
-    } else if (value) {
+    if (value?.length || (!Array.isArray(value) && value)) {
       // Esta condição é executada somente quando é passado o ID para realizar a busca pelo ID.
       this.searchById(value);
     } else {
       this.cleanViewValue();
+      this.controlChangeModelEmitter(undefined);
     }
   }
 
-  // Atribui um ou mais valores ao campo.
-  abstract setViewValue(value: any, object: any): void;
-
-  // Método com a implementação para abrir o lookup.
-  abstract openLookup(): void;
-
-  protected cleanModel() {
-    this.cleanViewValue();
-    this.callOnChange(undefined);
+  // Retorna o Subscriber da propriedade getSubscription que ocorre
+  // no evento de blur que executa o método searchEvent().
+  getSubscriptionFunction(): Subscription {
+    return this.getSubscription;
   }
 
   protected cleanViewValue() {
+    this.setDisclaimers([]);
     this.setViewValue('', {});
     this.oldValue = '';
     this.valueToModel = null;
@@ -549,10 +1047,20 @@ export abstract class PoLookupBaseComponent
   }
 
   // Chama o método writeValue e preenche o model.
-  protected selectModel(value: any) {
-    this.writeValue(value);
-    if (value && value instanceof Object) {
-      this.selectValue(value);
+  protected selectModel(options: Array<any>) {
+    if (options.length) {
+      this.selectedOptions = [...options];
+
+      const newModel = this.multiple ? options.map(option => option[this.fieldValue]) : options[0];
+      this.selectValue(newModel);
+
+      if (options.length === 1) {
+        this.oldValue = options[0][this.fieldLabel];
+        this.setViewValue(this.getFormattedLabel(options[0]), options[0]);
+      }
+    } else {
+      this.selectValue(undefined);
+      this.cleanViewValue();
     }
   }
 
@@ -569,7 +1077,53 @@ export abstract class PoLookupBaseComponent
 
     if (service && isTypeof(service, 'string')) {
       this.service = this.defaultService;
-      this.service.setUrl(service);
+      this.service.setConfig(service, this.fieldValue, this.multiple);
     }
   }
+
+  private setControl() {
+    const ngControl: NgControl = this.injector.get(NgControl, null, this.injectOptions);
+
+    if (ngControl) {
+      this.control = ngControl.control as UntypedFormControl;
+    }
+  }
+
+  private initializeColumn(): void {
+    if (this.fieldLabel) {
+      this.keysDescription = [this.fieldLabel];
+    } else {
+      this.keysDescription = [];
+
+      this.keysDescription = this.columns.filter(element => element.fieldLabel).map(element => element.property);
+    }
+  }
+
+  private updateLookupInputHeight(): void {
+    if (!this.inputEl) return;
+
+    const height = this.inputEl.nativeElement.offsetHeight;
+    if (this.size === PoFieldSize.Small) {
+      this.isExpandedHeight = height > 32;
+    } else {
+      this.isExpandedHeight = height > 44;
+    }
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
+  }
+
+  // Atribui um ou mais valores ao campo.
+  abstract setViewValue(value: any, object: any): void;
+
+  // Método com a implementação para abrir o lookup.
+  abstract openLookup(): void;
+
+  abstract setDisclaimers(a);
+
+  abstract updateVisibleItems();
+
+  protected abstract getDefaultSpacing();
 }

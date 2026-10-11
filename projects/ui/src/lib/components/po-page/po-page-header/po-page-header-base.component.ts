@@ -1,6 +1,12 @@
-import { Input, Directive } from '@angular/core';
+import { Directive, Input, input } from '@angular/core';
 
 import { PoBreadcrumb } from '../../po-breadcrumb/po-breadcrumb.interface';
+import { PoHelperOptions } from '../../po-helper/interfaces/po-helper.interface';
+import { parseSafeText, PoFormattingTag, PoTextFragment } from '../../../utils/safe-text-parser';
+import { PoHelperCustomAction } from '../../po-helper/interfaces/po-helper-custom-action.interface';
+
+/** Tags aceitas pelo subtítulo do po-page-header. */
+const PAGE_SUBTITLE_ALLOWED_TAGS: Array<PoFormattingTag> = ['b', 'i', 'u', 'strong', 'em'];
 
 /**
  * @docsPrivate
@@ -12,7 +18,24 @@ import { PoBreadcrumb } from '../../po-breadcrumb/po-breadcrumb.interface';
  */
 @Directive()
 export class PoPageHeaderBaseComponent {
+  /** Título da página. */
+  @Input('p-title') title: string;
+
+  /** Define o conteúdo do po-helper. */
+  helper = input<PoHelperOptions | string>(undefined, { alias: 'p-helper' });
+
+  /** Define a ação customizada para o po-helper (uso interno entre componentes). */
+  customAction = input<PoHelperCustomAction>(undefined, { alias: 'p-custom-action' });
+
+  /** Define o tamanho dos componentes no header. */
+  @Input('p-size') size: string;
+
+  /** Define o tipo de header: `primary`, `secondary` ou `tertiary`. */
+  @Input('p-type') type: string = 'primary';
+
   private _breadcrumb: PoBreadcrumb;
+  private _subtitle: string;
+  private _subtitleFragments: Array<PoTextFragment> = [];
 
   /** Objeto com propriedades do breadcrumb. */
 
@@ -23,6 +46,17 @@ export class PoPageHeaderBaseComponent {
     return this._breadcrumb;
   }
 
-  /** Título da página. */
-  @Input('p-title') title: string;
+  /** Subtítulo da página. */
+  @Input('p-subtitle') set subtitle(value: string) {
+    this._subtitle = value;
+    this._subtitleFragments = parseSafeText(value, PAGE_SUBTITLE_ALLOWED_TAGS);
+  }
+
+  get subtitle(): string {
+    return this._subtitle;
+  }
+
+  get subtitleFragments(): Array<PoTextFragment> {
+    return this._subtitleFragments;
+  }
 }

@@ -4,9 +4,12 @@ import { PoModalComponent, PoSlideItem } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-slide-landscapes',
-  templateUrl: './sample-po-slide-landscapes.component.html'
+  templateUrl: './sample-po-slide-landscapes.component.html',
+  standalone: false
 })
 export class SamplePoSlideLandscapesComponent {
+  @ViewChild(PoModalComponent, { static: true }) modal: PoModalComponent;
+
   landscapes: Array<PoSlideItem> = [
     { image: '/assets/graphics/landscape-01.jpeg', alt: 'On the road', action: this.aboutLandscape.bind(this) },
     {
@@ -18,8 +21,6 @@ export class SamplePoSlideLandscapesComponent {
   ];
 
   modalText: string;
-
-  @ViewChild(PoModalComponent, { static: true }) modal: PoModalComponent;
 
   aboutLandscape(item: PoSlideItem) {
     this.modalText = item.alt;

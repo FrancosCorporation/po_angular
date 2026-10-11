@@ -1,15 +1,18 @@
 import { Component, OnInit } from '@angular/core';
 
-import { PoCheckboxGroupOption, PoSelectOption } from '@po-ui/ng-components';
+import { PoCheckboxGroupOption, PoRadioGroupOption, PoSelectOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-decimal-labs',
-  templateUrl: './sample-po-decimal-labs.component.html'
+  templateUrl: './sample-po-decimal-labs.component.html',
+  standalone: false
 })
 export class SamplePoDecimalLabsComponent implements OnInit {
+  helperText: string;
   decimal: number;
   decimalsLength: number;
   event: string;
+  displayFormat: string;
   help: string;
   icon: string;
   label: string;
@@ -20,6 +23,7 @@ export class SamplePoDecimalLabsComponent implements OnInit {
   errorPattern: string;
   max: number;
   min: number;
+  size: string;
 
   public readonly localeOptions: Array<PoSelectOption> = [
     { value: 'pt', label: 'Portuguese' },
@@ -29,18 +33,29 @@ export class SamplePoDecimalLabsComponent implements OnInit {
   ];
 
   public readonly iconOptions: Array<PoSelectOption> = [
-    { value: 'po-icon-cart', label: 'po-icon-cart' },
-    { value: 'po-icon-finance-secure', label: 'po-icon-finance-secure' },
-    { value: 'po-icon-debit-payment', label: 'po-icon-debit-payment' }
+    { value: 'an an-shopping-cart-simple', label: 'an an-shopping-cart-simple' },
+    { value: 'an an-currency-dollar-simple', label: 'an an-currency-dollar-simple' },
+    { value: 'fa fa-calculator', label: 'fa fa-calculator' }
   ];
 
   public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [
     { value: 'clean', label: 'Clean' },
     { value: 'disabled', label: 'Disabled' },
+    { value: 'errorLimit', label: 'Limit Error Message' },
+    { value: 'labelTextWrap', label: 'Label Text Wrap' },
+    { value: 'compactLabel', label: 'Compact Label' },
+    { value: 'loading', label: 'Loading' },
     { value: 'noAutocomplete', label: 'No Autocomplete' },
     { value: 'optional', label: 'Optional' },
     { value: 'readonly', label: 'Read Only' },
-    { value: 'required', label: 'Required' }
+    { value: 'required', label: 'Required' },
+    { value: 'requiredFieldErrorMessage', label: 'Required Field Error Message' },
+    { value: 'showRequired', label: 'Show Required' }
+  ];
+
+  public readonly sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
   ];
 
   get maxDecimalsLength() {
@@ -60,9 +75,11 @@ export class SamplePoDecimalLabsComponent implements OnInit {
   }
 
   restore() {
+    this.helperText = '';
     this.decimal = undefined;
     this.decimalsLength = undefined;
     this.event = '';
+    this.displayFormat = undefined;
     this.help = undefined;
     this.icon = undefined;
     this.label = undefined;
@@ -72,6 +89,7 @@ export class SamplePoDecimalLabsComponent implements OnInit {
     this.errorPattern = undefined;
     this.max = undefined;
     this.min = undefined;
+    this.size = 'medium';
 
     this.properties = [];
   }

@@ -1,26 +1,48 @@
-import { Input, Directive } from '@angular/core';
+import { Directive, HostBinding, HostListener, Input, output } from '@angular/core';
 
 import {
-  browserLanguage,
   convertToBoolean,
   convertToInt,
+  getDefaultSizeFn,
   isExternalLink,
   isTypeof,
-  validValue,
-  uuid
+  uuid,
+  validateSizeFn,
+  validValue
 } from '../../utils/util';
 
+import { PoFieldSize } from '../../enums/po-field-size.enum';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { PoMenuFilter } from './po-menu-filter/po-menu-filter.interface';
 import { PoMenuItem } from './po-menu-item.interface';
+import { PoMenuGlobalService } from './services/po-menu-global.service';
 import { PoMenuService } from './services/po-menu.service';
-import { PoLanguageService } from '../../services/po-language/po-language.service';
-import { poLocaleDefault } from '../../services/po-language/po-language.constant';
 
 export const poMenuLiteralsDefault = {
-  en: { itemNotFound: 'Item not found.', emptyLabelError: 'Attribute PoMenuItem.label can not be empty.' },
-  es: { itemNotFound: 'Elemento no encontrado.', emptyLabelError: 'El atributo PoMenuItem.label no puede ser vacío.' },
-  pt: { itemNotFound: 'Item não encontrado.', emptyLabelError: 'O atributo PoMenuItem.label não pode ser vazio.' },
-  ru: { itemNotFound: 'Предмет не найден.', emptyLabelError: 'Атрибут PoMenuItem.label не может быть пустым.' }
+  en: {
+    itemNotFound: 'Item not found',
+    emptyLabelError: 'Attribute PoMenuItem.label can not be empty',
+    close: 'Close menu',
+    open: 'Open menu'
+  },
+  es: {
+    itemNotFound: 'Elemento no encontrado',
+    emptyLabelError: 'El atributo PoMenuItem.label no puede ser vacío',
+    close: 'Cerrar menú',
+    open: 'Abrir menú'
+  },
+  pt: {
+    itemNotFound: 'Item não encontrado',
+    emptyLabelError: 'O atributo PoMenuItem.label não pode ser vazio',
+    close: 'Fechar menu',
+    open: 'Abrir menu'
+  },
+  ru: {
+    itemNotFound: 'Предмет не найден',
+    emptyLabelError: 'Атрибут PoMenuItem.label не может быть пустым',
+    close: 'Закрыть меню',
+    open: 'Открыть меню'
+  }
 };
 
 /**
@@ -30,29 +52,95 @@ export const poMenuLiteralsDefault = {
  *
  * O componente po-menu recebe uma lista de objetos do tipo `MenuItem` com as informações dos itens de menu como
  * textos, links para redirecionamento, ações, até 4 níveis de menu e ícones para o primeiro nível de menu.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                    |
+ * |----------------------------------------|-------------------------------------------------------|-------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                 |
+ * | `--border-radius`                      | Contém o valor do raio dos cantos do elemento&nbsp;   | `var(--border-radius-md)`                       |
+ * | `--border-color`                       | Cor da borda                                          | `var(--color-neutral-light-20)`                 |
+ * | `--background-color`                   | Cor de background                                     | `Var(----color-neutral-light-05)`               |
+ * | **Menu Footer**                        |                                                       |                                                 |
+ * | `--color`                              | Cor principla do menu footer                          | `var(--color-action-default)`                   |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                      |
+ * | `--line-height`                        | Tamanho da label                                      | `var(--line-height-md)`                         |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                     |
+ * | `--font-weight-lvl0`                   | Peso da fonte                                         | `var(--font-weight-bold)`                       |
+ * | **po-menu-item**                       |                                                       |                                                 |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                      |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                      |
+ * | `--line-height`                        | Tamanho da label                                      | `var(--line-height-md)`                         |
+ * | `--border-radius`                      | Contém o valor do raio dos cantos do elemento&nbsp;   | `var(--border-radius-md)`                       |
+ * | `--color`                              | Cor principal do item                                 | `var(--color-action-default)`                   |
+ * | `--background-color`                   | Cor do background                                     | `transparent`                                   |
+ * | **Hover**                              |                                                       |                                                 |
+ * | `--color-hover`                        | Cor principal no estado hover                         | `var(--color-brand-01-darkest)`                 |
+ * | `--background-color-hover`             | Cor de background no estado hover                     | `var(--color-brand-01-lighter)`                 |
+ * | **Focused**                            |                                                       |                                                 |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                     |
+ * | **Pressed**                            |                                                       |                                                 |
+ * | `--background-color-pressed` &nbsp;    | Cor de background no estado de pressionado&nbsp;      | `var(--color-brand-01-light)`                   |
+ * | **Actived**                            |                                                       |                                                 |
+ * | `--background-color-actived`           | Cor de background no estado actived                   | `var(--color-brand-01-darkest)`                 |
+ * | `--color-actived`                      | Cor principal no estado actived                       | `var(--color-brand-01-lighter)`                 |
+ * | **Font**                               |                                                       |                                                 |
+ * | `--font-weight-lvl0`                   | Peso da fonte bold                                    | `var(--font-weight-bold)`                       |
+ * | `--font-weight-lvl1`                   | Peso da fonte                                         | `var(--font-weight-normal)`                     |
+ *
+ * <br>
  */
 @Directive()
 export abstract class PoMenuBaseComponent {
-  private _collapsed = false;
-  private _filter = false;
-  private _level;
-  private _logo: string;
-  private _maxLevel = 4;
-  private _menus = [];
-  private _params: any;
-  private _service: string | PoMenuFilter;
-  private _shortLogo: string;
-
   allowIcons: boolean;
   allowCollapseMenu: boolean;
+  allowCollapseHover: boolean;
 
   filteredItems;
   filterService: PoMenuFilter;
 
-  readonly literals = {
-    ...poMenuLiteralsDefault[this.languageService.getLanguageDefault()],
-    ...poMenuLiteralsDefault[this.languageService.getShortLanguage()]
-  };
+  readonly literals: any;
+
+  private _collapsed = false;
+  private _componentsSize: string = undefined;
+  private _initialComponentsSize: string = undefined;
+  private _filter = false;
+  private _searchTreeItems = false;
+  private _level;
+  private readonly _maxLevel = 4;
+  private _menus = [];
+  private _params: any;
+  private _service: string | PoMenuFilter;
+  private _logoLink: boolean | string = true;
+  private _menuId: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Expande e Colapsa (retrai) o menu automaticamente.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-automatic-toggle', transform: convertToBoolean }) automaticToggle: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento emitido toda vez que o estado do menu muda, enviando `true` quando expandido e `false` quando colapsado.
+   *
+   * ```html
+   * <po-menu (p-toggle)="onMenuToggle($event)"></po-menu>
+   * ```
+   */
+  toggleChange = output<boolean>({ alias: 'p-toggle' });
 
   /**
    * @optional
@@ -75,6 +163,7 @@ export abstract class PoMenuBaseComponent {
   @Input('p-collapsed') set collapsed(collapsed: boolean) {
     this._collapsed = convertToBoolean(collapsed);
 
+    this.allowCollapseHover = this._collapsed;
     this.validateCollapseClass();
   }
 
@@ -82,9 +171,41 @@ export abstract class PoMenuBaseComponent {
     return this._collapsed;
   }
 
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no menu:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
+
   /** Lista dos itens do menu. Se o valor estiver indefinido ou inválido, será inicializado como um array vazio. */
   @Input('p-menus') set menus(menus: Array<PoMenuItem>) {
     this._menus = Array.isArray(menus) ? menus : [];
+
+    this.menuGlobalService.sendMenus(menus);
+
+    setTimeout(() => {
+      const urlRouter = this.checkingRouterChildrenFragments();
+      this.checkActiveMenuByUrl(urlRouter);
+    });
   }
 
   get menus() {
@@ -115,6 +236,27 @@ export abstract class PoMenuBaseComponent {
 
   get filter() {
     return this._filter;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Quando ativado, a pesquisa também retornará itens agrupadores além dos itens que contêm uma ação e/ou link definidos.
+   * Isso pode ser útil quando se deseja encontrar rapidamente categorias ou seções do menu.
+   *
+   * > É necessário que a propriedade `p-filter` esteja habilitada.
+   *
+   * @default `false`
+   */
+  @Input('p-search-tree-items') set searchTreeItems(searchTreeItems: boolean) {
+    this._searchTreeItems = <any>searchTreeItems === '' ? true : convertToBoolean(searchTreeItems);
+    this.filteredItems = [...this._menus];
+  }
+
+  get searchTreeItems() {
+    return this._searchTreeItems;
   }
 
   /**
@@ -193,13 +335,30 @@ export abstract class PoMenuBaseComponent {
    * - Como boa prática, indica-se utilizar imagens com até `24px` de altura e `224px` de largura,
    * caso ultrapassar esses valores a imagem será readequada no espaço disponível.
    */
-  @Input('p-logo') set logo(value: any) {
-    this._logo = isTypeof(value, 'string') && value.trim() ? value : undefined;
+  @Input('p-logo') logo?: string;
+
+  @Input('p-menu-id') set menuid(id: string) {
+    this.menuGlobalService.sendId(id);
+    this._menuId = id;
   }
 
-  get logo() {
-    return this._logo;
+  get menuid() {
+    return this._menuId;
   }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o texto alternativo para a logomarca.
+   *
+   * > **Importante**
+   * > Caso esta propriedade não seja definida o texto padrão será "Logomarca início".
+   *
+   * @default `Logomarca início`
+   */
+  @Input('p-logo-alt') logoAlt?: string;
 
   /**
    * @optional
@@ -215,26 +374,45 @@ export abstract class PoMenuBaseComponent {
    * caso ultrapassar esses valores a imagem será readequada no espaço disponível.
    * - Caso não informar um valor, esta propriedade passa a assumir o valor informado na propriedade `p-logo`.
    */
-  @Input('p-short-logo') set shortLogo(value: any) {
-    this._shortLogo = isTypeof(value, 'string') && value.trim() ? value : undefined;
+  @Input('p-short-logo') shortLogo: string;
+
+  // propriedade interna
+  @Input('p-only-menu-item') onlyMenuItem: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   * Define o link para a rota ao clicar no logo do menu.
+   *
+   * - Se o valor for uma string, define a rota para o link informado.
+   * - Se for `false`, o logo não terá link associado.
+   * - Se for `true`, o logo terá a rota padrão `./`.
+   *
+   * @default `true`
+   */
+  @Input('p-logo-link') set logoLink(value: boolean | string) {
+    this._logoLink = value === false ? false : value || true;
   }
 
-  get shortLogo() {
-    return this._shortLogo;
+  get logoLink(): boolean | string {
+    return this._logoLink;
   }
 
-  constructor(public menuService: PoMenuService, public languageService: PoLanguageService) {}
-  private configService(service: string | PoMenuFilter) {
-    if (typeof service === 'string' && service.trim()) {
-      // service url
-      this.menuService.configProperties(service);
-      this.filterService = this.menuService;
-    } else if (typeof service === 'object' && service.getFilteredData) {
-      // custom service
-      this.filterService = service;
-    } else {
-      this.filterService = undefined;
-    }
+  constructor(
+    public menuGlobalService: PoMenuGlobalService,
+    public menuService: PoMenuService,
+    public languageService: PoLanguageService
+  ) {
+    this.literals = {
+      ...poMenuLiteralsDefault[this.languageService?.getLanguageDefault()],
+      ...poMenuLiteralsDefault[this.languageService?.getShortLanguage()]
+    };
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
   }
 
   protected setMenuExtraProperties() {
@@ -276,6 +454,19 @@ export abstract class PoMenuBaseComponent {
       return 'externalLink';
     }
     return 'internalLink';
+  }
+
+  private configService(service: string | PoMenuFilter) {
+    if (typeof service === 'string' && service.trim()) {
+      // service url
+      this.menuService.configProperties(service);
+      this.filterService = this.menuService;
+    } else if (typeof service === 'object' && service.getFilteredData) {
+      // custom service
+      this.filterService = service;
+    } else {
+      this.filterService = undefined;
+    }
   }
 
   private processSubItems(menu) {
@@ -332,5 +523,12 @@ export abstract class PoMenuBaseComponent {
     }
   }
 
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialComponentsSize, PoFieldSize);
+    this._componentsSize = size;
+  }
+
+  protected abstract checkActiveMenuByUrl(urlRouter);
+  protected abstract checkingRouterChildrenFragments();
   protected abstract validateCollapseClass();
 }

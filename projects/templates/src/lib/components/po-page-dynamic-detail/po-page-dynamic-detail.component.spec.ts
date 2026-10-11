@@ -1,34 +1,33 @@
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, fakeAsync, TestBed, tick, waitForAsync } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { RouterTestingModule } from '@angular/router/testing';
 
-import { throwError, of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
-import { PoDialogService } from '@po-ui/ng-components';
+import { PoDialogService, PoThemeA11yEnum } from '@po-ui/ng-components';
 
-import * as util from '../../utils/util';
 import { expectPropertiesValues } from '../../util-test/util-expect.spec';
+import { PoUtils as util } from '../../utils/util';
 
-import { PoPageDynamicDetailComponent } from './po-page-dynamic-detail.component';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { PoPageDynamicDetailActions } from './interfaces/po-page-dynamic-detail-actions.interface';
 import { PoPageDynamicDetailBeforeRemove } from './interfaces/po-page-dynamic-detail-before-remove.interface';
+import { PoPageDynamicDetailComponent } from './po-page-dynamic-detail.component';
 
 describe('PoPageDynamicDetailComponent:', () => {
   let component: PoPageDynamicDetailComponent;
   let fixture: ComponentFixture<PoPageDynamicDetailComponent>;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [FormsModule, HttpClientTestingModule, RouterTestingModule.withRoutes([])],
-        providers: [PoDialogService],
-        declarations: [PoPageDynamicDetailComponent],
-        schemas: [NO_ERRORS_SCHEMA]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoPageDynamicDetailComponent],
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [FormsModule, RouterTestingModule.withRoutes([])],
+      providers: [PoDialogService, provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoPageDynamicDetailComponent);
@@ -67,6 +66,66 @@ describe('PoPageDynamicDetailComponent:', () => {
 
       component.actions = invalidActions[3];
       expect(component['_actions']).toEqual({});
+    });
+
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
     });
 
     it('p-fields: should call `getKeysByFields` and `getDuplicatesByFields` and set property with valid values', () => {
@@ -191,7 +250,7 @@ describe('PoPageDynamicDetailComponent:', () => {
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(of({}));
         spyOn(component['poPageDynamicService'], <any>'configServiceApi');
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         component.ngOnInit();
 
@@ -221,7 +280,7 @@ describe('PoPageDynamicDetailComponent:', () => {
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(of({}));
         spyOn(component['poPageDynamicService'], <any>'configServiceApi');
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         component.ngOnInit();
 
@@ -244,18 +303,16 @@ describe('PoPageDynamicDetailComponent:', () => {
         component.fields = [{ property: 'filter1' }, { property: 'filter2' }];
         component.title = 'Original Title';
 
-        component.onLoad = () => {
-          return {
-            title: 'New Title',
-            breadcrumb: {
-              items: [{ label: 'Test' }, { label: 'Test2' }]
-            },
-            actions: {
-              remove: '/new_datail'
-            },
-            fields: [{ property: 'filter1' }, { property: 'filter3' }]
-          };
-        };
+        component.onLoad = () => ({
+          title: 'New Title',
+          breadcrumb: {
+            items: [{ label: 'Test' }, { label: 'Test2' }]
+          },
+          actions: {
+            remove: '/new_datail'
+          },
+          fields: [{ property: 'filter1' }, { property: 'filter3' }]
+        });
 
         spyOn(component, <any>'loadData').and.returnValue(of({}));
 
@@ -273,13 +330,13 @@ describe('PoPageDynamicDetailComponent:', () => {
           items: [{ label: 'Test' }, { label: 'Test2' }]
         });
 
-        component['subscriptions'] = null;
+        Object.defineProperty(component, 'subscriptions', { value: null, configurable: true });
         component.ngOnDestroy();
       }));
 
       it('should configure properties based on the return of onload route', fakeAsync(() => {
         component.autoRouter = false;
-        component.actions = <any>{};
+        component.actions = {};
         component.breadcrumb = <any>{};
         component.fields = [];
         component.title = '';
@@ -308,7 +365,7 @@ describe('PoPageDynamicDetailComponent:', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of(metadata));
         spyOn(<any>component['poPageCustomizationService'], 'createObservable').and.returnValue(of(custom));
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         component.ngOnInit();
 
@@ -344,7 +401,7 @@ describe('PoPageDynamicDetailComponent:', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of(response));
         spyOn(component, <any>'loadData').and.returnValue(of({}));
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(of({}));
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
         component['loadDataFromAPI']();
 
         tick();
@@ -371,7 +428,7 @@ describe('PoPageDynamicDetailComponent:', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of({}));
         spyOn(component, <any>'loadData').and.returnValue(of({}));
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(of({}));
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
         component['loadDataFromAPI']();
 
         tick();
@@ -859,28 +916,30 @@ describe('PoPageDynamicDetailComponent:', () => {
     });
 
     describe('remove', () => {
-      const uniqueKey = '1';
-
       it('remove: should call `formatUniqueKey`', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: '' };
+        const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = { allowAction: false };
         component.model = { id: 1, name: 'Angular' };
 
         spyOn(component, <any>'formatUniqueKey');
+        spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['formatUniqueKey']).toHaveBeenCalledWith(component.model);
       });
 
       it('shouldn`t call executeRemove if allowAction is false', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: '' };
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = { allowAction: false };
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
         spyOn(component, <any>'executeRemove');
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['executeRemove']).not.toHaveBeenCalled();
       });
@@ -888,6 +947,8 @@ describe('PoPageDynamicDetailComponent:', () => {
       it('shouldn`t call executeRemove if removeAction is a function', () => {
         const removeAction = jasmine.createSpy('removeAction');
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = { allowAction: true };
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
@@ -900,105 +961,122 @@ describe('PoPageDynamicDetailComponent:', () => {
       });
 
       it('should call executeRemove if allowAction is true', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: 'test' };
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = { allowAction: true };
+
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
         spyOn(component, <any>'executeRemove').and.returnValue(of({}));
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['executeRemove']).toHaveBeenCalledWith(actions.remove, uniqueKey);
       });
 
-      it('should call executeRemove if allowAction is undefined', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+      it('should call executeRemove if beforeRemoveResult.allowAction is undefined', () => {
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: 'test' };
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = { allowAction: undefined };
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
         spyOn(component, <any>'executeRemove').and.returnValue(of({}));
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['executeRemove']).toHaveBeenCalledWith(actions.remove, uniqueKey);
       });
 
       it('should call executeRemove if allowAction is null', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: 'test' };
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = { allowAction: null };
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
         spyOn(component, <any>'executeRemove').and.returnValue(of({}));
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['executeRemove']).toHaveBeenCalledWith(actions.remove, uniqueKey);
       });
 
       it('should call executeRemove with newUrl if it has a defined value', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: 'test' };
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = { newUrl: 'newUrl' };
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
         spyOn(component, <any>'executeRemove').and.returnValue(of({}));
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['executeRemove']).toHaveBeenCalledWith(returnBeforeRemove.newUrl, uniqueKey);
       });
 
       it('should call executeRemove with removeAction if newUrl is undefined', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: 'test' };
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = { newUrl: undefined };
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
         spyOn(component, <any>'executeRemove').and.returnValue(of({}));
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['executeRemove']).toHaveBeenCalledWith(actions.remove, uniqueKey);
       });
 
       it('should call executeRemove with removeAction if newUrl is null', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: 'test' };
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = { newUrl: null };
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
         spyOn(component, <any>'executeRemove').and.returnValue(of({}));
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['executeRemove']).toHaveBeenCalledWith(actions.remove, uniqueKey);
       });
 
       it('should call executeRemove with removeAction if returnBeforeRemove is null', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: 'test' };
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = null;
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
         spyOn(component, <any>'executeRemove').and.returnValue(of({}));
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['executeRemove']).toHaveBeenCalledWith(actions.remove, uniqueKey);
       });
 
       it('should call executeRemove with removeAction if returnBeforeRemove is undefined', () => {
-        const actions: PoPageDynamicDetailActions = { remove: 'people/list/' };
+        const actions: PoPageDynamicDetailActions = { remove: 'people/list/', beforeRemove: 'test' };
         const returnBeforeRemove: PoPageDynamicDetailBeforeRemove = undefined;
+        component.model = { id: 1, name: 'Angular' };
+        const uniqueKey = '1';
 
         spyOn(component, <any>'formatUniqueKey').and.returnValue(uniqueKey);
         spyOn(component['poPageDynamicDetailActionsService'], 'beforeRemove').and.returnValue(of(returnBeforeRemove));
         spyOn(component, <any>'executeRemove').and.returnValue(of({}));
 
-        component['remove'](actions.remove);
+        component['remove'](actions.remove, actions.beforeRemove);
 
         expect(component['executeRemove']).toHaveBeenCalledWith(actions.remove, uniqueKey);
       });

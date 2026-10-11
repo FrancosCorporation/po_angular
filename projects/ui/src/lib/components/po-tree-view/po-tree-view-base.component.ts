@@ -1,39 +1,142 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { Directive, HostBinding, HostListener, effect, input, output } from '@angular/core';
 
-import { convertToBoolean } from '../../utils/util';
-
+import { PoFieldSize } from '../../enums/po-field-size.enum';
 import { PoTreeViewItem } from './po-tree-view-item/po-tree-view-item.interface';
+import { convertToBoolean, convertToInt, getDefaultSizeFn, validateSizeFn } from '../../utils/util';
 
 const poTreeViewMaxLevel = 4;
+
+type PoTreeViewItemValue = string | number | undefined;
 
 /**
  * @description
  *
- * O componente fornece um modelo de visualização em árvore, possibilitando a visualização das informações de maneira
- * hierárquica, desta forma sendo possível utilizar até 4 níveis.
+ * O componente fornece um modelo de visualização em árvore, possibilitando a exibição de informações de maneira
+ * hierárquica com suporte a múltiplos níveis (configurável via `p-max-level`).
  *
- * Nele é possível navegar entre os itens através da tecla *tab*, permitindo expandir ou colapsar o item em foco
- * por meio das teclas *enter* e *space*.
+ * O componente permite:
+ * - Navegação completa por teclado seguindo o padrão WAI-ARIA TreeView;
+ * - Expansão e recolhimento de itens agrupadores;
+ * - Seleção múltipla (checkbox) ou única (radio) dos itens;
+ * - Exibição de ícones automáticos para agrupadores e itens finais;
+ * - Estado desabilitado global ou individual por item;
+ * - Execução de itens finais via clique ou teclado.
  *
- * Além da navegação, o componente possibilita também a seleção dos itens do primeiro ao último nível, tanto de forma parcial como completa.
+ * #### Navegação por teclado
  *
- * O componente também possui eventos disparados ao marcar/desmarcar e expandir/colapsar os itens.
+ * | Tecla                 | Descrição                                                                                                 |
+ * |-----------------------|-----------------------------------------------------------------------------------------------------------|
+ * | **Tab**               | Entra no componente posicionando o foco no primeiro nó ativo. Ao pressionar novamente, sai do componente. |
+ * | **ArrowDown**         | Move o foco para o próximo nó visível.                                                                    |
+ * | **ArrowUp**           | Move o foco para o nó visível anterior.                                                                   |
+ * | **ArrowRight**        | Se colapsado, expande o nó. Se expandido, move o foco para o nó filho.                                    |
+ * | **ArrowLeft**         | Se expandido, recolhe o nó. Se filho, move o foco para o nó pai.                                          |
+ * | **Home**              | Move o foco para o primeiro nó visível.                                                                   |
+ * | **End**               | Move o foco para o último nó visível.                                                                     |
+ * | **Enter / Space**     | Com `p-selectable`: alterna a seleção do item. Sem `p-selectable`: executa o item final.                  |
+ * | **Caractere**         | Move o foco para o próximo nó cujo label inicia com o caractere pressionado (busca cíclica).              |
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                    |
+ * |----------------------------------------|-------------------------------------------------------|-------------------------------------------------|
+ * | **Default**                            |                                                       |                                                 |
+ * | `--background-color`                   | Cor de background do item                             | `var(--color-neutral-light-00)`                 |
+ * | `--divider-color`                      | Cor do divider dos agrupadores de nível 0             | `var(--color-neutral-mid-40)`                   |
+ * | `--font-family`                        | Família tipográfica                                   | `var(--font-family-theme)`                      |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                      |
+ * | `--line-height`                        | Altura da linha                                       | `var(--line-height-md)`                         |
+ * | `--color`                              | Cor padrão do item                                    | `var(--color-action-default)`                   |
+ * | **Hover**                              |                                                       |                                                 |
+ * | `--color-hover`                        | Cor do item em hover                                  | `var(--color-action-hover)`                     |
+ * | **Pressed**                            |                                                       |                                                 |
+ * | `--color-pressed`                      | Cor do item em pressed                                | `var(--color-action-pressed)`                   |
+ * | **Disabled**                           |                                                       |                                                 |
+ * | `--color-disabled`                     | Cor do item desabilitado                              | `var(--color-action-disabled)`                  |
+ * | **Selected**                           |                                                       |                                                 |
+ * | `--title-color`                        | Cor do label quando selecionado                       | `var(--color-action-focus)`                     |
  */
 @Directive()
 export class PoTreeViewBaseComponent {
-  private _items: Array<PoTreeViewItem> = [];
-  private _selectable: boolean = false;
+  // ==============================
+  // #region Inputs
+  // ==============================
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  readonly componentsSizeInput = input<string>(undefined, { alias: 'p-components-size' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Desabilita o componente inteiro.
+   *
+   * Quando `true`, todos os itens do tree-view serão exibidos no estado desabilitado,
+   * independentemente do valor individual da propriedade `disabled` de cada item.
+   *
+   * > O botão de expansão/recolhimento (arrow) permanece interativo mesmo quando o componente está desabilitado.
+   *
+   * @default `false`
+   */
+  readonly disabled = input<boolean, boolean>(false, {
+    alias: 'p-disabled',
+    transform: (value: boolean) => convertToBoolean(value)
+  });
 
   /**
    * Lista de itens do tipo `PoTreeViewItem` que será renderizada pelo componente.
+   *
+   * > Consulte a documentação de `PoTreeViewItem` para detalhes sobre as propriedades disponíveis em cada item.
    */
-  @Input('p-items') set items(value: Array<PoTreeViewItem>) {
-    this._items = Array.isArray(value) ? this.getItemsByMaxLevel(value) : [];
-  }
+  readonly inputedItems = input<Array<PoTreeViewItem>>([], { alias: 'p-items' });
 
-  get items() {
-    return this._items;
-  }
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o máximo de níveis para o tree-view.
+   *
+   * > O valor padrão é 4
+   *
+   * @default 4
+   */
+  readonly maxLevel = input<number, number>(poTreeViewMaxLevel, {
+    alias: 'p-max-level',
+    transform: (value: number) => convertToInt(value, poTreeViewMaxLevel)
+  });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Remove a borda do container do componente.
+   *
+   * @default false
+   */
+  readonly noBorder = input<boolean, boolean>(false, {
+    alias: 'p-no-border',
+    transform: (value: boolean) => convertToBoolean(value)
+  });
 
   /**
    * @optional
@@ -42,15 +145,35 @@ export class PoTreeViewBaseComponent {
    *
    * Habilita uma caixa de seleção para selecionar e/ou desmarcar um item da lista.
    *
+   * > Quando habilitado, a propriedade `showIcon` dos itens não será aplicada.
+   *
    * @default false
    */
-  @Input('p-selectable') set selectable(value: boolean) {
-    this._selectable = convertToBoolean(value);
-  }
+  readonly selectable = input<boolean, boolean>(false, {
+    alias: 'p-selectable',
+    transform: (value: boolean) => convertToBoolean(value)
+  });
 
-  get selectable() {
-    return this._selectable;
-  }
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita a seleção para item único atráves de po-radio.
+   *
+   * @default false
+   */
+  readonly singleSelect = input<boolean, boolean>(false, {
+    alias: 'p-single-select',
+    transform: (value: boolean) => convertToBoolean(value)
+  });
+  // ==============================
+  // #endregion
+  // ==============================
+
+  // ==============================
+  // #region Outputs
+  // ==============================
 
   /**
    * @optional
@@ -61,7 +184,7 @@ export class PoTreeViewBaseComponent {
    *
    * > Como parâmetro o componente envia o item colapsado.
    */
-  @Output('p-collapsed') collapsed = new EventEmitter<PoTreeViewItem>();
+  readonly collapsed = output<PoTreeViewItem>({ alias: 'p-collapsed' });
 
   /**
    * @optional
@@ -72,7 +195,7 @@ export class PoTreeViewBaseComponent {
    *
    * > Como parâmetro o componente envia o item expandido.
    */
-  @Output('p-expanded') expanded = new EventEmitter<PoTreeViewItem>();
+  readonly expanded = output<PoTreeViewItem>({ alias: 'p-expanded' });
 
   /**
    * @optional
@@ -83,7 +206,7 @@ export class PoTreeViewBaseComponent {
    *
    * > Como parâmetro o componente envia o item selecionado.
    */
-  @Output('p-selected') selected = new EventEmitter<PoTreeViewItem>();
+  readonly selected = output<PoTreeViewItem>({ alias: 'p-selected' });
 
   /**
    * @optional
@@ -94,20 +217,220 @@ export class PoTreeViewBaseComponent {
    *
    * > Como parâmetro o componente envia o item que foi desmarcado.
    */
-  @Output('p-unselected') unselected = new EventEmitter<PoTreeViewItem>();
+  readonly unselected = output<PoTreeViewItem>({ alias: 'p-unselected' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Ação que será disparada ao executar um item final (sem `subItems`).
+   *
+   * > Como parâmetro o componente envia o item executado.
+   */
+  readonly activated = output<PoTreeViewItem>({ alias: 'p-activated' });
+  // ==============================
+  // #endregion
+  // ==============================
+
+  // ==============================
+  // #region Internal Properties
+  // ==============================
+
+  private _componentsSize: string = undefined;
+  private _items: Array<PoTreeViewItem> = [];
+
+  // armazena o value do item selecionado
+  selectedValue: string | number;
+
+  @HostBinding('attr.p-components-size')
+  protected get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  protected set items(value: Array<PoTreeViewItem>) {
+    const expandedState = this.getExpandedState(this._items);
+    const selectedState = this.getSelectedState(this._items);
+
+    this._items = Array.isArray(value) ? this.getItemsByMaxLevel(value) : [];
+
+    this.applyExpandedState(this._items, expandedState);
+
+    if (!this.selectable()) {
+      const lastSelectedFinalValue = this.getLastSelectedFinalItemValue(this._items);
+
+      if (lastSelectedFinalValue !== undefined) {
+        this.setSingleFinalSelection(this._items, lastSelectedFinalValue);
+        this.selectedValue = lastSelectedFinalValue;
+      }
+    } else if (this.singleSelect()) {
+      this.setSingleSelectionByValue(this._items, this.selectedValue);
+    } else {
+      this.applySelectedState(this._items, selectedState);
+    }
+  }
+
+  protected get items() {
+    return this._items;
+  }
+
+  constructor() {
+    effect(() => {
+      const value = this.componentsSizeInput();
+      this.applySizeBasedOnA11y(value);
+    });
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y(this.componentsSizeInput());
+  }
 
   protected emitExpanded(treeViewItem: PoTreeViewItem) {
-    const event = treeViewItem.expanded ? 'expanded' : 'collapsed';
-
-    this[event].emit({ ...treeViewItem });
+    if (treeViewItem.expanded) {
+      this.expanded.emit({ ...treeViewItem });
+    } else {
+      this.collapsed.emit({ ...treeViewItem });
+    }
   }
 
   protected emitSelected(treeViewItem: PoTreeViewItem) {
-    const event = treeViewItem.selected ? 'selected' : 'unselected';
+    if (treeViewItem.disabled) {
+      return;
+    }
 
-    this.updateItemsOnSelect(treeViewItem);
+    this.selectedValue = treeViewItem.value;
 
-    this[event].emit({ ...treeViewItem });
+    const { subItems, ...rest } = treeViewItem;
+    const treeViewToUpdate = this.singleSelect() ? { ...rest } : treeViewItem;
+
+    this.updateItemsOnSelect(treeViewToUpdate);
+
+    const treeViewToEmit = this.singleSelect() ? { ...rest } : { ...treeViewItem };
+
+    if (treeViewItem.selected) {
+      this.selected.emit(treeViewToEmit);
+    } else {
+      this.unselected.emit(treeViewToEmit);
+    }
+  }
+
+  protected emitActivated(treeViewItem: PoTreeViewItem) {
+    if (!this.selectable()) {
+      this.selectSingleFinalItem(treeViewItem);
+    }
+
+    this.activated.emit({ ...treeViewItem });
+  }
+
+  private selectSingleFinalItem(activatedItem: PoTreeViewItem) {
+    this.setSingleFinalSelection(this.items, activatedItem.value);
+    this.selectedValue = activatedItem.value;
+
+    this._items = this.getItemsWithParentSelected(this.items);
+  }
+
+  private setSingleFinalSelection(items: Array<PoTreeViewItem>, selectedValue: string | number) {
+    items.forEach(item => {
+      if (item.subItems?.length) {
+        this.setSingleFinalSelection(item.subItems, selectedValue);
+      } else {
+        item.selected = item.value === selectedValue;
+      }
+    });
+  }
+
+  private setSingleSelectionByValue(items: Array<PoTreeViewItem>, selectedValue: PoTreeViewItemValue): void {
+    items.forEach(item => {
+      item.selected = selectedValue !== undefined && item.value === selectedValue;
+
+      if (item.subItems?.length) {
+        this.setSingleSelectionByValue(item.subItems, selectedValue);
+      }
+    });
+  }
+
+  private getExpandedState(items: Array<PoTreeViewItem> = []): Map<string | number, boolean> {
+    const state = new Map<string | number, boolean>();
+
+    const collect = (list: Array<PoTreeViewItem>) => {
+      list.forEach(item => {
+        if (item.subItems?.length) {
+          state.set(item.value, !!item.expanded);
+          collect(item.subItems);
+        }
+      });
+    };
+
+    collect(items);
+
+    return state;
+  }
+
+  private applyExpandedState(items: Array<PoTreeViewItem>, state: Map<string | number, boolean>): void {
+    if (!state.size) {
+      return;
+    }
+
+    items.forEach(item => {
+      if (item.subItems?.length) {
+        if (state.has(item.value)) {
+          item.expanded = state.get(item.value);
+        }
+        this.applyExpandedState(item.subItems, state);
+      }
+    });
+  }
+
+  private getSelectedState(items: Array<PoTreeViewItem> = []): Map<string | number, boolean | null> {
+    const state = new Map<string | number, boolean | null>();
+
+    const collect = (list: Array<PoTreeViewItem>) => {
+      list.forEach(item => {
+        state.set(item.value, item.selected ?? false);
+
+        if (item.subItems?.length) {
+          collect(item.subItems);
+        }
+      });
+    };
+
+    collect(items);
+
+    return state;
+  }
+
+  private applySelectedState(items: Array<PoTreeViewItem>, state: Map<string | number, boolean | null>): void {
+    if (!state.size) {
+      return;
+    }
+
+    items.forEach(item => {
+      if (state.has(item.value)) {
+        item.selected = state.get(item.value);
+      }
+
+      if (item.subItems?.length) {
+        this.applySelectedState(item.subItems, state);
+      }
+    });
+  }
+
+  private getLastSelectedFinalItemValue(items: Array<PoTreeViewItem> = []): PoTreeViewItemValue {
+    let lastValue: PoTreeViewItemValue;
+
+    items.forEach(item => {
+      if (item.subItems?.length) {
+        const childValue = this.getLastSelectedFinalItemValue(item.subItems);
+        if (childValue !== undefined) {
+          lastValue = childValue;
+        }
+      } else if (item.selected) {
+        lastValue = item.value;
+      }
+    });
+
+    return lastValue;
   }
 
   private addChildItemInParent(childItem: PoTreeViewItem, parentItem: PoTreeViewItem) {
@@ -118,16 +441,17 @@ export class PoTreeViewBaseComponent {
     parentItem.subItems.push(childItem);
   }
 
-  // caso houver parentItem:
-  //  - expande o parentItem caso o filho estiver expandido;
-  //  - adiciona o childItem no parentItem;
-  //  - marca o parentItem caso conter subItems marcodos ou nulos;
-  // Se não conter parentItem, adiciona o childItem no items.
-  private addItem(items: Array<PoTreeViewItem>, childItem: PoTreeViewItem, parentItem?: PoTreeViewItem) {
+  private addItem(items: Array<PoTreeViewItem>, childItem: PoTreeViewItem, parentItem?: PoTreeViewItem, isNewItem?) {
     if (parentItem) {
-      this.expandParentItem(childItem, parentItem);
+      if (isNewItem) {
+        this.expandParentItem(childItem, parentItem);
+      }
+
       this.addChildItemInParent(childItem, parentItem);
-      this.selectItemBySubItems(parentItem);
+
+      if (!this.singleSelect()) {
+        this.selectItemBySubItems(parentItem);
+      }
 
       items.push(parentItem);
     } else {
@@ -137,8 +461,19 @@ export class PoTreeViewBaseComponent {
 
   private selectAllItems(items: Array<PoTreeViewItem>, isSelected: boolean) {
     items.forEach(item => {
-      if (item.subItems) {
+      const isGroup = !!item.subItems?.length;
+
+      if (isGroup) {
         this.selectAllItems(item.subItems, isSelected);
+      }
+
+      if (item.disabled && !isGroup) {
+        return;
+      }
+
+      if (item.disabled && isGroup) {
+        item.selected = this.everyItemSelected(item.subItems);
+        return;
       }
 
       item.selected = isSelected;
@@ -146,23 +481,30 @@ export class PoTreeViewBaseComponent {
   }
 
   private selectItemBySubItems(item: PoTreeViewItem) {
-    item.selected = this.everyItemSelected(item.subItems);
+    const selectableSubItems = this.getSelectableSubItems(item.subItems);
+
+    if (!selectableSubItems.length) {
+      return;
+    }
+
+    item.selected = this.everyItemSelected(selectableSubItems);
   }
 
-  // retornará:
-  //  - true: se todos os items estiverem marcados;
-  //  - null: se no minimo um item esteja marcado ou nullo (indeterminate)
-  //  - false: caso não corresponda em nenhuma das opções acima, no caso, nenhum marcado ou nulo;
-  private everyItemSelected(items: Array<PoTreeViewItem> = []): boolean | null {
-    const itemsLength = items.length;
+  private getSelectableSubItems(items: Array<PoTreeViewItem> = []): Array<PoTreeViewItem> {
+    return items.filter(item => !(item.disabled && !item.subItems?.length));
+  }
 
-    const lengthCheckedItems = items.filter(item => item.selected).length;
+  private everyItemSelected(items: Array<PoTreeViewItem> = []): boolean | null {
+    const relevantItems = this.getSelectableSubItems(items);
+    const itemsLength = relevantItems.length;
+
+    const lengthCheckedItems = relevantItems.filter(item => item.selected).length;
 
     if (itemsLength && itemsLength === lengthCheckedItems) {
       return true;
     }
 
-    const hasIndeterminateItems = items.filter(item => item.selected || item.selected === null).length;
+    const hasIndeterminateItems = relevantItems.filter(item => item.selected || item.selected === null).length;
 
     if (hasIndeterminateItems) {
       return null;
@@ -171,7 +513,6 @@ export class PoTreeViewBaseComponent {
     return false;
   }
 
-  // expande o item pai caso o filho estiver expandido.
   private expandParentItem(childItem: PoTreeViewItem, parentItem: PoTreeViewItem) {
     if (childItem.expanded) {
       parentItem.expanded = true;
@@ -184,11 +525,23 @@ export class PoTreeViewBaseComponent {
     parentItem?: PoTreeViewItem,
     newItems = []
   ) {
+    const globalDisabled = this.disabled();
+
     items.forEach(item => {
       const { subItems, ...currentItem } = item;
 
-      if (level === poTreeViewMaxLevel) {
+      if (level === this.maxLevel()) {
         return;
+      }
+
+      // Compatibilidade: isSelectable === false é redirecionado para disabled
+      if (currentItem.isSelectable === false && !currentItem.disabled) {
+        currentItem.disabled = true;
+      }
+
+      // p-disabled global prevalece sobre o estado individual
+      if (globalDisabled) {
+        currentItem.disabled = true;
       }
 
       if (Array.isArray(subItems)) {
@@ -201,7 +554,11 @@ export class PoTreeViewBaseComponent {
         --level;
       }
 
-      this.addItem(newItems, currentItem, parentItem);
+      if (item.selected) {
+        this.selectedValue = currentItem.value;
+      }
+
+      this.addItem(newItems, currentItem, parentItem, true);
     });
 
     return newItems;
@@ -222,10 +579,18 @@ export class PoTreeViewBaseComponent {
   }
 
   private updateItemsOnSelect(selectedItem: PoTreeViewItem) {
-    if (selectedItem.subItems) {
+    if (selectedItem.subItems && !this.singleSelect()) {
       this.selectAllItems(selectedItem.subItems, selectedItem.selected);
     }
 
     this._items = this.getItemsWithParentSelected(this.items);
   }
+
+  private applySizeBasedOnA11y(initialValue: string): void {
+    const size = validateSizeFn(initialValue, PoFieldSize);
+    this._componentsSize = size;
+  }
+  // ==============================
+  // #endregion
+  // ==============================
 }

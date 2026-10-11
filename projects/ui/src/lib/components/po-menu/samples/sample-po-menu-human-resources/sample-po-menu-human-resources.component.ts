@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
 import { PoMenuItem } from '@po-ui/ng-components';
 
@@ -8,29 +8,26 @@ import { SamplePoMenuHumanResourcesService } from './sample-po-menu-human-resour
   selector: 'sample-po-menu-human-resources',
   templateUrl: './sample-po-menu-human-resources.component.html',
   providers: [SamplePoMenuHumanResourcesService],
-  styles: [
-    `
-      .sample-menu-header-text-color {
-        color: #9da7a9;
-      }
-    `
-  ]
+  styleUrls: ['./sample-po-menu-human-resources.component.css'],
+  standalone: false
 })
 export class SamplePoMenuHumanResourcesComponent {
+  samplePoMenuHumanResourcesService = inject(SamplePoMenuHumanResourcesService);
+
   menuItemSelected: string;
 
   menus: Array<PoMenuItem> = [
-    { label: 'Register user', action: this.printMenuAction.bind(this), icon: 'po-icon-user', shortLabel: 'Register' },
+    { label: 'Register user', action: this.printMenuAction.bind(this), icon: 'an an-user', shortLabel: 'Register' },
     {
       label: 'Timekeeping',
       action: this.printMenuAction.bind(this),
-      icon: 'po-icon-clock',
+      icon: 'an an-clock',
       shortLabel: 'Timekeeping',
       badge: { value: 1 }
     },
     {
       label: 'Useful links',
-      icon: 'po-icon-share',
+      icon: 'an an-share',
       shortLabel: 'Links',
       subItems: [
         { label: 'Ministry of Labour', action: this.printMenuAction.bind(this), link: 'http://trabalho.gov.br/' },
@@ -39,7 +36,7 @@ export class SamplePoMenuHumanResourcesComponent {
     },
     {
       label: 'Benefits',
-      icon: 'po-icon-star',
+      icon: 'an an-star',
       shortLabel: 'Benefits',
       subItems: [
         {
@@ -60,8 +57,6 @@ export class SamplePoMenuHumanResourcesComponent {
       ]
     }
   ];
-
-  constructor(public samplePoMenuHumanResourcesService: SamplePoMenuHumanResourcesService) {}
 
   printMenuAction(menu: PoMenuItem) {
     this.menuItemSelected = menu.label;

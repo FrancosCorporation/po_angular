@@ -1,12 +1,15 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 
 import { PoNotificationService } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-dropdown-social-network',
-  templateUrl: './sample-po-dropdown-social-network.component.html'
+  templateUrl: './sample-po-dropdown-social-network.component.html',
+  standalone: false
 })
 export class SamplePoDropdownSocialNetworkComponent implements OnInit {
+  private poNotification = inject(PoNotificationService);
+
   currentFriend: object;
   userAvatar: string = 'https://lorempixel.com/144/144/';
 
@@ -23,8 +26,6 @@ export class SamplePoDropdownSocialNetworkComponent implements OnInit {
   ];
 
   private indexFriend: number = 0;
-
-  constructor(private poNotification: PoNotificationService) {}
 
   ngOnInit() {
     this.setCurrentFriend(0);

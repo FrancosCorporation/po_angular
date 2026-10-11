@@ -1,14 +1,17 @@
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Component, OnInit, inject } from '@angular/core';
+import { UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 
 import { PoRadioGroupOption, PoSelectOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-radio-group-translator-reactive-form',
-  templateUrl: './sample-po-radio-group-translator-reactive-form.component.html'
+  templateUrl: './sample-po-radio-group-translator-reactive-form.component.html',
+  standalone: false
 })
 export class SamplePoRadioGroupTranslatorReactiveFormComponent implements OnInit {
-  translatorForm: FormGroup;
+  private formBuilder = inject(UntypedFormBuilder);
+
+  translatorForm: UntypedFormGroup;
 
   readonly languageOptions: Array<PoRadioGroupOption> = [
     { label: 'Spanish', value: 'es' },
@@ -32,8 +35,6 @@ export class SamplePoRadioGroupTranslatorReactiveFormComponent implements OnInit
     { id: '5', en: 'Vision', es: 'Vista' },
     { id: '6', en: 'Book', es: 'Libro' }
   ];
-
-  constructor(private formBuilder: FormBuilder) {}
 
   ngOnInit() {
     this.translatorForm = this.formBuilder.group({

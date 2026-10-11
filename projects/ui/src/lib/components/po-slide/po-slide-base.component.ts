@@ -1,6 +1,6 @@
-import { Input, Directive } from '@angular/core';
+import { Directive, Input } from '@angular/core';
 
-import { convertToInt } from './../../utils/util';
+import { convertToBoolean, convertToInt } from './../../utils/util';
 
 import { PoSlideItem } from './interfaces/po-slide-item.interface';
 
@@ -19,6 +19,17 @@ const poSlideIntervalDefault = 4000;
  */
 @Directive()
 export abstract class PoSlideBaseComponent {
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a exibição das setas de navegação.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-arrows', transform: convertToBoolean }) hideArrows: boolean = false;
+
   private _interval: number = poSlideIntervalDefault;
   private _height?: number;
   private _slides: Array<PoSlideItem | string | any>;
@@ -63,17 +74,17 @@ export abstract class PoSlideBaseComponent {
    * Array de imagens ou dados para o slide, pode ser de três formas:
    *
    * - Array implementando objetos da interface `PoSlideItem`:
-   * ```
-   * [{ image: '/assets/image-1', action: 'imageClick.bind(this)'}, { image: '/assets/image-2' }]
-   * ```
+   *   ```
+   *   [{ image: '/assets/image-1', action: 'imageClick.bind(this)'}, { image: '/assets/image-2' }]
+   *   ```
    * - Array de `strings` com os caminhos das imagens:
-   * ```
-   * ['/assets/image-1', '/assets/image-2' ]
-   * ```
+   *   ```
+   *   ['/assets/image-1', '/assets/image-2' ]
+   *   ```
    * - Array com lista de itens (para utilizar template):
-   * ```
-   * [{ label: '1', img: '/assets/image-1' }, { label: '2', img: '/assets/image-1' }]
-   * ```
+   *   ```
+   *   [{ label: '1', img: '/assets/image-1' }, { label: '2', img: '/assets/image-1' }]
+   *   ```
    *
    * > As setas de navegação e o controle com círculos apenas serão renderizados caso possua mais de um slide.
    */

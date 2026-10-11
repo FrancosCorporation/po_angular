@@ -1,0 +1,7 @@
+@if (link !== false) {
+  <a [href]="link === true ? './' : link">
+    <img [alt]="logoAlt" [class]="className" [src]="logo" [title]="logoAlt" />
+  </a>
+} @else {
+  <img [alt]="logoAlt" [class]="className" [src]="logo" [title]="logoAlt" />
+}

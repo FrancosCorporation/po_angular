@@ -20,16 +20,16 @@ Biblioteca de componentes de UI para Angular.
 
 ### Pré-requisitos
 
-Para começar a utilizar o **PO UI** é pré-requisito ter o `Node.js` instalado (versão 10.x ou acima) e o seu gerenciador de pacote favorito na versão mais atual. Caso você ainda não tenha instalado o pacote `@angular/cli`, instale-o via `npm` ou `yarn`.
+Para começar a utilizar o **PO UI** é pré-requisito ter o `Node.js` instalado (versão 20.11.x ou acima) e o seu gerenciador de pacote favorito na versão mais atual. Caso você ainda não tenha instalado o pacote `@angular/cli`, instale-o via `npm` ou `yarn`.
 
 Instalando com npm:
 ```
-npm i -g @angular/cli@11
+npm i -g @angular/cli@21
 ```
 
 Caso prefira instalar com o yarn:
 ```
-yarn global add @angular/cli@11
+yarn global add @angular/cli@21
 ```
 
 ### Passo 1 - Crie o seu primeiro projeto
@@ -39,7 +39,7 @@ yarn global add @angular/cli@11
 O [Angular CLI](https://cli.angular.io/) se encarrega de construir toda estrutura inicial do projeto. Para isso, execute o seguinte comando:
 
 ```
-ng new my-po-project --skipInstall
+ng new my-po-project --skip-install
 ```
 
 > O parâmetro `--skip-install` permite criar o projeto, contudo, não instalará as dependências automaticamente.
@@ -51,25 +51,28 @@ Antes de executar a instalação ou inserir o **Po** no seu projeto existente, �
 
 Veja abaixo a lista de dependências e as versões compatíveis, elas devem ser conferidas e se necessário, ajustadas no seu projeto.
 
-```
+```json
   "dependencies": {
-    "@angular/animations": "~11.1.0",
-    "@angular/common": "~11.1.0",
-    "@angular/compiler": "~11.1.0",
-    "@angular/core": "~11.1.0",
-    "@angular/forms": "~11.1.0",
-    "@angular/platform-browser": "~11.1.0",
-    "@angular/platform-browser-dynamic": "~11.1.0",
-    "@angular/platform-server": "~11.1.0",
-    "@angular/router": "~11.1.0",
-    "tslib": "^2.0.0",
-    "rxjs": "~6.6.0",
-    "zone.js": "~0.10.3"
+    "@angular/animations": "~21.2.17",
+    "@angular/common": "~21.2.17",
+    "@angular/compiler": "~21.2.17",
+    "@angular/core": "~21.2.17",
+    "@angular/forms": "~21.2.17",
+    "@angular/platform-browser": "~21.2.17",
+    "@angular/platform-browser-dynamic": "~21.2.17",
+    "@angular/router": "~21.2.17",
+    "rxjs": "~7.8.1",
+    "tslib": "^2.6.2",
+    "zone.js": "~0.15.0"
     ...
   },
   "devDependencies": {
+    "@angular-devkit/build-angular": "~21.2.17",
+    "@angular-devkit/schematics": "~21.2.17",
+    "@angular/cli": "~21.2.17",
+    "@angular/compiler-cli": "~21.2.17",
     ...
-    "typescript": "~4.1.3"
+    "typescript": "~5.9.3"
   }
 ```
 
@@ -80,6 +83,8 @@ Instalando com npm:
 npm install
 ```
 
+> Caso utilizar a versão 7 do npm pode ocorrer erro de versão das dependências, neste caso utilize `npm install --legacy-peer-deps`.
+
 Caso prefira instalar com o yarn:
 ```
 yarn install
@@ -87,7 +92,7 @@ yarn install
 
 ### Passo 2 - Adiconando o pacote @po-ui/ng-components
 
-Utilizando o comando `ng add` do [Angular CLI](https://cli.angular.io/), vamos adicionar o **Po** em seu projeto e o mesmo se encarregará de configurar o tema, instalar o pacote e importar o módulo do **Po**.
+Utilizando o comando `ng add` do [Angular CLI](https://cli.angular.io/), vamos adicionar o **Po** em seu projeto e o mesmo se encarregará de configurar o tema, instalar o  guia de primeiros passos **Po**. Além de importar também o modulo **HttpClientModule**.
 
 Execute o comando abaixo na pasta raiz do seu projeto:
 
@@ -109,6 +114,23 @@ Abra o *browser* e acesse a url http://localhost:4200. Pronto!
 
 ----
 
+### MCP? Sim!
+
+Temos uma ótima notícia para a comunidade de desenvolvedores! Nossa biblioteca Angular agora faz parte do [Context7](https://context7.com/po-ui/po-angular), uma plataforma que fornece documentação e trechos de código sempre atualizados para LLMs e editores de código com suporte a IA.
+
+#### O que isso significa para você?
+
+- **Acesso Rápido à Documentação:** Obtenha a documentação mais recente e exemplos de uso da nossa biblioteca diretamente em seu ambiente de desenvolvimento, como Cursor, Claude e outros LLMs.
+- **Desenvolvimento Acelerado com IA:** Ao usar um editor de código com IA, você pode instruí-lo a utilizar nossa biblioteca e ele terá acesso a todo o contexto necessário para gerar código preciso e funcional.
+
+#### Suporte ao Protocolo de Contexto de Modelo (MCP)
+
+Nossa biblioteca está disponível através de um servidor MCP do Context7. O MCP é um padrão aberto projetado para conectar de forma inteligente assistentes de IA a fontes de dados, como a documentação da nossa biblioteca. Isso garante que a IA tenha o contexto correto para responder às suas solicitações de programação com maior precisão.
+
+Para começar, basta mencionar o nome da nossa biblioteca em suas interações com um LLM que suporte o Context7.
+
+----
+
 ### E agora?
 
 Agora é só abrir seu **editor / IDE** favorito e começar a trabalhar no seu projeto.
@@ -118,6 +140,6 @@ Caso você queira utilizar nossos componentes de templates, como o **[po-page-lo
 ```
 ng add @po-ui/ng-templates
 ```
-> Ao executar este comando, será instalado o pacote `@po-ui/ng-templates` e configurado o `PoTemplatesModules` no `app.module`
+> Ao executar este comando, será instalado o pacote `@po-ui/ng-templates` e configurado o `PoTemplatesModules` no `app.module`.
 
 A partir dai o seu projeto está preparado para receber outros componentes do **[PO UI](https://po-ui.io/documentation)**! \o/

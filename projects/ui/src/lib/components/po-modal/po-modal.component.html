@@ -1,45 +1,67 @@
-<div *ngIf="!isHidden" class="po-modal" tabindex="0" (keydown.esc)="closeModalOnEscapeKey($event)">
-  <div class="po-modal-overlay">
-    <div class="po-modal-container po-pb-2 po-pt-2" (mousedown)="onClickOut($event)">
+@if (!isHidden) {
+  <div #modalContainer class="po-modal" tabindex="0" (keydown.esc)="closeModalOnEscapeKey($event)">
+    <div class="po-modal-overlay" (mousedown)="onClickOut($event)"></div>
+    <div class="po-modal-container po-pb-2 po-pt-2">
       <div class="po-modal-vertical-align">
         <div #modalContent class="po-modal-content po-modal-{{ size }}" tabindex="-1">
           <div class="po-modal-header">
             <div class="po-modal-title po-text-ellipsis">
-              {{ title }}
+              @if (icon) {
+                <po-icon [p-icon]="icon"></po-icon>
+              }
+              <div class="po-text-ellipsis">
+                {{ title }}
+              </div>
             </div>
-
-            <a *ngIf="!hideClose" class="po-modal-header-close-button" tabindex="0" (click)="close(true)">
-              <span class="po-icon po-icon-close"></span>
-            </a>
+            @if (!hideClose) {
+              <po-button
+                [p-aria-label]="literals.close"
+                p-icon="ICON_CLOSE"
+                (p-click)="close(true)"
+                p-kind="tertiary"
+                [p-size]="componentsSize"
+              >
+              </po-button>
+            }
           </div>
-
           <div class="po-modal-body">
             <ng-content></ng-content>
           </div>
-
-          <div class="po-modal-footer">
-            <po-button
-              *ngIf="secondaryAction"
-              [p-disabled]="secondaryAction.disabled"
-              [p-label]="secondaryAction.label"
-              [p-loading]="secondaryAction.loading"
-              [p-type]="getSecondaryActionButtonType()"
-              (p-click)="secondaryAction.action()"
-            >
-            </po-button>
-
-            <po-button
-              class="po-button-modal-first-action"
-              [p-disabled]="primaryAction.disabled"
-              [p-label]="primaryAction.label"
-              [p-loading]="primaryAction.loading"
-              [p-type]="getPrimaryActionButtonType()"
-              (p-click)="primaryAction.action()"
-            >
-            </po-button>
-          </div>
+          @if (modalFooter) {
+            <ng-content select="po-modal-footer"></ng-content>
+          } @else {
+            <po-modal-footer>
+              <div class="po-modal-footer-basic">
+                @if (secondaryAction) {
+                  <po-button
+                    [p-danger]="getSecondaryActionButtonDanger()"
+                    [p-disabled]="secondaryAction.disabled"
+                    [p-icon]="secondaryAction.icon"
+                    [p-label]="secondaryAction.label"
+                    [p-loading]="secondaryAction.loading"
+                    p-kind="secondary"
+                    [p-size]="componentsSize"
+                    (p-click)="secondaryAction.action()"
+                  >
+                  </po-button>
+                }
+                <po-button
+                  class="po-button-modal-first-action"
+                  [p-danger]="primaryAction.danger"
+                  [p-disabled]="primaryAction.disabled"
+                  [p-icon]="primaryAction.icon"
+                  [p-label]="primaryAction.label"
+                  [p-loading]="primaryAction.loading"
+                  p-kind="primary"
+                  [p-size]="componentsSize"
+                  (p-click)="primaryAction.action()"
+                >
+                </po-button>
+              </div>
+            </po-modal-footer>
+          }
         </div>
       </div>
     </div>
   </div>
-</div>
+}

@@ -1,6 +1,42 @@
-<div class="po-field-container-bottom">
-  <span *ngIf="errorPattern" class="po-field-container-bottom-text-error">
-    <span class="po-icon po-icon-warning po-field-container-icon-error"></span>
-    {{ errorPattern }}
-  </span>
+<div
+  class="po-field-container-bottom po-footer-group"
+  [class.po-field-container-bottom-disabled]="disabled"
+  [attr.aria-label]="errorPattern && errorLimit ? errorPattern : null"
+  role="alert"
+  aria-live="assertive"
+  tabindex="-1"
+>
+  @if (errorPattern) {
+    <div class="po-field-container-bottom-text-error">
+      <po-icon p-icon="ICON_EXCLAMATION"></po-icon>
+      <span
+        class="po-field-error-message"
+        [class.po-field-error-limit]="errorLimit"
+        [p-tooltip]="errorLimit ? errorPattern : null"
+        p-tooltip-position="top"
+        [p-append-in-body]="appendBox"
+      >
+        {{ errorPattern }}
+      </span>
+    </div>
+  }
+  @if (!errorPattern && help) {
+    <div class="po-field-container-bottom-help-text">
+      @if (help) {
+        <span>
+          {{ help }}
+        </span>
+      }
+    </div>
+  }
+  @if (poHelperComponent()) {
+    <po-helper
+      #helperEl
+      [p-size]="size"
+      [p-helper]="poHelperComponent()"
+      [p-disabled]="disabled"
+      [p-append-in-body]="appendBox"
+    >
+    </po-helper>
+  }
 </div>

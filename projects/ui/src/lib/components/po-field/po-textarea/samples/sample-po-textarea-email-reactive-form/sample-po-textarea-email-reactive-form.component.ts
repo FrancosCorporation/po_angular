@@ -1,15 +1,20 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Component, OnInit, ViewChild, inject } from '@angular/core';
+import { UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 
 import { PoModalAction, PoModalComponent } from '@po-ui/ng-components';
 import { PoPageAction } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-textarea-email-reactive-form',
-  templateUrl: './sample-po-textarea-email-reactive-form.component.html'
+  templateUrl: './sample-po-textarea-email-reactive-form.component.html',
+  standalone: false
 })
 export class SamplePoTextareaEmailReactiveFormComponent implements OnInit {
-  formEmail: FormGroup;
+  private formBuilder = inject(UntypedFormBuilder);
+
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+
+  formEmail: UntypedFormGroup;
   pageActions: Array<PoPageAction>;
   primaryAction: PoModalAction = {
     action: () => {
@@ -18,10 +23,6 @@ export class SamplePoTextareaEmailReactiveFormComponent implements OnInit {
     },
     label: 'Ok'
   };
-
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
-
-  constructor(private formBuilder: FormBuilder) {}
 
   ngOnInit() {
     this.formEmail = this.formBuilder.group({

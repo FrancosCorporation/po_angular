@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
 import { PoLookupColumn, PoSelectOption } from '@po-ui/ng-components';
 
@@ -9,9 +9,13 @@ import { SamplePoLookupService } from '../sample-po-lookup.service';
 @Component({
   selector: 'sample-po-lookup-hero',
   templateUrl: './sample-po-lookup-hero.component.html',
-  providers: [SamplePoLookupService]
+  providers: [SamplePoLookupService],
+  standalone: false
 })
 export class SamplePoLookupHeroComponent {
+  service = inject(SamplePoLookupService);
+  notification = inject(PoNotificationService);
+
   hero: string;
   vehicle: string;
 
@@ -36,8 +40,6 @@ export class SamplePoLookupHeroComponent {
     { property: 'nickname', divider: 'Hero Informations', optional: true, gridColumns: 6, label: 'Hero' },
     { property: 'name', optional: true, gridColumns: 6 }
   ];
-
-  constructor(public service: SamplePoLookupService, public notification: PoNotificationService) {}
 
   fieldFormat(value) {
     return `${value.nickname} - ${value.label}`;

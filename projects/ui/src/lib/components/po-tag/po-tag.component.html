@@ -1,22 +1,71 @@
 <div class="po-tag-container" [class.po-tag-container-horizontal]="tagOrientation">
-  <div *ngIf="label" class="po-tag-title po-text-nowrap">
-    <span class="po-tag-label">{{ tagOrientation ? label + ':' : label }}</span>
-  </div>
+  @if (label) {
+    <div class="po-tag-title po-text-nowrap">
+      <span class="po-tag-label">{{ tagOrientation ? label + ':' : label }}</span>
+    </div>
+  }
 
   <div class="po-tag-sub-container">
     <div
-      class="po-tag"
-      [class.po-clickable]="isClickable"
-      [class.po-tag-inverse]="inverse"
-      [ngClass]="tagColor"
-      tabindex="0"
-      (click)="onClick()"
+      #poTagWrapper
+      class="po-tag-wrapper"
+      [class.po-clickable]="isClickable && !disabled && !removable"
+      [attr.role]="isClickable && !disabled && !removable ? 'button' : ''"
       (keydown.enter)="onKeyPressed($event)"
       (keydown.space)="$event.preventDefault()"
       (keyup.space)="onKeyPressed($event)"
+      (click)="onClick()"
+      [tabindex]="isClickable && !removable ? 0 : -1"
     >
-      <span *ngIf="icon" class="po-icon" [ngClass]="!type && iconTypeString ? icon : iconFromType"></span>
-      <span class="po-tag-value">{{ value }}</span>
+      <div
+        #poTag
+        class="po-tag"
+        [class.po-clickable]="isClickable && !disabled && !removable"
+        [class.po-tag-removable]="removable"
+        [class.po-tag-disabled]="disabled && removable"
+        [ngClass]="tagColor"
+        [ngStyle]="styleTag()"
+      >
+        @if (icon && !removable) {
+          <po-icon
+            class="po-tag-icon"
+            [p-icon]="!type || forceIcon ? icon : iconFromType"
+            [ngStyle]="!type && customTextColor && !isCaptionTag ? { 'color': customTextColor } : ''"
+          >
+          </po-icon>
+        }
+
+        <div
+          #tagContainer
+          class="po-tag-value"
+          [p-append-in-body]="appendInBody"
+          [p-tooltip]="getWidthTag() ? value : ''"
+          p-tooltip-position="top"
+        >
+          <span
+            [ngStyle]="!type && customTextColor && !removable && !isCaptionTag ? { 'color': customTextColor } : ''"
+            >{{ value }}</span
+          >
+        </div>
+
+        @if (removable) {
+          <po-icon
+            #tagClose
+            p-icon="ICON_CLOSE"
+            p-tooltip-position="top"
+            [p-tooltip]="literals.remove"
+            [p-append-in-body]="appendInBody"
+            [attr.aria-label]="setAriaLabel()"
+            class="po-tag-remove"
+            [class.po-clickable]="!disabled"
+            [tabindex]="!disabled ? 0 : -1"
+            [attr.role]="!disabled ? 'button' : ''"
+            (click)="onClose()"
+            (keydown.enter)="onClose('enter')"
+          >
+          </po-icon>
+        }
+      </div>
     </div>
   </div>
 </div>

@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
-import { FormControl } from '@angular/forms';
+import { UntypedFormControl } from '@angular/forms';
 
 import { Subscription } from 'rxjs';
 
@@ -7,9 +7,12 @@ import { PoDialogService, PoNotificationService, PoPageAction, PoRadioGroupOptio
 
 @Component({
   selector: 'sample-po-dialog-cancel-credit-card',
-  templateUrl: './sample-po-dialog-cancel-credit-card.component.html'
+  templateUrl: './sample-po-dialog-cancel-credit-card.component.html',
+  standalone: false
 })
 export class SamplePoDialogCancelCreditCardComponent implements OnDestroy, OnInit {
+  @ViewChild('form', { static: true }) form: UntypedFormControl;
+
   action: Array<PoPageAction>;
   address: string;
   cardNumber: string;
@@ -22,8 +25,6 @@ export class SamplePoDialogCancelCreditCardComponent implements OnDestroy, OnIni
   stateProvince: string;
   zipPostalCode: string;
 
-  private statusSubscription: Subscription;
-
   public readonly cardTypeOptions: Array<PoRadioGroupOption> = [
     { label: 'Master Card', value: 'Master' },
     { label: 'Visa', value: 'visa' },
@@ -31,9 +32,12 @@ export class SamplePoDialogCancelCreditCardComponent implements OnDestroy, OnIni
     { label: 'Hipercard', value: 'hipercard' }
   ];
 
-  @ViewChild('form', { static: true }) form: FormControl;
+  private statusSubscription: Subscription;
 
-  constructor(private poDialog: PoDialogService, private poNotification: PoNotificationService) {}
+  constructor(
+    private poDialog: PoDialogService,
+    private poNotification: PoNotificationService
+  ) {}
 
   ngOnDestroy() {
     this.statusSubscription.unsubscribe();
@@ -43,7 +47,7 @@ export class SamplePoDialogCancelCreditCardComponent implements OnDestroy, OnIni
     this.action = [
       {
         label: 'Cancel',
-        icon: 'po-icon po-icon-delete',
+        icon: 'ICON_DELETE',
         action: this.openConfirmDialog.bind(this),
         disabled: true
       }
@@ -63,7 +67,7 @@ export class SamplePoDialogCancelCreditCardComponent implements OnDestroy, OnIni
   openConfirmDialog() {
     this.poDialog.confirm({
       title: 'Confirm',
-      message: `<p>Hi <b>${this.name}</b>.</p> <p> Do you confirm the cancellation of the card number  <i class="po-icon po-icon-credit-payment"></i> <b>${this.cardNumber}<b>? </p>`,
+      message: `<p>Hi <b>${this.name}</b>.</p> <p> Do you confirm the cancellation of the card number  <i class="po-icon an an-credit-card"></i> <b>${this.cardNumber}<b>? </p>`,
       confirm: () => this.confirmCancelation()
     });
   }

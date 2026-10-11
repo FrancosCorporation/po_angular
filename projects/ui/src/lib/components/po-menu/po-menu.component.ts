@@ -1,29 +1,33 @@
 import {
+  AfterViewInit,
   ChangeDetectorRef,
   Component,
   ContentChild,
   DoCheck,
   ElementRef,
+  OnChanges,
   OnDestroy,
   OnInit,
   Renderer2,
-  ViewContainerRef
+  SimpleChanges,
+  inject
 } from '@angular/core';
 
 import { NavigationCancel, NavigationEnd, Router } from '@angular/router';
 
-import { map } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
+import { map } from 'rxjs/operators';
 
-import { getFormattedLink, isMobile, openExternalLink } from '../../utils/util';
+import { getFormattedLink, uuid, PoUtils } from '../../utils/util';
 
+import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { PoMenuBaseComponent } from './po-menu-base.component';
 import { PoMenuHeaderTemplateDirective } from './po-menu-header-template/po-menu-header-template.directive';
 import { PoMenuItem } from './po-menu-item.interface';
 import { PoMenuItemFiltered } from './po-menu-item/po-menu-item-filtered.interface';
+import { PoMenuGlobalService } from './services/po-menu-global.service';
 import { PoMenuItemsService } from './services/po-menu-items.service';
 import { PoMenuService } from './services/po-menu.service';
-import { PoLanguageService } from '../../services/po-language/po-language.service';
 
 const poMenuDebounceTime = 400;
 const poMenuMinLength = 3;
@@ -51,7 +55,7 @@ const poMenuRootLevel = 1;
  * Para o menu funcionar corretamente é necessário importar o `RouterModule` e `Routes` do módulo principal de
  *  sua aplicação:
  *
- * ````
+ * ```
  * import { RouterModule, Routes } from '@angular/router';
  *
  * ...
@@ -103,51 +107,62 @@ const poMenuRootLevel = 1;
  * <example name="po-menu-labs" title="PO Menu Labs">
  *   <file name="sample-po-menu-labs/sample-po-menu-labs.component.html"> </file>
  *   <file name="sample-po-menu-labs/sample-po-menu-labs.component.ts"> </file>
+ *   <file name="sample-po-menu-labs/sample-po-menu-labs.component.css"> </file>
  * </example>
  *
  * <example name="po-menu-human-resources" title="PO Menu - Human Resources">
  *   <file name="sample-po-menu-human-resources/sample-po-menu-human-resources.component.html"> </file>
  *   <file name="sample-po-menu-human-resources/sample-po-menu-human-resources.component.ts"> </file>
+ *   <file name="sample-po-menu-human-resources/sample-po-menu-human-resources.component.css"> </file>
  *   <file name="sample-po-menu-human-resources/sample-po-menu-human-resources.service.ts"> </file>
  * </example>
  */
 @Component({
   selector: 'po-menu',
   templateUrl: './po-menu.component.html',
-  providers: [PoMenuItemsService, PoMenuService]
+  providers: [PoMenuItemsService, PoMenuService],
+  standalone: false
 })
-export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, OnInit, DoCheck {
+export class PoMenuComponent
+  extends PoMenuBaseComponent
+  implements AfterViewInit, OnDestroy, OnInit, DoCheck, OnChanges
+{
+  changeDetector = inject(ChangeDetectorRef);
+  private readonly element = inject(ElementRef);
+  private readonly renderer = inject(Renderer2);
+  private readonly router = inject(Router);
+  private readonly menuItemsService = inject(PoMenuItemsService);
+
   @ContentChild(PoMenuHeaderTemplateDirective, { static: true }) menuHeaderTemplate: PoMenuHeaderTemplateDirective;
 
   activeMenuItem: PoMenuItem;
   collapsedMobile: boolean;
   filterLoading = false;
   groupedMenuItem: PoMenuItem;
+  id = uuid();
   linkActive: string;
   mobileOpened: boolean = false;
   noData: boolean = false;
   timeoutFilter: any;
+  afterViewInitWasCalled = false;
 
   private filteringItems: boolean = false;
   private menuInitialized: boolean = false;
-  private menuPrevious: string = null;
+  private menuPrevious = null;
   private resizeListener: () => void;
 
   private itemSubscription: Subscription;
   private routeSubscription: Subscription;
 
-  constructor(
-    public changeDetector: ChangeDetectorRef,
-    viewRef: ViewContainerRef,
-    private element: ElementRef,
-    private renderer: Renderer2,
-    private router: Router,
-    private menuItemsService: PoMenuItemsService,
-    menuService: PoMenuService,
-    languageService: PoLanguageService
-  ) {
-    super(menuService, languageService);
+  /* eslint-disable max-params */
+  constructor() {
+    const menuGlobalService = inject(PoMenuGlobalService);
+    const menuService = inject(PoMenuService);
+    const languageService = inject(PoLanguageService);
+
+    super(menuGlobalService, menuService, languageService);
   }
+  /* eslint-enable max-params */
 
   private get isActiveItemMenuSubMenu() {
     return this.activeMenuItem['level'] > this.groupedMenuItem['level'];
@@ -174,7 +189,7 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
       return;
     }
 
-    const menuCurrent = JSON.stringify(this.menus);
+    const menuCurrent = this.stringify(this.menus);
 
     if (this.menuPrevious !== menuCurrent || !this.menuInitialized) {
       this.updateMenu();
@@ -189,24 +204,39 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
     if (this.resizeListener) {
       this.resizeListener();
     }
+
+    this.menuGlobalService.sendRemovedApplicationMenu(this.id);
   }
 
   ngOnInit() {
     this.subscribeToMenuItem();
     this.subscribeToRoute();
+    this.menuGlobalService.sendId(this.menuid);
+  }
 
-    setTimeout(() => {
-      const urlRouter = this.checkingRouterChildrenFragments();
-      this.checkActiveMenuByUrl(urlRouter);
-    });
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['menus'] && this.afterViewInitWasCalled) {
+      this.menuGlobalService.sendChanges(changes['menus'].currentValue);
+      this.changeDetector.detectChanges();
+    }
+  }
+
+  ngAfterViewInit() {
+    this.menuGlobalService.sendApplicationMenu(this);
+    this.afterViewInitWasCalled = true;
   }
 
   activateMenuByUrl(urlPath: string, menus: Array<PoMenuItem>) {
     if (menus) {
+      const urlPathWithoutLastFragment = urlPath.substr(0, urlPath.lastIndexOf('/'));
       return menus.some(menu => {
-        const formattedLink = getFormattedLink(menu.link);
-        if (formattedLink === urlPath) {
-          this.linkActive = formattedLink;
+        const formattedMenuLink = getFormattedLink(menu.link);
+        const menuLinkPath = `${urlPathWithoutLastFragment}${formattedMenuLink.substr(
+          formattedMenuLink.lastIndexOf('/')
+        )}`;
+
+        if (menuLinkPath === urlPath && menuLinkPath === formattedMenuLink) {
+          this.linkActive = formattedMenuLink;
           this.activateMenuItem(menu);
           return true;
         } else {
@@ -225,7 +255,7 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
   /**
    * <a id="colapseMethod"></a>
    *
-   * *Método para colapsar (retrair) o menu.
+   * Método para colapsar (retrair) o menu.
    */
   collapse() {
     this.validateToggleMenu(true);
@@ -242,7 +272,7 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
   /**
    * <a id="expandMethod"></a>
    *
-   * *Método para expandir (aumentar) o menu.
+   * Método para expandir (aumentar) o menu.
    */
   expand() {
     this.validateToggleMenu(false);
@@ -265,9 +295,9 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
 
   /**
    * <a id="toggleMethod"></a>
-   * *Método que colapsa e expande o menu alternadamente.
+   * Método que colapsa e expande o menu alternadamente.
    *
-   * > *Os métodos apenas vão colapsar/expandir o menu se:
+   * > Os métodos apenas vão colapsar/expandir o menu se:
    *  - Todos os itens de menu tiverem valor nas propriedades `icon` e `shortLabel`.
    */
   toggle() {
@@ -280,13 +310,37 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
 
     this.validateCollapseClass(this.collapsedMobile);
 
-    if (isMobile()) {
+    if (PoUtils.isMobile()) {
       return;
     }
 
     if (this.mobileOpened) {
       this.createResizeListener();
     }
+  }
+
+  onMouseEnter(): void {
+    if (this.collapsed && this.automaticToggle) {
+      this.setCollapsed(false);
+      this.allowCollapseHover = true;
+    }
+  }
+
+  onMouseLeave(): void {
+    if (!this.collapsed && this.allowCollapseHover && this.automaticToggle) {
+      this.setCollapsed(true);
+    }
+  }
+
+  protected checkingRouterChildrenFragments() {
+    const childrenPrimary = this.router.parseUrl(this.router.url).root.children['primary'];
+
+    return childrenPrimary ? `/${childrenPrimary.segments.map(it => it.path).join('/')}` : '';
+  }
+
+  protected validateCollapseClass(collapsedMobile: boolean = false) {
+    const wrapper = this.element.nativeElement.parentNode;
+    this.renderer[this.isCollapsed && !collapsedMobile ? 'addClass' : 'removeClass'](wrapper, 'po-collapsed-menu');
   }
 
   private activateCollapseSubMenuItem() {
@@ -300,11 +354,13 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
   private activateMenuItem(menu: PoMenuItem): void {
     this.activeMenuItem = menu;
     this.linkActive = menu.link;
+
     if (this.activeMenuItem['level'] > poMenuRootLevel) {
       this.openParentMenu(this.activeMenuItem);
     } else {
       this.groupedMenuItem = null;
     }
+
     this.menuItemsService.sendToChildMenuClicked({
       active: this.activeMenuItem,
       grouped: this.groupedMenuItem,
@@ -314,12 +370,6 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
 
   private areSubMenus(menus: Array<PoMenuItem>) {
     return menus.every(menu => menu['level'] > poMenuRootLevel);
-  }
-
-  private checkingRouterChildrenFragments() {
-    const childrenPrimary = this.router.parseUrl(this.router.url).root.children['primary'];
-
-    return childrenPrimary ? `/${childrenPrimary.segments.map(it => it.path).join('/')}` : '';
   }
 
   private clearGroupMenuIfFirstLevel(activeMenuItem: PoMenuItem) {
@@ -334,7 +384,7 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
     }
 
     if (menu['type'] === 'externalLink') {
-      openExternalLink(menu.link);
+      PoUtils.openExternalLink(menu.link);
     } else if (menu['type'] === 'internalLink') {
       this.activateMenuItem(menu);
     } else if (menu['type'] === 'subItems') {
@@ -350,10 +400,10 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
     }
   }
 
-  private convertToMenuItemFiltered(menuItem: any = { label: '', link: '' }): PoMenuItemFiltered {
-    const { label, link } = menuItem;
+  private convertToMenuItemFiltered(menuItem: any = { label: '', link: '', action: () => {} }): PoMenuItemFiltered {
+    const { label, link, action } = menuItem;
 
-    const menuItemFiltered: PoMenuItemFiltered = { label, link };
+    const menuItemFiltered: PoMenuItemFiltered = { label, link, action };
 
     this.setMenuItemProperties(menuItemFiltered);
 
@@ -424,14 +474,16 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
 
   private findItems(menus: Array<PoMenuItem>, filter: string, filteredItems: Array<any>) {
     menus.forEach(menu => {
-      const hasAction = menu.action || menu.link;
+      const hasAction = this.searchTreeItems ? this.searchTreeItems : menu.action || menu.link;
       const labelHasFilter = menu.label.toLowerCase().includes(filter);
 
       if (labelHasFilter && hasAction) {
         const newMenu = { ...menu };
 
         if (newMenu.subItems?.length) {
-          delete newMenu.subItems;
+          if (!this.searchTreeItems) {
+            delete newMenu.subItems;
+          }
           newMenu['type'] = this.setMenuType(newMenu);
         }
 
@@ -521,12 +573,21 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
     this.noData = this.filteredItems.length === 0;
   }
 
+  private stringify(menus: Array<PoMenuItem>): string {
+    // não faz o stringify da propriedade icon, pois pode conter objeto complexo e disparar um erro.
+    return JSON.stringify(this.menus, (key, value) => {
+      if (key !== 'icon') {
+        return value;
+      }
+    });
+  }
+
   private toggleGroupedMenuItem() {
     this.groupedMenuItem['isOpened'] = !this.collapsed && this.allowCollapseMenu;
   }
 
   private toggleMenuCollapse(collapsed: boolean = false) {
-    this.collapsed = collapsed;
+    this.setCollapsed(collapsed);
 
     if (this.groupedMenuItem && this.activeMenuItem) {
       this.groupedMenuItem =
@@ -566,12 +627,12 @@ export class PoMenuComponent extends PoMenuBaseComponent implements OnDestroy, O
     this.menuInitialized = true;
     this.setMenuExtraProperties();
     this.filteredItems = [...this.menus];
-    this.menuPrevious = JSON.stringify(this.menus);
+    this.menuPrevious = this.stringify(this.menus);
     this.validateMenus(this.menus);
   }
 
-  protected validateCollapseClass(collapsedMobile: boolean = false) {
-    const wrapper = this.element.nativeElement.parentNode;
-    this.renderer[this.isCollapsed && !collapsedMobile ? 'addClass' : 'removeClass'](wrapper, 'po-collapsed-menu');
+  private setCollapsed(value: boolean) {
+    this.collapsed = value;
+    this.toggleChange.emit(!value);
   }
 }

@@ -1,4 +1,4 @@
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, inject } from '@angular/core';
 
 import { Subscription } from 'rxjs';
 
@@ -6,7 +6,7 @@ import { PoBreadcrumbItem } from './../po-breadcrumb-item.interface';
 import { PoBreadcrumbFavoriteService } from './po-breadcrumb-favorite.service';
 import { PoLanguageService } from '../../../services/po-language/po-language.service';
 
-export const PoBreadcrumbLiterals: Object = {
+export const PoBreadcrumbLiterals: object = {
   en: <any>{
     favorite: 'Favorite',
     unfavorite: 'Unfavorite'
@@ -36,14 +36,12 @@ export const PoBreadcrumbLiterals: Object = {
 @Component({
   selector: 'po-breadcrumb-favorite',
   templateUrl: './po-breadcrumb-favorite.component.html',
-  providers: [PoBreadcrumbFavoriteService]
+  providers: [PoBreadcrumbFavoriteService],
+  standalone: false
 })
 export class PoBreadcrumbFavoriteComponent implements OnInit, OnDestroy {
-  favorite: boolean = false;
-  literals;
-
-  private getSubscription: Subscription;
-  private setSubscription: Subscription;
+  private readonly service = inject(PoBreadcrumbFavoriteService);
+  private readonly languageService = inject(PoLanguageService);
 
   // URL do serviço.
   @Input('p-favorite-service') favoriteService: string;
@@ -54,7 +52,18 @@ export class PoBreadcrumbFavoriteComponent implements OnInit, OnDestroy {
   // Parâmetro que será enviado junto com o serviço de favoritar.
   @Input('p-params-service') paramsService: object;
 
-  constructor(private service: PoBreadcrumbFavoriteService, private languageService: PoLanguageService) {
+  // Esconde literal e mantém apenas icone
+  @Input('p-hidden-literal') hiddenLiteral: boolean = false;
+
+  favorite: boolean = false;
+  literals;
+
+  private getSubscription: Subscription;
+  private setSubscription: Subscription;
+
+  constructor() {
+    const languageService = this.languageService;
+
     const language = languageService.getShortLanguage();
 
     this.literals = {

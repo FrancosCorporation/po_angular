@@ -1,8 +1,10 @@
-import { Component, ElementRef, ViewChild } from '@angular/core';
+import { Component, ContentChild, ElementRef, ViewChild, inject } from '@angular/core';
 
-import { PoModalBaseComponent } from './po-modal-base.component';
-import { PoModalService } from './po-modal-service';
 import { uuid } from '../../utils/util';
+import { PoModalBaseComponent } from './po-modal-base.component';
+import { PoModalFooterComponent } from './po-modal-footer/po-modal-footer.component';
+
+import { PoActiveOverlayService } from '../../services/po-active-overlay/po-active-overlay.service';
 import { PoLanguageService } from '../../services/po-language/po-language.service';
 
 /**
@@ -28,23 +30,35 @@ import { PoLanguageService } from '../../services/po-language/po-language.servic
 
 @Component({
   selector: 'po-modal',
-  templateUrl: './po-modal.component.html'
+  templateUrl: './po-modal.component.html',
+  standalone: false
 })
 export class PoModalComponent extends PoModalBaseComponent {
+  private readonly poActiveOverlayService = inject(PoActiveOverlayService);
+
   @ViewChild('modalContent', { read: ElementRef }) modalContent: ElementRef;
+  @ViewChild('modalContainer', { read: ElementRef }) modalContainer: ElementRef;
+  @ContentChild(PoModalFooterComponent) modalFooter: PoModalFooterComponent;
 
   private firstElement;
   private focusFunction;
-  private focusableElements = 'input, select, textarea, button:not([disabled]), a';
-  private id: string = uuid();
+  private readonly focusableElements = 'input, select, textarea, button:not([disabled]), a';
+  private readonly id: string = uuid();
   private sourceElement;
 
-  constructor(private poModalService: PoModalService, poLanguageService: PoLanguageService) {
+  constructor() {
+    const poLanguageService = inject(PoLanguageService);
+
     super(poLanguageService);
   }
 
   close(xClosed = false) {
-    this.poModalService.modalActive = undefined;
+    if (
+      this.poActiveOverlayService.activeOverlay.length > 0 &&
+      this.poActiveOverlayService.activeOverlay[this.poActiveOverlayService.activeOverlay.length - 1] === this.id
+    ) {
+      this.poActiveOverlayService.activeOverlay.pop();
+    }
 
     super.close(xClosed);
 
@@ -63,12 +77,8 @@ export class PoModalComponent extends PoModalBaseComponent {
     }
   }
 
-  getPrimaryActionButtonType() {
-    return this.primaryAction.danger ? 'danger' : 'primary';
-  }
-
-  getSecondaryActionButtonType() {
-    return this.secondaryAction && this.secondaryAction.danger && !this.primaryAction.danger ? 'danger' : 'default';
+  getSecondaryActionButtonDanger() {
+    return this.secondaryAction && this.secondaryAction.danger && !this.primaryAction.danger ? 'true' : 'false';
   }
 
   onClickOut(event) {
@@ -79,14 +89,12 @@ export class PoModalComponent extends PoModalBaseComponent {
 
   open() {
     this.sourceElement = document.activeElement;
-
     super.open();
-
     this.handleFocus();
   }
 
   private handleFocus(): any {
-    this.poModalService.modalActive = this.id;
+    this.poActiveOverlayService.activeOverlay.push(this.id);
 
     setTimeout(() => {
       if (this.modalContent) {
@@ -98,10 +106,14 @@ export class PoModalComponent extends PoModalBaseComponent {
 
   private initFocus() {
     this.focusFunction = (event: any) => {
-      this.poModalService.modalActive = this.poModalService.modalActive || this.id;
+      const isCdkOverlayListbox = event.target.closest('.cdk-overlay-container') !== null;
       const modalElement = this.modalContent.nativeElement;
 
-      if (!modalElement.contains(event.target) && this.poModalService.modalActive === this.id) {
+      if (
+        !modalElement.contains(event.target) &&
+        !isCdkOverlayListbox &&
+        this.poActiveOverlayService.activeOverlay[this.poActiveOverlayService.activeOverlay.length - 1] === this.id
+      ) {
         event.stopPropagation();
         this.firstElement.focus();
       }

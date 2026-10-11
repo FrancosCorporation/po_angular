@@ -1,0 +1,17 @@
+<div #radio class="po-radio">
+  <label (click)="eventClick()" (keydown)="onKeyDown($event)">
+    <input
+      #radioInput
+      type="radio"
+      [checked]="checked"
+      [disabled]="disabled"
+      [name]="name ?? 'po-input-radio'"
+      [required]="required"
+      [value]="radioValue ?? ''"
+      (blur)="onBlur()"
+    />
+    @if (label) {
+      <po-label [p-text-wrap]="labelTextWrap" [p-disabled]="disabled" [p-label]="label"></po-label>
+    }
+  </label>
+</div>

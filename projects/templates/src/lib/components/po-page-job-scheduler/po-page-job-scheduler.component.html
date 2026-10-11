@@ -1,7 +1,12 @@
-<po-page-default [p-actions]="jobSchedulerActions" [p-breadcrumb]="breadcrumb" [p-title]="title">
+<po-page-default
+  [p-actions]="jobSchedulerActions"
+  [p-breadcrumb]="breadcrumb"
+  [p-components-size]="componentsSize"
+  [p-title]="title"
+>
   <div class="po-row">
     <po-stepper
-      class="po-lg-3 po-xl-2"
+      [ngClass]="stepperDefaultOrientation === 'horizontal' ? 'po-lg-12 po-xl-12' : 'po-lg-3 po-xl-2'"
       p-sequential="true"
       [p-orientation]="stepperOrientation"
       [p-step]="step"
@@ -10,13 +15,16 @@
     >
     </po-stepper>
 
-    <po-container class="po-lg-8 po-xl-6">
+    <po-container [ngClass]="stepperDefaultOrientation === 'horizontal' ? 'po-lg-12 po-xl-12' : 'po-lg-8 po-xl-6'">
       <form #formScheduler="ngForm">
         <div class="po-row">
           <po-page-job-scheduler-execution
-            [hidden]="step !== 1"
+            [p-no-parameters]="parametersEmpty"
+            [p-no-custom-params-component]="!parametersTemplate.length"
+            [hidden]="step !== stepExecution"
             #schedulerExecution
             class="po-md-12"
+            [p-components-size]="componentsSize"
             [p-is-edit]="isEdit"
             [p-literals]="literals"
             [p-value]="model"
@@ -24,26 +32,39 @@
           >
           </po-page-job-scheduler-execution>
 
-          <po-page-job-scheduler-parameters
-            *ngIf="step === 2"
-            #schedulerParameters
-            class="po-md-12"
-            [p-literals]="literals"
-            [p-parameters]="parameters || []"
-            [(p-value)]="model.executionParameter"
-          >
-          </po-page-job-scheduler-parameters>
+          @if (stepParametersInitialized && !parametersTemplate.length) {
+            <po-page-job-scheduler-parameters
+              [hidden]="step !== stepParameters"
+              #schedulerParameters
+              class="po-md-12"
+              [p-components-size]="componentsSize"
+              [p-literals]="literals"
+              [p-parameters]="parameters || []"
+              [(p-value)]="model.executionParameter"
+            >
+            </po-page-job-scheduler-parameters>
+          }
 
-          <po-page-job-scheduler-summary
-            *ngIf="step === 3"
-            class="po-md-12"
-            [p-literals]="literals"
-            [p-parameters]="parameters"
-            [p-value]="publicValues"
-          >
-          </po-page-job-scheduler-summary>
+          @if (step === stepSummary) {
+            <po-page-job-scheduler-summary
+              [p-no-parameters]="!parameters.length"
+              [p-summary-template]="jobSchedulerSummaryTemplate"
+              class="po-md-12"
+              [p-components-size]="componentsSize"
+              [p-literals]="literals"
+              [p-parameters]="parameters"
+              [p-value]="publicValues"
+            >
+            </po-page-job-scheduler-summary>
+          }
         </div>
       </form>
+
+      @for (template of parametersTemplate; track template; let index = $index) {
+        <div [hidden]="step !== index + (_stepExecutionLast ? 1 : 2)">
+          <ng-template [ngTemplateOutlet]="template?.templateRef"></ng-template>
+        </div>
+      }
     </po-container>
   </div>
 </po-page-default>

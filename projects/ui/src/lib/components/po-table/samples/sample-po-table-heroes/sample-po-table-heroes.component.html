@@ -1,0 +1,39 @@
+<div class="po-row po-pb-2">
+  <div class="po-md-6">
+    <div class="po-font-text-bold po-text-color-neutral-dark-40">Choose one or more heroes for your team</div>
+    <po-table
+      #POItemsOri
+      [p-columns]="columns"
+      [p-infinite-scroll]="true"
+      p-selectable="true"
+      [p-hide-select-all]="true"
+      [p-hide-table-search]="false"
+      p-infinite-scroll-distance="80"
+      (p-selected)="changeOptions($event, 'new')"
+      (p-unselected)="changeOptions($event, 'change')"
+      p-height="300"
+      [p-items]="items"
+      (p-delete-items)="deleteItems($event)"
+      [p-hide-action-fixed-columns]="true"
+      [p-text-wrap]="true"
+      [p-virtual-scroll]="false"
+    >
+    </po-table>
+  </div>
+  <div class="po-md-6">
+    <div class="po-font-text-bold po-text-color-neutral-dark-40">Here your chosen heroes</div>
+    <po-table
+      #POItemsSelected
+      [p-columns]="columns"
+      [p-hide-table-search]="false"
+      [p-striped]="true"
+      [p-infinite-scroll]="true"
+      p-height="300"
+      [p-items]="itemsSelected"
+      [p-hide-action-fixed-columns]="true"
+      [p-text-wrap]="true"
+      [p-virtual-scroll]="false"
+    >
+    </po-table>
+  </div>
+</div>

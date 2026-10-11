@@ -1,5 +1,5 @@
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Component, OnInit, inject } from '@angular/core';
+import { UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 
 import { PoLookupColumn, PoSelectOption } from '@po-ui/ng-components';
 
@@ -10,10 +10,15 @@ import { SamplePoLookupService } from '../sample-po-lookup.service';
 @Component({
   selector: 'sample-po-lookup-hero-reactive-form',
   templateUrl: './sample-po-lookup-hero-reactive-form.component.html',
-  providers: [SamplePoLookupService]
+  providers: [SamplePoLookupService],
+  standalone: false
 })
 export class SamplePoLookupHeroReactiveFormComponent implements OnInit {
-  formMission: FormGroup;
+  service = inject(SamplePoLookupService);
+  notification = inject(PoNotificationService);
+  private formBuilder = inject(UntypedFormBuilder);
+
+  formMission: UntypedFormGroup;
 
   public readonly columns: Array<PoLookupColumn> = [
     { property: 'nickname', label: 'Hero' },
@@ -31,12 +36,6 @@ export class SamplePoLookupHeroReactiveFormComponent implements OnInit {
     { label: 'Submarine', value: 'submarine' },
     { label: 'Truck', value: 'truck' }
   ];
-
-  constructor(
-    public service: SamplePoLookupService,
-    public notification: PoNotificationService,
-    private formBuilder: FormBuilder
-  ) {}
 
   ngOnInit(): void {
     this.formMission = this.formBuilder.group({

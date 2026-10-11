@@ -1,4 +1,4 @@
-import { Component, EventEmitter, ViewChild } from '@angular/core';
+import { Component, EventEmitter, OnInit, ViewChild } from '@angular/core';
 
 import { PoModalAction } from '../../../components/po-modal/po-modal-action.interface';
 import { PoModalComponent } from '../../../components/po-modal/po-modal.component';
@@ -18,24 +18,33 @@ export const colors = { success: 'color-11', error: 'color-07', warning: 'color-
  */
 @Component({
   selector: 'po-http-interceptor-detail',
-  templateUrl: './po-http-interceptor-detail.component.html'
+  templateUrl: './po-http-interceptor-detail.component.html',
+  standalone: false
 })
-export class PoHttpInterceptorDetailComponent {
+export class PoHttpInterceptorDetailComponent implements OnInit {
   @ViewChild(PoModalComponent, { static: true }) modal: PoModalComponent;
 
   closed = new EventEmitter<any>();
   details: Array<PoHttpInterceptorDetail> = [];
-  private language = this.languageService.getShortLanguage();
-  private literals = poHttpInterceptorDetailLiteralsDefault[this.language];
-
-  primaryAction: PoModalAction = {
-    action: () => this.close(),
-    label: this.literals.closeButton
-  };
-
   title: string;
 
-  constructor(private languageService: PoLanguageService) {}
+  private readonly language: any;
+  private readonly literals: any;
+
+  // eslint-disable-next-line @typescript-eslint/member-ordering
+  primaryAction: PoModalAction;
+
+  constructor(private readonly languageService: PoLanguageService) {
+    this.language = this.languageService?.getShortLanguage();
+    this.literals = poHttpInterceptorDetailLiteralsDefault[this.language];
+  }
+
+  ngOnInit(): void {
+    this.primaryAction = {
+      action: () => this.close(),
+      label: this.literals.closeButton
+    };
+  }
 
   set detail(details: Array<PoHttpInterceptorDetail>) {
     if (details && details.length) {
@@ -51,7 +60,11 @@ export class PoHttpInterceptorDetailComponent {
   }
 
   formatDetailItemTitle(detail) {
-    return detail.code ? `${detail.code} - ${detail.message}` : detail.message;
+    return detail.detailTitle
+      ? detail.detailTitle
+      : detail.code
+        ? `${detail.code} - ${detail.message}`
+        : detail.message;
   }
 
   open() {
@@ -70,8 +83,10 @@ export class PoHttpInterceptorDetailComponent {
     return detail.message ? newDetails.concat(this.getValidDetailProperties(detail)) : newDetails;
   }
 
-  private getValidDetailProperties({ code, message, detailedMessage, type }: PoHttpInterceptorDetail) {
-    return { code, message, detailedMessage, type };
+  private getValidDetailProperties({ code, message, detailedMessage, type, detailTitle }: PoHttpInterceptorDetail) {
+    return detailTitle
+      ? { code, message, detailedMessage, type, detailTitle }
+      : { code, message, detailedMessage, type };
   }
 
   private filterByValidDetails(details: Array<PoHttpInterceptorDetail>) {
@@ -79,6 +94,10 @@ export class PoHttpInterceptorDetailComponent {
   }
 
   private formatTitle(details: Array<PoHttpInterceptorDetail>) {
-    return details.length > 1 ? `${this.literals.details} (${details.length})` : this.literals.detail;
+    return details.length > 1
+      ? `${this.literals.details} (${details.length})`
+      : details.length === 1
+        ? this.formatDetailItemTitle(details[0])
+        : this.literals.detail;
   }
 }

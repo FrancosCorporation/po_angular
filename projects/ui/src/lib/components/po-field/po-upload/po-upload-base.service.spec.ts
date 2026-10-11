@@ -1,7 +1,7 @@
-import { EventEmitter } from '@angular/core';
+import { ChangeDetectorRef, EventEmitter } from '@angular/core';
 import { inject, TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { HttpResponse } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpResponse, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 import { Observable } from 'rxjs';
 
@@ -11,8 +11,8 @@ import { PoUploadFile } from './po-upload-file';
 describe('PoUploadBaseService:', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [PoUploadBaseService]
+      imports: [],
+      providers: [PoUploadBaseService, provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
     });
   });
 
@@ -74,7 +74,7 @@ describe('PoUploadBaseService:', () => {
     fakeFile['lastModifiedDate'] = new Date();
     fakeFile['name'] = 'Teste';
     fakeFile['webkitRelativePath'] = '';
-    const files = [new PoUploadFile(<File>fakeFile)];
+    const files = [new PoUploadFile(fakeFile)];
     const headers = { Authorization: '145236' };
     const tOnUpload = new EventEmitter<any>();
     const callback = (file: PoUploadFile, event: any) => '';
@@ -87,15 +87,51 @@ describe('PoUploadBaseService:', () => {
     expect(service.sendFile).toHaveBeenCalled();
   }));
 
+  it('should call formData.append with correct parameters', inject(
+    [PoUploadBaseService],
+    (service: PoUploadBaseService) => {
+      const fakeFile = new Blob([]);
+      fakeFile['lastModified'] = 1504558774471;
+      fakeFile['lastModifiedDate'] = new Date();
+      fakeFile['name'] = 'Teste';
+      fakeFile['webkitRelativePath'] = '';
+      const files = [new PoUploadFile(fakeFile)];
+      const headers = { Authorization: '145236' };
+      const tOnUpload = new EventEmitter<any>();
+      const callback = (file: PoUploadFile, event: any) => '';
+
+      const formData = new FormData();
+      spyOn(window, 'FormData').and.returnValue(formData);
+      spyOn(formData, 'append');
+
+      const uploadEvent = {
+        extraFormData: { param1: 'value1', param2: 'value2' },
+        data: { key: 'value' },
+        url: 'http://example.com/upload',
+        headers: { 'Content-Type': 'application/json' }
+      };
+
+      spyOn(tOnUpload, 'emit').and.callFake(event => {
+        event.extraFormData = uploadEvent.extraFormData;
+        event.data = uploadEvent.data;
+        event.url = uploadEvent.url;
+        event.headers = uploadEvent.headers;
+      });
+
+      service.upload('', files, headers, tOnUpload, callback, callback, callback);
+
+      expect(formData.append).toHaveBeenCalled();
+    }
+  ));
+
   it('should execute uploadCallback function', inject([PoUploadBaseService], (service: PoUploadBaseService) => {
     const methods = returnMethodsCallback();
     const fakeThis = {
-      getRequest: (url: any, headers: any, formData: any) => {
-        return new Observable(observer => {
+      getRequest: (url: any, headers: any, formData: any) =>
+        new Observable(observer => {
           observer.next({ type: 1 });
           observer.complete();
-        });
-      },
+        }),
       addRequest: service.addRequest,
       requests: service.requests
     };
@@ -114,16 +150,14 @@ describe('PoUploadBaseService:', () => {
 
     expect(methods.uploadCallback).toHaveBeenCalled();
   }));
-
   it('should execute successCallback function', inject([PoUploadBaseService], (service: PoUploadBaseService) => {
     const methods = returnMethodsCallback();
     const fakeThis = {
-      getRequest: (url: any, headers: any, formData: any) => {
-        return new Observable(observer => {
+      getRequest: (url: any, headers: any, formData: any) =>
+        new Observable(observer => {
           observer.next(new HttpResponse());
           observer.complete();
-        });
-      },
+        }),
       addRequest: service.addRequest,
       requests: service.requests
     };
@@ -146,12 +180,11 @@ describe('PoUploadBaseService:', () => {
   it('should not execute a callback function', inject([PoUploadBaseService], (service: PoUploadBaseService) => {
     const methods = returnMethodsCallback();
     const fakeThis = {
-      getRequest: (url: any, formData: any) => {
-        return new Observable(observer => {
-          observer.next('');
+      getRequest: (url: any, formData: any) =>
+        new Observable(observer => {
+          observer.next({});
           observer.complete();
-        });
-      },
+        }),
       addRequest: service.addRequest,
       requests: service.requests
     };
@@ -174,11 +207,10 @@ describe('PoUploadBaseService:', () => {
   it('should execute errorCallback function', inject([PoUploadBaseService], (service: PoUploadBaseService) => {
     const methods = returnMethodsCallback();
     const fakeThis = {
-      getRequest: (url: any, headers: any, formData: any) => {
-        return new Observable(observer => {
+      getRequest: (url: any, headers: any, formData: any) =>
+        new Observable(observer => {
           observer.error();
-        });
-      },
+        }),
       addRequest: service.addRequest,
       requests: service.requests
     };

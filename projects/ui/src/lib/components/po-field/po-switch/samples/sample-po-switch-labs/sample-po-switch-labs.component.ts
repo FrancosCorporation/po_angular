@@ -4,16 +4,20 @@ import { PoCheckboxGroupOption, PoRadioGroupOption, PoSwitchLabelPosition } from
 
 @Component({
   selector: 'sample-po-switch-labs',
-  templateUrl: './sample-po-switch-labs.component.html'
+  templateUrl: './sample-po-switch-labs.component.html',
+  standalone: false
 })
 export class SamplePoSwitchLabsComponent implements OnInit {
+  helperText: string;
   event: string;
+  fieldErrorMessage: string;
   help: string;
   label: string;
   labelOff: string;
   labelOn: string;
   labelPosition: PoSwitchLabelPosition;
   properties: Array<string>;
+  size: string;
   switch: boolean;
 
   public readonly labelPositionOptions: Array<PoRadioGroupOption> = [
@@ -21,7 +25,21 @@ export class SamplePoSwitchLabsComponent implements OnInit {
     { label: 'Right', value: PoSwitchLabelPosition.Right }
   ];
 
-  public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [{ value: 'disabled', label: 'Disabled' }];
+  public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [
+    { value: 'disabled', label: 'Disabled' },
+    { value: 'formatModel', label: 'Format Model' },
+    { value: 'hideLabelStatus', label: 'Hide label status' },
+    { value: 'errorLimit', label: 'Limit Error Message' },
+    { value: 'invalidValue', label: 'Invalid Value is On/True' },
+    { value: 'labelTextWrap', label: 'Label Text Wrap' },
+    { value: 'loading', label: 'Loading' },
+    { value: 'compactLabel', label: 'Compact Label' }
+  ];
+
+  public readonly sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
+  ];
 
   ngOnInit() {
     this.restore();
@@ -32,6 +50,7 @@ export class SamplePoSwitchLabsComponent implements OnInit {
   }
 
   restore() {
+    this.helperText = '';
     this.event = '';
     this.help = undefined;
     this.label = undefined;
@@ -39,6 +58,8 @@ export class SamplePoSwitchLabsComponent implements OnInit {
     this.labelOff = '';
     this.labelPosition = undefined;
     this.properties = [];
+    this.size = 'medium';
     this.switch = undefined;
+    this.fieldErrorMessage = '';
   }
 }

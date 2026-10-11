@@ -1,8 +1,8 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { Directive, EventEmitter, HostBinding, HostListener, Input, Output } from '@angular/core';
 
 import { PoModalAction } from '@po-ui/ng-components';
 
-import { convertToBoolean, isExternalLink, isTypeof } from '../../utils/util';
+import { convertToBoolean, getDefaultSizeFn, isExternalLink, isTypeof, validateSizeFn } from '../../utils/util';
 
 import { PoPageChangePasswordRecovery } from './interfaces/po-page-change-password-recovery.interface';
 import { PoPageChangePasswordRequirement } from './interfaces/po-page-change-password-requirement.interface';
@@ -37,36 +37,6 @@ import { PoPageChangePasswordRequirement } from './interfaces/po-page-change-pas
  */
 @Directive()
 export abstract class PoPageChangePasswordBaseComponent {
-  private _hideCurrentPassword: boolean = false;
-  private _recovery: string | PoPageChangePasswordRecovery | Function;
-  private _requirements: Array<PoPageChangePasswordRequirement> = [];
-  private _urlHome: string = '/';
-  protected validatorChange: any;
-
-  confirmPassword: string;
-  currentPassword: string;
-  modalAction: PoModalAction;
-  newPassword: string;
-  recoveryUrlType: string;
-  showRequirements: boolean;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Esconde o campo `Senha atual` para que o template seja para criação de senha.
-   *
-   * @default `false`
-   */
-  @Input('p-hide-current-password') set hideCurrentPassword(value: boolean) {
-    this._hideCurrentPassword = convertToBoolean(value);
-  }
-
-  get hideCurrentPassword(): boolean {
-    return this._hideCurrentPassword;
-  }
-
   /**
    * @optional
    *
@@ -77,56 +47,6 @@ export abstract class PoPageChangePasswordBaseComponent {
    * > Caso seja indefinida o espaço se mantém preservado porém vazio.
    */
   @Input('p-logo') logo?: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * URL para a ação do link `Esqueceu a senha`.
-   *
-   * A propriedade aceita os seguintes tipos:
-   *
-   * - **String**: informe uma url externa ou uma rota válida;
-   * - **Function**: pode-se customizar a ação. Para esta possilidade basta atribuir:
-   * ```
-   * <po-page-change-password>
-   *      [recovery]="this.myFunc.bind(this)";
-   * </po-page-change-password>
-   * ```
-   *
-   * - **PoPageChangePasswordRecovery**: cria-se vínculo automático com o template **po-modal-password-recovery**.
-   *   O objeto deve conter a **url** para requisição dos recursos e pode-se definir o **tipo** de modal para recuperação de senha,
-   *   **email** para contato e **máscara** do campo de telefone.
-   *
-   * > Caso não tenha valor o link `Esqueceu a senha` desaparece.
-   */
-  @Input('p-recovery') set recovery(value: string | Function | PoPageChangePasswordRecovery) {
-    this._recovery = value;
-
-    if (isTypeof(value, 'string')) {
-      this.recoveryUrlType = isExternalLink(value) ? 'externalLink' : 'internalLink';
-    }
-  }
-
-  get recovery() {
-    return this._recovery;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Lista de regras para criação e alteração de senha.
-   */
-  @Input('p-requirements') set requirements(value: Array<PoPageChangePasswordRequirement>) {
-    this._requirements = value || [];
-    this.showRequirements = this._requirements.length > 0;
-  }
-  get requirements() {
-    return this._requirements;
-  }
 
   /**
    * @optional
@@ -233,6 +153,136 @@ export abstract class PoPageChangePasswordBaseComponent {
    *
    * @description
    *
+   * Função executada ao submeter o form pelo botão salvar.
+   *
+   * Caso definida essa função, a modal de confirmação não aparece, mas pode ser chamada pelo
+   * método `openConfirmation`. Exemplo:
+   *
+   * ```
+   * @ViewChild(PoPageChangePasswordComponent) changePassword: PoPageChangePasswordComponent;
+   *
+   * onSubmit() {
+   *  this.changePassword.openConfirmation();
+   * }
+   *
+   * ```
+   * > Esta propriedade será ignorada se for definido valor para a propriedade `p-url-new-password`.
+   */
+  @Output('p-submit') submit: EventEmitter<any> = new EventEmitter();
+
+  confirmPassword: string;
+  currentPassword: string;
+  modalAction: PoModalAction;
+  newPassword: string;
+  recoveryUrlType: string;
+  showRequirements: boolean;
+
+  protected validatorChange: any;
+
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _hideCurrentPassword: boolean = false;
+  private _recovery: string | PoPageChangePasswordRecovery | Function;
+  private _requirements: Array<PoPageChangePasswordRequirement> = [];
+  private _urlHome: string = '/';
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Esconde o campo `Senha atual` para que o template seja para criação de senha.
+   *
+   * @default `false`
+   */
+  @Input('p-hide-current-password') set hideCurrentPassword(value: boolean) {
+    this._hideCurrentPassword = convertToBoolean(value);
+  }
+
+  get hideCurrentPassword(): boolean {
+    return this._hideCurrentPassword;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * URL para a ação do link `Esqueceu a senha`.
+   *
+   * A propriedade aceita os seguintes tipos:
+   *
+   * - **String**: informe uma url externa ou uma rota válida;
+   * - **Function**: pode-se customizar a ação. Para esta possilidade basta atribuir:
+   *   ```
+   *   <po-page-change-password>
+   *     [recovery]="this.myFunc.bind(this)";
+   *   </po-page-change-password>
+   *   ```
+   *
+   * - **PoPageChangePasswordRecovery**: cria-se vínculo automático com o template **po-modal-password-recovery**.
+   *   O objeto deve conter a **url** para requisição dos recursos e pode-se definir o **tipo** de modal para recuperação de senha,
+   *   **email** para contato e **máscara** do campo de telefone.
+   *
+   * > Caso não tenha valor o link `Esqueceu a senha` desaparece.
+   */
+  @Input('p-recovery') set recovery(value: string | Function | PoPageChangePasswordRecovery) {
+    this._recovery = value;
+
+    if (isTypeof(value, 'string')) {
+      this.recoveryUrlType = isExternalLink(value) ? 'externalLink' : 'internalLink';
+    }
+  }
+
+  get recovery() {
+    return this._recovery;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Lista de regras para criação e alteração de senha.
+   */
+  @Input('p-requirements') set requirements(value: Array<PoPageChangePasswordRequirement>) {
+    this._requirements = value || [];
+    this.showRequirements = this._requirements.length > 0;
+  }
+  get requirements() {
+    return this._requirements;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
    * URL para a ação do botão `Entrar no sistema` da modal de confirmação que aparece após salvar a senha ou se chamada pelo método
    * `openConfirmation`.
    *
@@ -251,22 +301,22 @@ export abstract class PoPageChangePasswordBaseComponent {
    *
    * @description
    *
-   * Função executada ao submeter o form pelo botão salvar.
+   * Define a propriedade nativa `autocomplete` do campo como `off`.
    *
-   * Caso definida essa função, a modal de confirmação não aparece, mas pode ser chamada pelo
-   * método `openConfirmation`. Exemplo:
+   * > No input de senha(`po-password`) será definido como `new-password`.
    *
-   * ```
-   * @ViewChild(PoPageChangePasswordComponent) changePassword: PoPageChangePasswordComponent;
-   *
-   * onSubmit() {
-   *  this.changePassword.openConfirmation();
-   * }
-   *
-   * ```
-   * > Esta propriedade será ignorada se for definido valor para a propriedade `p-url-new-password`.
+   * @default `true`
    */
-  @Output('p-submit') submit: EventEmitter<any> = new EventEmitter();
+  @Input('p-no-autocomplete-password') noAutocompletePassword: boolean = true;
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
+  }
 
   abstract navigateTo(url: string): void;
 }

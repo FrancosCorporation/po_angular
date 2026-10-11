@@ -1,10 +1,34 @@
 import { animate, animateChild, group, query, style, transition, trigger } from '@angular/animations';
-import { Component, ElementRef, ViewChild } from '@angular/core';
+import { Component, ContentChild, ElementRef, ViewChild, inject } from '@angular/core';
 import { ReplaySubject } from 'rxjs';
 import { delay, take } from 'rxjs/operators';
 
-import { getFocusableElements } from '../../../utils/util';
+import { getFocusableElements, uuid } from '../../../utils/util';
+
+import { PoActiveOverlayService } from '../../../services/po-active-overlay/po-active-overlay.service';
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { PoPageSlideLiterals } from './interfaces/po-page-slide-literals.interface';
 import { PoPageSlideBaseComponent } from './po-page-slide-base.component';
+import { PoPageSlideFooterComponent } from './po-page-slide-footer/po-page-slide-footer.component';
+
+export const poPageSlideLiteralsDefault = {
+  en: <PoPageSlideLiterals>{
+    close: 'Close',
+    label: 'Panel'
+  },
+  es: <PoPageSlideLiterals>{
+    close: 'Cerrar',
+    label: 'Panel'
+  },
+  pt: <PoPageSlideLiterals>{
+    close: 'Fechar',
+    label: 'Painel'
+  },
+  ru: <PoPageSlideLiterals>{
+    close: 'Закрывать',
+    label: 'Панель'
+  }
+};
 
 /**
  * @docsExtends PoPageSlideBaseComponent
@@ -34,27 +58,38 @@ import { PoPageSlideBaseComponent } from './po-page-slide-base.component';
     trigger('fade', [
       transition(':enter', [
         style({ opacity: 0 }),
-        group([animate('150ms', style({ opacity: 1 })), query('@slide', animateChild())])
+        group([animate(`{{duration}}`, style({ opacity: 1 })), query('@slide', animateChild())])
       ]),
       transition(':leave', group([query('@slide', animateChild()), animate('150ms', style({ opacity: 0 }))]))
     ]),
     trigger('slide', [
       transition(':enter', [
         style({ transform: 'translateX(50px)' }),
-        animate('691ms ease-in-out', style({ transform: 'none' }))
+        animate(`{{timing }}`, style({ transform: 'none' }))
       ]),
       transition(':leave', [animate('150ms', style({ transform: 'translateX(50px)' }))])
     ])
-  ]
+  ],
+  standalone: false
 })
 export class PoPageSlideComponent extends PoPageSlideBaseComponent {
-  private _pageContent: ElementRef;
-  private loadingCompleted = new ReplaySubject<void>();
+  private readonly poActiveOverlayService = inject(PoActiveOverlayService);
+  private readonly languageService = inject(PoLanguageService);
 
-  private sourceElement: any;
+  private _pageContent: ElementRef;
+
   private firstElement: any;
+  private readonly id: string = uuid();
+  private readonly loadingCompleted = new ReplaySubject<void>();
+  private sourceElement: any;
+  buttonAriaLabel: string;
+  defaultDialogLabel: string;
+  duration: string = '70ms';
+  timing: string = '700ms Cubic-Bezier(0.35, 0, 0.1, 1)';
 
   private focusEvent: EventListener;
+
+  @ContentChild(PoPageSlideFooterComponent) pageSlideFooter: PoPageSlideFooterComponent;
 
   @ViewChild('pageContent', { read: ElementRef }) set pageContent(pageContent: ElementRef) {
     if (pageContent) {
@@ -69,6 +104,13 @@ export class PoPageSlideComponent extends PoPageSlideBaseComponent {
 
   constructor() {
     super();
+    this.setTimeFromCSS();
+    this.buttonAriaLabel = this.getTextDefault();
+    this.defaultDialogLabel = this.getLabelDefault();
+  }
+
+  get titleId(): string {
+    return `po-page-slide-title-${this.id}`;
   }
 
   public open(): void {
@@ -77,7 +119,23 @@ export class PoPageSlideComponent extends PoPageSlideBaseComponent {
     this.loadingCompleted.pipe(take(1)).pipe(delay(0)).subscribe(this.handleFocus.bind(this));
   }
 
+  protected override hasAlternativeCloseAction(): boolean {
+    // No modo `full` não há overlay/click-out; um footer pode prover a ação de fechar.
+    if (this.size === 'full') {
+      return !!this.pageSlideFooter;
+    }
+
+    return super.hasAlternativeCloseAction();
+  }
+
   public close(): void {
+    if (
+      this.poActiveOverlayService.activeOverlay.length > 0 &&
+      this.poActiveOverlayService.activeOverlay[this.poActiveOverlayService.activeOverlay.length - 1] === this.id
+    ) {
+      this.poActiveOverlayService.activeOverlay.pop();
+    }
+
     super.close();
 
     this.removeEventListeners();
@@ -90,12 +148,41 @@ export class PoPageSlideComponent extends PoPageSlideBaseComponent {
     }
   }
 
-  private handleFocus(): void {
-    this.loadFirstElement();
+  private setTimeFromCSS(): void {
+    const rootStyles = getComputedStyle(document.documentElement);
+    this.duration = rootStyles.getPropertyValue('--transition-duration').trim();
+    this.timing = rootStyles.getPropertyValue('--transition-timing').trim();
+  }
 
+  private getTextDefault(): string {
+    const language = this.languageService.getShortLanguage();
+
+    return poPageSlideLiteralsDefault[language].close;
+  }
+
+  private getLabelDefault(): string {
+    const language = this.languageService.getShortLanguage();
+
+    return poPageSlideLiteralsDefault[language].label;
+  }
+
+  private handleFocus(): void {
+    this.poActiveOverlayService.activeOverlay.push(this.id);
+    this.loadFirstElement();
+    this.initFocus();
+
+    document.addEventListener('focus', this.focusEvent, true);
+  }
+
+  private initFocus() {
     // O foco não pode sair da página.
     this.focusEvent = (event: Event) => {
-      if (!this.pageContent.nativeElement.contains(event.target)) {
+      const isCdkOverlayListbox = event.target['closest']('.cdk-overlay-container') !== null;
+      if (
+        !this.pageContent.nativeElement.contains(event.target) &&
+        !isCdkOverlayListbox &&
+        this.poActiveOverlayService.activeOverlay[this.poActiveOverlayService.activeOverlay.length - 1] === this.id
+      ) {
         event.stopPropagation();
         this.firstElement.focus();
       }
@@ -105,11 +192,9 @@ export class PoPageSlideComponent extends PoPageSlideBaseComponent {
       this.firstElement.focus();
     } else {
       const elements = getFocusableElements(this.pageContent.nativeElement);
-      const element = elements[1] || this.pageContent.nativeElement;
+      const element = elements[0] || this.pageContent.nativeElement;
       element.focus();
     }
-
-    document.addEventListener('focus', this.focusEvent, true);
   }
 
   private loadFirstElement(): void {
@@ -119,5 +204,19 @@ export class PoPageSlideComponent extends PoPageSlideBaseComponent {
   private removeEventListeners(): void {
     document.removeEventListener('focus', this.focusEvent, true);
     this.loadingCompleted.complete();
+  }
+
+  get fadeParams() {
+    return {
+      value: true,
+      params: { duration: this.duration || '70ms' }
+    };
+  }
+
+  get slideParams() {
+    return {
+      value: true,
+      params: { timing: this.timing || '700ms cubic-bezier(0.35, 0, 0.1, 1)' }
+    };
   }
 }

@@ -1,14 +1,15 @@
+import { SimpleChange, SimpleChanges } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule, NgForm, ReactiveFormsModule } from '@angular/forms';
-import { SimpleChange } from '@angular/core';
 
 import { of } from 'rxjs';
 
-import { configureTestSuite } from './../../../../util-test/util-expect.spec';
-
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { PoDynamicModule } from '../../po-dynamic.module';
+import { PoDynamicFormField } from '../interfaces/po-dynamic-form-field.interface';
 import { PoDynamicFormFieldsBaseComponent } from './po-dynamic-form-fields-base.component';
 import { PoDynamicFormFieldsComponent } from './po-dynamic-form-fields.component';
-import { PoDynamicModule } from '../../po-dynamic.module';
 
 describe('PoDynamicFormFieldsComponent: ', () => {
   let component: PoDynamicFormFieldsComponent;
@@ -16,16 +17,22 @@ describe('PoDynamicFormFieldsComponent: ', () => {
 
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [FormsModule, ReactiveFormsModule, PoDynamicModule],
-      providers: [{ provide: NgForm, useValue: new NgForm(null, null) }]
-    });
-  });
+      providers: [
+        { provide: NgForm, useValue: new NgForm(null, null) },
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting()
+      ]
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoDynamicFormFieldsComponent);
     component = fixture.componentInstance;
+
+    Object.defineProperty(component, 'form', {
+      get: () => ({ dirty: true })
+    });
 
     fixture.detectChanges();
 
@@ -61,9 +68,43 @@ describe('PoDynamicFormFieldsComponent: ', () => {
       expect(component.visibleFields).toEqual([]);
     });
 
-    it('trackBy: should return index', () => {
+    it('ngOnChanges: should call `hasChangeContainer` if has container and `fields.previousValue`', () => {
+      const fieldsChange: any = {
+        fields: {
+          previousValue: [{ property: 'test', visible: false }],
+          currentValue: [{ property: 'test', visible: true }]
+        }
+      };
+
+      const fields = [{ property: 'name' }];
+      spyOn(component, <any>'hasContainer').and.returnValue(true);
+      spyOn(component, <any>'getVisibleFields').and.returnValue(fields);
+
+      spyOn(component, <any>'hasChangeContainer');
+
+      component.ngOnChanges(fieldsChange);
+
+      expect(component['hasChangeContainer']).toHaveBeenCalled();
+    });
+
+    it('ngOnChanges: should update `previousValue` with the changes in `p-value`', () => {
+      const value = { name: 'name' };
+      component.value = value;
+
+      const changes: SimpleChanges = {
+        value: new SimpleChange(null, value, true)
+      };
+
+      component.ngOnChanges(changes);
+
+      expect(component['previousValue']).toEqual(value);
+    });
+
+    it('trackBy: should return field.property', () => {
       const index = 1;
-      expect(component.trackBy(index)).toBe(index);
+      const field = { property: 'field' };
+
+      expect(component.trackBy(index, field)).toBe('field');
     });
 
     it('focus: should call `fieldComponent.focus` if find field by property param.', () => {
@@ -88,6 +129,42 @@ describe('PoDynamicFormFieldsComponent: ', () => {
 
     describe('onChangeField', () => {
       const changedFieldIndex = 0;
+
+      it('should call `getField` with `propertyOfVisibleFields` if field type boolean', () => {
+        const fakeVisibleField = { property: 'test1', validate: 'teste', type: 'boolean' };
+
+        component['previousValue']['test1'] = 'value';
+        component['value']['test1'] = 'new value';
+
+        const field = { changedField: fakeVisibleField, changedFieldIndex };
+
+        Object.defineProperty(component, 'form', {
+          get: () => ({ touched: false })
+        });
+
+        spyOn(component, <any>'getField').and.returnValue(field);
+        component.onChangeField(fakeVisibleField);
+
+        expect(component['getField']).toHaveBeenCalledWith(fakeVisibleField.property);
+      });
+
+      it(`shouldn't call 'getField' with 'propertyOfVisibleFields' if field type not boolean and 'form.touched' is false`, () => {
+        const fakeVisibleField = { property: 'test1', validate: 'teste' };
+
+        component['previousValue']['test1'] = 'value';
+        component['value']['test1'] = 'new value';
+
+        const field = { changedField: fakeVisibleField, changedFieldIndex };
+
+        Object.defineProperty(component, 'form', {
+          get: () => ({ touched: false })
+        });
+
+        spyOn(component, <any>'getField').and.returnValue(field);
+        component.onChangeField(fakeVisibleField);
+
+        expect(component['getField']).not.toHaveBeenCalledWith(fakeVisibleField.property);
+      });
 
       it('should call `getField` with `propertyOfVisibleFields` if field value changed', () => {
         const fakeVisibleField = { property: 'test1', validate: 'teste' };
@@ -266,6 +343,71 @@ describe('PoDynamicFormFieldsComponent: ', () => {
         await component.onChangeField(fakeVisibleField, objectValue);
 
         expect(spyObjectValue).not.toHaveBeenCalled();
+      });
+
+      it('shouldn`t call `triggerValidationOnForm` if form.touched is false', async () => {
+        const fakeVisibleField = { property: 'test1' };
+
+        component['previousValue']['test1'] = undefined;
+        component['value']['test1'] = 'value';
+
+        Object.defineProperty(component, 'form', {
+          get: () => ({ touched: false })
+        });
+
+        spyOn(component, <any>'triggerValidationOnForm');
+
+        await component.onChangeField(fakeVisibleField);
+
+        expect(component['triggerValidationOnForm']).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('onChangeFieldModel', () => {
+      it('should call `triggerValidationOnForm` if validateOnInput is true', () => {
+        const fakeVisibleField = { property: 'test1' };
+        const field = { changedField: { property: 'test1' }, changedFieldIndex: 0 };
+
+        component.validateOnInput = true;
+
+        spyOn(component, <any>'getField').and.returnValue(field);
+        spyOn(component, <any>'triggerValidationOnForm');
+
+        component.onChangeFieldModel(fakeVisibleField);
+
+        expect(component['triggerValidationOnForm']).toHaveBeenCalled();
+      });
+
+      it('shouldn`t call `triggerValidationOnForm` if validateOnInput is false', () => {
+        const fakeVisibleField = { property: 'test1' };
+
+        component.validateOnInput = false;
+
+        spyOn(component, <any>'triggerValidationOnForm');
+
+        component.onChangeFieldModel(fakeVisibleField);
+
+        expect(component['triggerValidationOnForm']).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('showAdditionalHelp:', () => {
+      it('should call `showAdditionalHelp` if find component.', () => {
+        const fieldComponent = { showAdditionalHelp: jasmine.createSpy(), name: 'name' };
+        component.components = <any>[fieldComponent];
+
+        component.showAdditionalHelp('name');
+
+        expect(fieldComponent.showAdditionalHelp).toHaveBeenCalled();
+      });
+
+      it('should not call `showAdditionalHelp` if component is not found', () => {
+        const fieldComponent = { showAdditionalHelp: jasmine.createSpy(), name: 'name' };
+        component.components = <any>[fieldComponent];
+
+        component.showAdditionalHelp('nickname');
+
+        expect(fieldComponent.showAdditionalHelp).not.toHaveBeenCalled();
       });
     });
 
@@ -469,6 +611,267 @@ describe('PoDynamicFormFieldsComponent: ', () => {
       expect(spySendFieldChange).toHaveBeenCalledWith(field, component.value[field.property]);
       expect(spyApplyFieldValidation).not.toHaveBeenCalled();
     });
+
+    it('hasChangeContainer: should call `setContainerFields` if there is a change in the container size', () => {
+      const fieldPrevious: Array<PoDynamicFormField> = [
+        {
+          property: 'campo 1',
+          container: 'container 1'
+        },
+        {
+          property: 'campo 2'
+        },
+        {
+          property: 'campo 3'
+        }
+      ];
+
+      const fieldCurrent: Array<PoDynamicFormField> = [
+        {
+          property: 'campo 1',
+          container: 'container 1'
+        },
+        {
+          property: 'campo 2',
+          container: 'container 2'
+        },
+        {
+          property: 'campo 3'
+        }
+      ];
+
+      component.visibleFields = fieldCurrent;
+
+      spyOn(component, <any>'setContainerFields');
+
+      component['hasChangeContainer'](fieldPrevious, fieldCurrent);
+
+      expect(component['setContainerFields']).toHaveBeenCalled();
+    });
+
+    it('hasChangeContainer: should not call `setContainerFields` if container changed it value', () => {
+      const fieldPrevious: Array<PoDynamicFormField> = [
+        {
+          property: 'campo 1',
+          container: 'container 1'
+        },
+        {
+          property: 'campo 2'
+        },
+        {
+          property: 'campo 3'
+        }
+      ];
+
+      const fieldCurrent: Array<PoDynamicFormField> = [
+        {
+          property: 'campo 1',
+          container: 'container 11'
+        },
+        {
+          property: 'campo 2'
+        },
+        {
+          property: 'campo 3'
+        }
+      ];
+
+      component.fields = fieldCurrent;
+
+      spyOn(component, <any>'setContainerFields');
+
+      component['hasChangeContainer'](fieldPrevious, fieldCurrent);
+
+      expect(component['setContainerFields']).not.toHaveBeenCalled();
+    });
+
+    it('hasChangeContainer: should not call `setContainerFields` if container changed its value', () => {
+      const previous: Array<PoDynamicFormField> = [
+        { property: 'property1', container: 'container1' },
+        { property: 'property2', container: 'container2' }
+      ];
+
+      const current: Array<PoDynamicFormField> = [
+        { property: 'property1', container: 'container1-modificado', clean: true }, // mudança de container
+        { property: 'property2', container: 'container2' }
+      ];
+      spyOn(component, <any>'diffObjectsArray').and.returnValue(current);
+      spyOn(component, <any>'updateFieldContainer').and.returnValue([current]);
+      component.fields = current;
+      component.containerFields = [previous];
+
+      component['hasChangeContainer'](previous, current);
+
+      expect(component.containerFields[0][0].container).toBe('container1-modificado');
+    });
+
+    it('hasChangeContainer: should call `setContainerFields` if order was added', () => {
+      const previous: Array<PoDynamicFormField> = [{ property: 'property1' }, { property: 'property2' }];
+
+      const current: Array<PoDynamicFormField> = [{ property: 'property1', order: 1 }, { property: 'property2' }];
+      spyOn(component, <any>'diffObjectsArray').and.returnValue(current);
+      spyOn(component, <any>'updateFieldContainer').and.returnValue([current]);
+
+      spyOn(component, <any>'setContainerFields');
+      component['hasChangeContainer'](previous, current);
+
+      component.fields = current;
+      component.containerFields = [previous];
+
+      expect(component.setContainerFields).toHaveBeenCalled();
+    });
+
+    it('hasChangeContainer: should call `setContainerFields` if there is a change in hidden fields', () => {
+      const fieldPrevious: Array<PoDynamicFormField> = [
+        { property: 'campo 1', visible: false },
+        { property: 'campo 2' }
+      ];
+      const fieldCurrent: Array<PoDynamicFormField> = [{ property: 'campo 1', visible: true }, { property: 'campo 2' }];
+
+      component.visibleFields = fieldCurrent;
+
+      spyOn(component, <any>'setContainerFields');
+
+      component['hasChangeContainer'](fieldPrevious, fieldCurrent);
+
+      expect(component['setContainerFields']).toHaveBeenCalled();
+    });
+
+    it('hasChangeContainer: if there is a change in the visible fields', () => {
+      const fieldPrevious: Array<PoDynamicFormField> = [{ property: 'campo 1' }, { property: 'campo 2' }];
+      const fieldCurrent: Array<PoDynamicFormField> = [
+        { property: 'campo 1' },
+        { property: 'campo 2' },
+        { property: 'campo 3', visible: false }
+      ];
+
+      component.visibleFields = fieldCurrent.filter(x => x.visible === false);
+
+      spyOn(component, <any>'setContainerFields');
+
+      component['hasChangeContainer'](fieldPrevious, fieldCurrent);
+
+      expect(component['setContainerFields']).toHaveBeenCalled();
+    });
+
+    it('hasChangeContainer: should call "handleChange Container" if there is a change of fields to visible', () => {
+      const fieldPrevious: Array<PoDynamicFormField> = [
+        { property: 'campo 1', visible: true },
+        { property: 'campo 2', visible: false }
+      ];
+      const fieldCurrent: Array<PoDynamicFormField> = [
+        { property: 'campo 1', visible: false },
+        { property: 'campo 2', visible: true }
+      ];
+
+      spyOn(component, <any>'getVisibleFields').and.returnValue(fieldCurrent.filter(x => x.visible === true));
+      spyOn(component, <any>'handleChangesContainer');
+
+      component['hasChangeContainer'](fieldPrevious, fieldCurrent);
+
+      expect(component['handleChangesContainer']).toHaveBeenCalled();
+    });
+
+    it('handleChangesContainer: should not call `setContainerFields` if order had its value changed', () => {
+      const previous: Array<PoDynamicFormField> = [{ property: 'property1', order: 1 }, { property: 'property2' }];
+
+      const current: Array<PoDynamicFormField> = [{ property: 'property1', order: 2 }, { property: 'property2' }];
+
+      spyOn(component, <any>'setContainerFields');
+      component['handleChangesContainer'](previous, current, 'order');
+
+      expect(component.setContainerFields).toHaveBeenCalled();
+    });
+
+    it('handleChangesContainer: should not call `setContainerFields` if order and property have changed', () => {
+      const previous = [{ property: 'property1', order: 1, index: 0 }, { property: 'property2' }];
+
+      const current = [{ property: 'property3', order: 2, index: 1 }, { property: 'property2' }];
+
+      spyOn(component, <any>'setContainerFields');
+      component['handleChangesContainer'](previous, current, 'order');
+
+      expect(component.setContainerFields).toHaveBeenCalled();
+    });
+
+    it('hasChangeContainer: should not call `setContainerFields` if order was changed to other object', () => {
+      const previous: Array<PoDynamicFormField> = [{ property: 'property1', order: 1 }, { property: 'property2' }];
+
+      const current: Array<PoDynamicFormField> = [{ property: 'property1' }, { property: 'property2', order: 1 }];
+      spyOn(component, <any>'diffObjectsArray').and.returnValue(current);
+      spyOn(component, <any>'getVisibleFields').and.returnValue(current);
+      spyOn(component, <any>'updateFieldContainer').and.returnValue([current]);
+
+      spyOn(component, <any>'setContainerFields');
+      component['hasChangeContainer'](previous, current);
+
+      component.fields = current;
+      component.containerFields = [previous];
+
+      expect(component.setContainerFields).toHaveBeenCalled();
+    });
+
+    it('updateFieldContainer: should update array the with the new values', () => {
+      const changes = [
+        { property: 'property1', container: 'updatedContainer1' },
+        { property: 'property3', container: 'updatedContainer3' }
+      ];
+
+      const containerFields = [
+        [{ property: 'property1', container: 'container1' }],
+        [{ property: 'property2', container: 'container2' }],
+        [{ property: 'property3', container: 'container3' }]
+      ];
+
+      const updatedFields = component['updateFieldContainer'](changes, containerFields);
+
+      expect(updatedFields[0][0].container).toBe('updatedContainer1');
+      expect(updatedFields[1][0].container).toBe('container2');
+      expect(updatedFields[2][0].container).toBe('updatedContainer3');
+    });
+
+    it('diffObjectsArray: should return the complete object if it is new in the array', () => {
+      const oldArray = [{ property: 'property1', container: 'container1' }];
+      const newArray = [
+        { property: 'property1', container: 'container1' },
+        { property: 'property2', container: 'container2' }
+      ];
+
+      const result = component['diffObjectsArray'](oldArray, newArray);
+
+      expect(result).toEqual([{ property: 'property2', container: 'container2' }]);
+    });
+
+    it('diffObjectsArray: should only return changed properties for existing objects', () => {
+      const oldArray = [{ property: 'property1', container: 'container1' }];
+      const newArray = [{ property: 'property1', container: 'newContainer1' }];
+
+      const result = component['diffObjectsArray'](oldArray, newArray);
+
+      expect(result).toEqual([{ property: 'property1', container: 'newContainer1' }]);
+    });
+
+    it('hasContainer: should return true if has container', () => {
+      component.visibleFields = [{ property: 'test 1', container: 'container 1' }, { property: 'test 2' }];
+
+      expect(component['hasContainer']()).toBeTruthy();
+    });
+
+    it('hasContainer: should return false if has not container', () => {
+      component.visibleFields = [{ property: 'test 1' }, { property: 'test 2' }];
+
+      expect(component['hasContainer']()).toBeFalsy();
+    });
+
+    it('hasContainer: should return false if visibleFields is undefined', () => {
+      component.visibleFields = undefined;
+      expect(component['hasContainer']()).toBeFalse();
+    });
+
+    it('hasContainer: should return false if visibleFields is null', () => {
+      component.visibleFields = null;
+      expect(component['hasContainer']()).toBeFalse();
+    });
   });
 
   describe('Templates: ', () => {
@@ -544,7 +947,7 @@ describe('PoDynamicFormFieldsComponent: ', () => {
       expect(nativeElement.querySelector('po-datepicker')).toBeTruthy();
     });
 
-    it('should create a `po-datepicker` component if type is `datetime`', () => {
+    it('should create a `po-datetimepicker` component if type is `datetime`', () => {
       component.fields = [{ property: 'age', type: 'datetime' }];
 
       component.ngOnChanges({
@@ -553,10 +956,10 @@ describe('PoDynamicFormFieldsComponent: ', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('po-datepicker')).toBeTruthy();
+      expect(nativeElement.querySelector('po-datetimepicker')).toBeTruthy();
     });
 
-    it('should create a `po-input` component if type is `time`', () => {
+    it('should create a `po-timepicker` component if type is `time`', () => {
       component.fields = [{ property: 'age', type: 'time' }];
 
       component.ngOnChanges({
@@ -565,7 +968,7 @@ describe('PoDynamicFormFieldsComponent: ', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('po-input')).toBeTruthy();
+      expect(nativeElement.querySelector('po-timepicker')).toBeTruthy();
     });
 
     it('should create a `po-decimal` component if type is `currency`', () => {
@@ -748,10 +1151,11 @@ describe('PoDynamicFormFieldsComponent: ', () => {
       expect(nativeElement.querySelectorAll('po-divider').length).toBe(2);
       expect(nativeElement.querySelectorAll('po-switch').length).toBe(1);
       expect(nativeElement.querySelectorAll('po-decimal').length).toBe(1);
-      expect(nativeElement.querySelectorAll('po-input').length).toBe(3);
+      expect(nativeElement.querySelectorAll('po-input').length).toBe(2);
+      expect(nativeElement.querySelectorAll('po-timepicker').length).toBe(1);
       expect(nativeElement.querySelectorAll('po-datepicker').length).toBe(1);
       expect(nativeElement.querySelectorAll('po-number').length).toBe(1);
-      expect(nativeElement.querySelectorAll('po-combo').length).toBe(1);
+      expect(nativeElement.querySelectorAll('po-combo').length).toBe(3);
       expect(nativeElement.querySelectorAll('po-select').length).toBe(1);
       expect(nativeElement.querySelectorAll('po-textarea').length).toBe(1);
     });
@@ -771,11 +1175,9 @@ describe('PoDynamicFormFieldsComponent: ', () => {
       });
 
       it('should update field of visibleFields with disabled true', async () => {
-        const validate = () => {
-          return {
-            field: { disabled: true }
-          };
-        };
+        const validate = () => ({
+          field: { disabled: true }
+        });
 
         component.fields[0].validate = validate;
         spyOn(component['validationService'], 'sendFieldChange').and.returnValue(of(validate()));
@@ -786,11 +1188,9 @@ describe('PoDynamicFormFieldsComponent: ', () => {
       });
 
       it('should update field of visibleFields with help', async () => {
-        const validate = () => {
-          return {
-            field: { help: 'new help' }
-          };
-        };
+        const validate = () => ({
+          field: { help: 'new help' }
+        });
 
         component.fields[0].validate = validate;
 
@@ -804,12 +1204,10 @@ describe('PoDynamicFormFieldsComponent: ', () => {
       it('should update field value', async () => {
         const expectedValue = 'new value';
 
-        const validate = () => {
-          return {
-            value: expectedValue,
-            field: { help: 'new help' }
-          };
-        };
+        const validate = () => ({
+          value: expectedValue,
+          field: { help: 'new help' }
+        });
 
         component.fields[0].validate = validate;
 

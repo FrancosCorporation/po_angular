@@ -1,9 +1,10 @@
-import { HttpTestingController, HttpClientTestingModule } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
 import { of } from 'rxjs';
 
-import { PoDynamicFormField } from '../po-dynamic-form-field.interface';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { PoDynamicFormField } from '../interfaces/po-dynamic-form-field.interface';
 import { PoDynamicFormValidationService } from './po-dynamic-form-validation.service';
 
 describe('PoDynamicFormValidationService:', () => {
@@ -16,14 +17,19 @@ describe('PoDynamicFormValidationService:', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [PoDynamicFormValidationService]
+      imports: [],
+      providers: [
+        PoDynamicFormValidationService,
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting()
+      ]
     });
 
     httpMock = TestBed.inject(HttpTestingController);
     service = TestBed.inject(PoDynamicFormValidationService);
 
-    (field = { property: 'test1', required: true, visible: true }), (mockURL = 'http://po.com.br/api');
+    field = { property: 'test1', required: true, visible: true };
+    mockURL = 'http://po.com.br/api';
     value = { name: 'username' };
   });
 

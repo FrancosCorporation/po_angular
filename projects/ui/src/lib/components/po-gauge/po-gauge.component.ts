@@ -1,10 +1,7 @@
-import { ChangeDetectorRef, Component, DoCheck, ElementRef, ViewChild } from '@angular/core';
+import { Component, OnChanges, OnInit, SimpleChanges } from '@angular/core';
 
-import { PoGaugePadding } from './po-gauge-default-values.constant';
-
+import { PoChartSerie } from '../po-chart';
 import { PoGaugeBaseComponent } from './po-gauge-base.component';
-import { PoGaugeColorService } from './services/po-gauge-color.service';
-import { PoGaugeSvgContainer } from './interfaces/po-gauge-svg-container.interface';
 
 /**
  * @docsExtends PoGaugeBaseComponent
@@ -23,52 +20,43 @@ import { PoGaugeSvgContainer } from './interfaces/po-gauge-svg-container.interfa
  *  <file name="sample-po-gauge-summary/sample-po-gauge-summary.component.html"> </file>
  *  <file name="sample-po-gauge-summary/sample-po-gauge-summary.component.ts"> </file>
  * </example>
+ *
+ * @deprecated v22.x.x
+ * Utilize o `po-chart` com `type="gauge"` como alternativa recomendada.
  */
 @Component({
   selector: 'po-gauge',
-  templateUrl: './po-gauge.component.html'
+  templateUrl: './po-gauge.component.html',
+  standalone: false
 })
-export class PoGaugeComponent extends PoGaugeBaseComponent implements DoCheck {
-  svgContainer: PoGaugeSvgContainer;
+export class PoGaugeComponent extends PoGaugeBaseComponent implements OnChanges, OnInit {
+  series: Array<PoChartSerie> = [];
+  valuesMultiple: number;
 
-  private isLoaded: boolean = false;
-
-  @ViewChild('descriptionEl', { read: ElementRef }) descriptionEl: ElementRef;
-  @ViewChild('legendEl', { read: ElementRef }) legendEl: ElementRef;
-  @ViewChild('titleEl', { read: ElementRef }) titleEl: ElementRef;
-  @ViewChild('svgEl', { read: ElementRef }) svgEl: ElementRef;
-
-  constructor(protected colorService: PoGaugeColorService, private changeDetector: ChangeDetectorRef) {
-    super(colorService);
-  }
-
-  private get hasElementRef() {
-    return !!this.svgEl?.nativeElement.offsetWidth;
-  }
-
-  get hasRanges(): boolean {
-    return this.ranges.length > 0;
-  }
-
-  ngDoCheck() {
-    if (!this.isLoaded && this.hasElementRef) {
-      this.isLoaded = true;
-      this.svgContainerSize();
+  ngOnInit(): void {
+    if (this.options?.showContainerGauge !== false) {
+      this.options = { ...this.options, showContainerGauge: true };
     }
   }
 
-  protected svgContainerSize(): void {
-    if (this.svgEl?.nativeElement.offsetWidth) {
-      this.changeDetector.detectChanges();
-
-      const titleHeight = this.titleEl.nativeElement?.offsetHeight ?? 0;
-      const legendHeight = this.legendEl.nativeElement?.offsetHeight ?? 0;
-      const descriptionHeight = this.descriptionEl.nativeElement?.offsetHeight ?? 0;
-
-      const height = this.height - titleHeight - legendHeight - descriptionHeight - PoGaugePadding * 2;
-      const width = this.svgEl.nativeElement.offsetWidth;
-
-      this.svgContainer = { width, height };
+  ngOnChanges(changes: SimpleChanges): void {
+    const { description, ranges, value, options } = changes;
+    if (description || options) {
+      this.options = {
+        ...this.options,
+        showContainerGauge: this.options?.showContainerGauge !== false,
+        descriptionChart: this.description || options?.currentValue?.descriptionChart
+      };
+    }
+    if (ranges || value) {
+      if (this.ranges?.length) {
+        this.series = [...this.ranges];
+        this.valuesMultiple = this.value;
+      } else if (value?.currentValue) {
+        this.series = [{ data: this.value }];
+      } else {
+        this.series = [];
+      }
     }
   }
 }

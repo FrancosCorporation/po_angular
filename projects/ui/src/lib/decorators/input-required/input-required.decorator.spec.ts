@@ -6,11 +6,14 @@ import { InputRequired } from './input-required.decorator';
 
 @Component({
   selector: 'mock-component',
-  template: ''
+  template: '',
+  standalone: false
 })
 class PoMockComponent implements OnInit {
   @InputRequired() myProperty: any;
-  ngOnInit() {}
+  ngOnInit() {
+    let a;
+  }
 }
 
 describe('InputRequired:', () => {

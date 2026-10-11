@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 
 import { Subscription } from 'rxjs';
 
@@ -13,9 +13,13 @@ import {
 
 @Component({
   selector: 'sample-po-page-login-human-resources',
-  templateUrl: './sample-po-page-login-human-resources.component.html'
+  templateUrl: './sample-po-page-login-human-resources.component.html',
+  standalone: false
 })
 export class SamplePoPageLoginHumanResourcesComponent implements OnDestroy, OnInit {
+  private poI18nService = inject(PoI18nService);
+  private poDialog = inject(PoDialogService);
+
   customField: PoPageLoginCustomField = {
     property: 'domain',
     placeholder: 'Enter your domain'
@@ -29,15 +33,13 @@ export class SamplePoPageLoginHumanResourcesComponent implements OnDestroy, OnIn
   passwordErrors = [];
   params: PoPageBlockedUserReasonParams = { attempts: 3, hours: 24 };
   passwordRecovery: PoPageLoginRecovery = {
-    url: 'https://thf.totvs.com.br/sample/api/users',
+    url: 'https://po-sample-api.onrender.com/v1/users',
     type: PoModalPasswordRecoveryType.All,
     contactMail: 'support@mail.com'
   };
   showPageBlocked: boolean = false;
 
   private i18nSubscription: Subscription;
-
-  constructor(private poI18nService: PoI18nService, private poDialog: PoDialogService) {}
 
   ngOnDestroy() {
     this.i18nSubscription.unsubscribe();

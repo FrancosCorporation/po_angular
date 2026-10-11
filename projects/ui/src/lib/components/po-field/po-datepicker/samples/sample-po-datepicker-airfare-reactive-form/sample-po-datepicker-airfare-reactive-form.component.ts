@@ -1,14 +1,19 @@
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Component, OnInit, inject } from '@angular/core';
+import { UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 
 import { PoDialogService, PoNotificationService, PoSelectOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-datepicker-airfare-reactive-form',
-  templateUrl: './sample-po-datepicker-airfare-reactive-form.component.html'
+  templateUrl: './sample-po-datepicker-airfare-reactive-form.component.html',
+  standalone: false
 })
 export class SamplePoDatepickerAirfareReactiveFormComponent implements OnInit {
-  formAirfare: FormGroup;
+  private formBuilder = inject(UntypedFormBuilder);
+  private poDialog = inject(PoDialogService);
+  private poNotification = inject(PoNotificationService);
+
+  formAirfare: UntypedFormGroup;
 
   readonly accompanyNumber: Array<PoSelectOption> = [
     { value: 0, label: '0' },
@@ -29,12 +34,6 @@ export class SamplePoDatepickerAirfareReactiveFormComponent implements OnInit {
     { value: 'First', label: 'First' }
   ];
 
-  constructor(
-    private formBuilder: FormBuilder,
-    private poDialog: PoDialogService,
-    private poNotification: PoNotificationService
-  ) {}
-
   ngOnInit() {
     this.formAirfare = this.formBuilder.group({
       accompany: [0, Validators.required],
@@ -46,7 +45,7 @@ export class SamplePoDatepickerAirfareReactiveFormComponent implements OnInit {
     });
   }
 
-  apply(formAirfare: FormGroup) {
+  apply(formAirfare: UntypedFormGroup) {
     const { accompany, destination, endDate, origin, ticketClass, startDate } = formAirfare.value;
 
     const message = `Would you like to confirm the ticket from ${origin} to ${destination} with departure date at

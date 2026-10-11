@@ -1,22 +1,23 @@
 import { Component, ViewChild } from '@angular/core';
 import { NgForm } from '@angular/forms';
-import { trigger, state, style, transition, animate } from '@angular/animations';
 
 import {
   PoDynamicFormField,
-  PoTableColumn,
-  PoTableAction,
-  PoNotificationService,
-  PoToasterOrientation,
   PoModalAction,
   PoModalComponent,
-  PoPageAction
+  PoNotificationService,
+  PoPageAction,
+  PoTableAction,
+  PoTableColumn,
+  PoToasterOrientation
 } from '@po-ui/ng-components';
+import { PoButtonType } from 'projects/ui/src/lib';
 
 @Component({
   selector: 'app-tools-dynamic-form',
   templateUrl: 'tools-dynamic-form.component.html',
-  styleUrls: ['tools-dynamic-form.component.css']
+  styleUrls: ['tools-dynamic-form.component.css'],
+  standalone: false
 })
 export class ToolsDynamicFormComponent {
   @ViewChild('generatorForm') generatorForm: NgForm;
@@ -38,6 +39,8 @@ export class ToolsDynamicFormComponent {
 
   quickField = <any>{};
   editFieldId;
+
+  buttonAddType: PoButtonType = PoButtonType.Submit;
 
   readonly columns: Array<PoTableColumn> = [
     { property: 'property' },
@@ -99,7 +102,7 @@ export class ToolsDynamicFormComponent {
   readonly serviceFields: Array<PoDynamicFormField> = [
     {
       property: 'searchService',
-      help: 'https://po-sample-api.herokuapp.com/v1/heroes',
+      help: 'https://po-sample-api.onrender.com/v1/heroes',
       label: 'SearchService',
       gridColumns: 12,
       gridLgColumns: 6,
@@ -107,7 +110,7 @@ export class ToolsDynamicFormComponent {
     },
     {
       property: 'optionsService',
-      help: 'https://po-sample-api.herokuapp.com/v1/heroes',
+      help: 'https://po-sample-api.onrender.com/v1/heroes',
       label: 'OptionsService',
       gridColumns: 12,
       gridLgColumns: 6,
@@ -154,7 +157,7 @@ export class ToolsDynamicFormComponent {
   };
 
   readonly pageActions: Array<PoPageAction> = [
-    { label: 'Importar JSON', icon: 'po-icon-upload', action: () => this.importJsonModal.open() },
+    { label: 'Importar JSON', icon: 'ICON_UPLOAD', action: () => this.importJsonModal.open() },
     { label: 'Visualizar JSON', disabled: () => !this.fields.length, action: () => this.viewJsonModal.open() },
     { label: 'Dynamic View', url: '/tools/dynamic-view' }
   ];
@@ -184,7 +187,7 @@ export class ToolsDynamicFormComponent {
       this.fields.push(newField);
     }
 
-    // tslint:disable-next-line:no-self-assignment
+    // eslint-disable-next-line no-self-assign
     this.fields = [...this.fields];
     this.resetForm();
   }

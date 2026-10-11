@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 
 import { merge, Observable, of, throwError } from 'rxjs';
@@ -31,19 +31,20 @@ export const poPageDynamicLiterals: { [key: string]: PoPageDynamicLiterals } = {
   providedIn: 'root'
 })
 export class PoPageDynamicService {
-  private endpoint = '/';
-  private language: string;
-  private metadata: string;
+  private readonly http = inject(HttpClient);
+  private readonly notification = inject(PoNotificationService);
 
   readonly headers: HttpHeaders = new HttpHeaders({
     'X-PO-SCREEN-LOCK': 'true'
   });
 
-  constructor(
-    private http: HttpClient,
-    private notification: PoNotificationService,
-    languageService: PoLanguageService
-  ) {
+  private endpoint = '/';
+  private readonly language: string;
+  private metadata: string;
+
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     this.language = languageService.getShortLanguage();
   }
 
@@ -84,8 +85,10 @@ export class PoPageDynamicService {
   }
 
   // Deleta um único recurso
-  deleteResource(id, endpoint?: string): Observable<any> {
-    return this.http.delete(`${this.getLocalEndPoint(endpoint, true)}/${id}`, { headers: this.headers });
+  deleteResource(id?, endpoint?: string): Observable<any> {
+    const localEndPoint = this.getLocalEndPoint(endpoint, true);
+    const url = id ? `${localEndPoint}/${id}` : localEndPoint;
+    return this.http.delete(url, { headers: this.headers });
   }
 
   // Deleta recursos em lote

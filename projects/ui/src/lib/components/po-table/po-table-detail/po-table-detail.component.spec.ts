@@ -1,12 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { expectPropertiesValues, configureTestSuite } from '../../../util-test/util-expect.spec';
+import { expectPropertiesValues } from '../../../util-test/util-expect.spec';
 
-import * as utilsFunctions from '../../../utils/util';
+import { PoUtils as utilsFunctions } from '../../../utils/util';
 
+import { PoThemeA11yEnum } from '../../../services';
+import { PoTableModule } from '../po-table.module';
 import { PoTableDetailColumn } from './po-table-detail-column.interface';
 import { PoTableDetailComponent } from './po-table-detail.component';
-import { PoTableModule } from '../po-table.module';
 
 describe('PoTableDetailComponent', () => {
   let component: PoTableDetailComponent;
@@ -14,13 +15,11 @@ describe('PoTableDetailComponent', () => {
   let fixture: ComponentFixture<PoTableDetailComponent>;
   let nativeElement;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [PoTableModule]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoTableDetailComponent);
     component = fixture.componentInstance;
 
@@ -35,6 +34,60 @@ describe('PoTableDetailComponent', () => {
   });
 
   describe('Properties: ', () => {
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+    });
+
     it('should set property `detail` with valid values', () => {
       const detail = { columns: [{ property: 'tour', label: 'Tour' }] };
       const validValues = [[{ property: 'tour', label: 'Tour' }], detail];
@@ -115,6 +168,64 @@ describe('PoTableDetailComponent', () => {
       expect(utilsFunctions.capitalizeFirstLetter).toHaveBeenCalledWith(propertyValue);
     });
 
+    describe('getDetailData:', () => {
+      it('should return the last string in arrayProperty', () => {
+        const detail: any = {
+          property: 'address.street',
+          label: 'Rua'
+        };
+        const item: any = {
+          name: 'teste',
+          address: {
+            street: 'Rua dos Alfeneiros, nº 4'
+          }
+        };
+        const result = component.getDetailData(item, detail);
+        expect(result).toEqual(item.address.street);
+      });
+
+      it('should return property if property is only item in array', () => {
+        const detail: any = {
+          property: 'address',
+          label: 'Rua'
+        };
+        const item: any = {
+          name: 'teste',
+          address: 'Rua dos Alfeneiros, nº 4'
+        };
+        const result = component.getDetailData(item, detail);
+        expect(result).toEqual(item.address);
+      });
+
+      it('should return a empty string when property is `undefined`', () => {
+        const detail: any = {
+          property: 'address.street',
+          label: 'Rua'
+        };
+        const item: any = {
+          name: 'teste',
+          address: {}
+        };
+        const expectedResult = '';
+        const result = component.getDetailData(item, detail);
+        expect(result).toEqual(expectedResult);
+      });
+
+      it('should return property if property value is equal 0', () => {
+        const detail: any = {
+          property: 'status',
+          label: 'Status'
+        };
+        const item: any = {
+          name: 'teste',
+          status: 0
+        };
+        const expectedResult = 0;
+        const result = component.getDetailData(item, detail);
+        expect(result).toEqual(expectedResult);
+      });
+    });
+
     it('onSelectRow: should set `$selected` property of row item to `true` and call `selectRow.emit`', () => {
       const row = { title: 'teste', $selected: false };
       spyOn(component.selectRow, 'emit');
@@ -122,7 +233,7 @@ describe('PoTableDetailComponent', () => {
       component.onSelectRow(row);
 
       expect(row.$selected).toBeTruthy();
-      expect(component.selectRow.emit).toHaveBeenCalledWith(row);
+      expect(component.selectRow.emit).toHaveBeenCalledWith({ item: row, parentRow: undefined });
     });
 
     describe('returnPoTableDetailObject: ', () => {
@@ -311,6 +422,24 @@ describe('PoTableDetailComponent', () => {
       fixture.detectChanges();
       const number = detailElement.querySelector(elementDetail).innerText;
       expect(number).toEqual(expectedReturn);
+    });
+
+    it('should find .po-table-header-flex-right if columns has number type', () => {
+      component.detail = { columns: [{ property: 'number', label: 'Number', type: 'number' }] };
+      component.detail['typeHeader'] = 'top';
+      component.items = [{ number: 333 }];
+
+      fixture.detectChanges();
+      expect(detailElement.querySelector('.po-table-header-flex-right')).toBeTruthy();
+    });
+
+    it('should find .po-table-column-right if columns has currency type', () => {
+      component.detail = { columns: [{ property: 'currency', label: 'Currency', type: 'currency' }] };
+      component.detail['typeHeader'] = 'top';
+      component.items = [{ currency: 2000 }];
+
+      fixture.detectChanges();
+      expect(detailElement.querySelector('.po-table-column-right')).toBeTruthy();
     });
   });
 });

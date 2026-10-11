@@ -1,21 +1,22 @@
-import * as utilsFunctions from './../../utils/util';
 import { expectPropertiesValues } from '../../util-test/util-expect.spec';
-import { PoLanguageService } from './../../../../../ui/src/lib/services/po-language/po-language.service';
 import { poLocaleDefault } from './../../../../../ui/src/lib/services/po-language/po-language.constant';
+import { PoLanguageService } from './../../../../../ui/src/lib/services/po-language/po-language.service';
 
+import { Component } from '@angular/core';
+import { PoThemeA11yEnum } from '@po-ui/ng-components';
+import { convertToBoolean } from '../../utils/util';
+import { PoPageDynamicSearchFilters } from './interfaces/po-page-dynamic-search-filters.interface';
+import { PoPageDynamicSearchLiterals } from './interfaces/po-page-dynamic-search-literals.interface';
 import { PoAdvancedFilterLiterals } from './po-advanced-filter/po-advanced-filter-literals.interface';
-import { PoPageDynamicSearchLiterals } from './po-page-dynamic-search-literals.interface';
 import {
   PoPageDynamicSearchBaseComponent,
   poPageDynamicSearchLiteralsDefault
 } from './po-page-dynamic-search-base.component';
-import { PoPageDynamicSearchFilters } from './po-page-dynamic-search-filters.interface';
-import { PoPageAction, PoBreadcrumb } from '@po-ui/ng-components/lib';
-import { Component } from '@angular/core';
 
 @Component({
   selector: 'mock-component',
-  template: ''
+  template: '',
+  standalone: false
 })
 class MockComponent extends PoPageDynamicSearchBaseComponent {
   onChangeFilters(filters: Array<PoPageDynamicSearchFilters>) {}
@@ -23,11 +24,10 @@ class MockComponent extends PoPageDynamicSearchBaseComponent {
 
 describe('PoPageDynamicSearchBaseComponent:', () => {
   let component;
-
   const languageService = new PoLanguageService();
 
   beforeEach(() => {
-    component = new MockComponent(<any>languageService);
+    component = new MockComponent(languageService);
   });
 
   it('should be created', () => {
@@ -35,6 +35,66 @@ describe('PoPageDynamicSearchBaseComponent:', () => {
   });
 
   describe('Properties:', () => {
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect(component.applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
     it('filters: should set `filters` to `[]` if not Array value', () => {
       const invalidValues = [undefined, null, '', true, false, 0, 1, 'string', {}];
 
@@ -45,6 +105,37 @@ describe('PoPageDynamicSearchBaseComponent:', () => {
       const validValues = [[{ property: 'Teste 1' }], [{ property: 'Teste 2' }]];
 
       expectPropertiesValues(component, 'filters', validValues, validValues);
+    });
+
+    it('hideRemoveAllDisclaimer: should set property `p-hide-remove-all-disclaimer` to `false` if invalid value', () => {
+      component.hideRemoveAllDisclaimer = convertToBoolean(3);
+
+      expect(component.hideRemoveAllDisclaimer).toBe(false);
+    });
+
+    it('hideRemoveAllDisclaimer: should update property `p-hide-remove-all-disclaimer` to `true` with valid values', () => {
+      component.hideRemoveAllDisclaimer = convertToBoolean(1);
+
+      expect(component.hideRemoveAllDisclaimer).toBe(true);
+    });
+
+    it('hideCloseDisclaimers: should set property `p-hide-close-disclaimers` to `[]` if not Array value', () => {
+      const invalidValues = [undefined, null, '', true, false, 0, 1, 'string', {}];
+
+      expectPropertiesValues(component, 'hideCloseDisclaimers', invalidValues, []);
+    });
+
+    it('hideCloseDisclaimers: should update property `p-hide-close-disclaimers` with valid values', () => {
+      const validValues = [['Teste 1'], ['Teste 2', 'Teste 3']];
+
+      expectPropertiesValues(component, 'hideCloseDisclaimers', validValues, validValues);
+    });
+
+    it('should return stringify value with filter without searchService', () => {
+      const columns: Array<any> = [{ property: 'test' }, { searchService: 'service/test' }];
+      const result = '[{"property":"test"},{}]';
+      const filter = component['stringify'](columns);
+      expect(filter).toEqual(result);
     });
 
     describe('p-literals:', () => {
@@ -151,6 +242,28 @@ describe('PoPageDynamicSearchBaseComponent:', () => {
       component['setAdvancedFilterLiterals'](pageDynamicSearchLiterals);
 
       expect(component.advancedFilterLiterals).toEqual(expectedValue);
+    });
+  });
+
+  describe('p-visible-fixed-filters:', () => {
+    it('should update `_visibleFixedFilters` when `visibleFixedFilters` is set', () => {
+      component.visibleFixedFilters = true;
+      expect(component['_visibleFixedFilters']).toBe(true);
+
+      component.visibleFixedFilters = false;
+      expect(component['_visibleFixedFilters']).toBe(false);
+    });
+
+    it('should return `_visibleFixedFilters` when `visibleFixedFilters` is accessed', () => {
+      component['_visibleFixedFilters'] = true;
+      expect(component.visibleFixedFilters).toBe(true);
+
+      component['_visibleFixedFilters'] = false;
+      expect(component.visibleFixedFilters).toBe(false);
+    });
+
+    it('should have a default value of `true` for `visibleFixedFilters` if not set', () => {
+      expect(component.visibleFixedFilters).toBeTrue();
     });
   });
 });

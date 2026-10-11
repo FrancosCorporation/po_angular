@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, Input, ViewChild, inject } from '@angular/core';
 
 import { PoControlPositionService } from '../../../services/po-control-position/po-control-position.service';
 
@@ -20,20 +20,27 @@ import { PoToolbarAction } from '../po-toolbar-action.interface';
 @Component({
   selector: 'po-toolbar-notification',
   templateUrl: './po-toolbar-notification.component.html',
-  providers: [PoControlPositionService]
+  providers: [PoControlPositionService],
+  standalone: false
 })
-export class PoToolbarNotificationComponent {
-  private _notificationNumber?: number = 0;
+export class PoToolbarNotificationComponent implements AfterViewInit {
+  private readonly cdr = inject(ChangeDetectorRef);
 
-  /** Define uma lista de ações. */
+  @ViewChild('notification', { read: ElementRef }) notificationRef: ElementRef;
+
   @Input('p-notification-actions') notificationActions?: Array<PoToolbarAction>;
 
-  /** Define o número de notificações. */
+  private _notificationNumber?: number = 0;
+
   @Input('p-notification-number') set notificationNumber(value: number) {
     this._notificationNumber = Number.isInteger(value) ? value : 0;
   }
 
   get notificationNumber() {
     return this._notificationNumber;
+  }
+
+  ngAfterViewInit() {
+    this.cdr.detectChanges();
   }
 }

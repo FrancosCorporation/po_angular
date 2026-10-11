@@ -1,4 +1,4 @@
-import { AfterContentInit, Component, ElementRef, Input } from '@angular/core';
+import { AfterContentInit, Component, ElementRef, Input, TemplateRef, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { uuid } from '../../../utils/util';
@@ -44,13 +44,11 @@ import { PoStepperStatus } from '../enums/po-stepper-status.enum';
  */
 @Component({
   selector: 'po-step',
-  templateUrl: 'po-step.component.html'
+  templateUrl: 'po-step.component.html',
+  standalone: false
 })
 export class PoStepComponent implements AfterContentInit {
-  private _status?: PoStepperStatus = PoStepperStatus.Disabled;
-
-  // ID do step
-  id?: string = uuid();
+  private readonly elementRef = inject(ElementRef);
 
   /**
    * @optional
@@ -76,11 +74,15 @@ export class PoStepComponent implements AfterContentInit {
    * ```
    */
   @Input('p-can-active-next-step') canActiveNextStep:
-    | ((currentStep) => boolean)
-    | ((currentStep) => Observable<boolean>);
+    ((currentStep) => boolean) | ((currentStep) => Observable<boolean>);
 
   /** Título que será exibido descrevendo o passo (*step*). */
-  @Input('p-label') label: string;
+  @Input('p-label') label: string = '';
+
+  // ID do step
+  id?: string = uuid();
+
+  private _status?: PoStepperStatus = PoStepperStatus.Disabled;
 
   // Estado de exibição do `po-step`.
   @Input('p-status') set status(status: PoStepperStatus) {
@@ -93,7 +95,32 @@ export class PoStepComponent implements AfterContentInit {
     return this._status;
   }
 
-  constructor(private elementRef: ElementRef) {}
+  /**
+   * @optional
+   *
+   * @description
+   * Define o ícone padrão do step em seu status *default*.
+   * Esta propriedade permite usar ícones da [Biblioteca de ícones](https://po-ui.io/icons).
+   * ```
+   * <po-stepper>
+   *    ...
+   *    <po-step p-icon-default="an an-map-pin"></po-step>
+   * </po-stepper>
+   * ```
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * ```
+   * <po-stepper>
+   *    ...
+   *    <po-step [p-icon-default]="template"></po-step>
+   * </po-stepper>
+   *
+   * <ng-template #template>
+   *    <i class="an an-shopping-cart"></i>
+   * </ng-template
+   * ```
+   * > Deve-se usar `font-size: inherit` para ajustar ícones que não se ajustam automaticamente.
+   */
+  @Input('p-icon-default') iconDefault?: string | TemplateRef<void>;
 
   ngAfterContentInit() {
     this.setDisplayOnActiveOrError();

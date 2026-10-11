@@ -1,12 +1,15 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
 import { PoNotificationService, PoRadioGroupOption, PoSelectOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-tabs-travel',
-  templateUrl: './sample-po-tabs-travel.component.html'
+  templateUrl: './sample-po-tabs-travel.component.html',
+  standalone: false
 })
 export class SamplePoTabsTravelComponent {
+  private poNotificationService = inject(PoNotificationService);
+
   card: number;
   cardName: string;
   classFlight: number;
@@ -55,8 +58,6 @@ export class SamplePoTabsTravelComponent {
     { label: 'Flights', value: 'flight' },
     { label: 'Trains', value: 'train' }
   ];
-
-  constructor(private poNotificationService: PoNotificationService) {}
 
   bankBillet() {
     this.poNotificationService.warning('Bank billet sent to email');

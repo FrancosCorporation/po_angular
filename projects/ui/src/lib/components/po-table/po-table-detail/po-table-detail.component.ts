@@ -1,10 +1,11 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 
-import { capitalizeFirstLetter, isTypeof } from '../../../utils/util';
+import { getDefaultSizeFn, isTypeof, validateSizeFn, PoUtils } from '../../../utils/util';
 
-import { PoTableDetail } from './po-table-detail.interface';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
 import { PoTableDetailColumn } from './po-table-detail-column.interface';
+import { PoTableDetail } from './po-table-detail.interface';
 
 /**
  * @docsPrivate
@@ -15,26 +16,44 @@ import { PoTableDetailColumn } from './po-table-detail-column.interface';
  */
 @Component({
   selector: 'po-table-detail',
-  templateUrl: './po-table-detail.component.html'
+  templateUrl: './po-table-detail.component.html',
+  standalone: false
 })
 export class PoTableDetailComponent {
-  private _detail: PoTableDetail;
+  private _componentsSize?: string = undefined;
 
   /**
-   * Configuração da linha de detalhes.
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no table:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
    */
-  @Input('p-detail') set detail(value: PoTableDetail) {
-    this._detail = this.returnPoTableDetailObject(value);
+  @Input('p-components-size') set componentsSize(value: string) {
+    this._componentsSize = validateSizeFn(value, PoFieldSize);
   }
 
-  get detail() {
-    return this._detail;
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
   }
 
   /**
    * Lista de itens do _detail_ da tabela.
    */
   @Input('p-items') items: Array<any>;
+
+  /**
+   * Linha do registro pai correspondente ao item de detalhe selecionado. Utilizado para gerenciar o estado de seleção do elemento pai,
+   * permitindo que o mesmo seja atualizado para refletir a seleção de todos os filhos ou estado indeterminado.
+   */
+  @Input('p-parent-row') parentRow: PoTableDetail;
 
   /**
    * Define se a tabela possui a opção de `selectable` habilitada.
@@ -50,7 +69,20 @@ export class PoTableDetailComponent {
    */
   @Output('p-select-row') selectRow: EventEmitter<any> = new EventEmitter<any>();
 
-  constructor(private decimalPipe: DecimalPipe) {}
+  private _detail: PoTableDetail;
+
+  /**
+   * Configuração da linha de detalhes.
+   */
+  @Input('p-detail') set detail(value: PoTableDetail) {
+    this._detail = this.returnPoTableDetailObject(value);
+  }
+
+  get detail() {
+    return this._detail;
+  }
+
+  constructor(private readonly decimalPipe: DecimalPipe) {}
 
   get detailColumns(): Array<PoTableDetailColumn> {
     return this.detail?.columns || [];
@@ -73,12 +105,26 @@ export class PoTableDetailComponent {
   }
 
   getColumnTitleLabel(detail: PoTableDetailColumn) {
-    return detail.label || capitalizeFirstLetter(detail.property);
+    return detail.label || PoUtils.capitalizeFirstLetter(detail.property);
+  }
+
+  getDetailData(item: any, detail: PoTableDetailColumn) {
+    const arrayProperty = detail.property.split('.');
+    if (arrayProperty.length > 1) {
+      const nestedProperties = arrayProperty;
+      let value: any = item;
+      for (const property of nestedProperties) {
+        value = value[property] || value[property] === 0 ? value[property] : '';
+      }
+      return value;
+    } else {
+      return item[detail.property];
+    }
   }
 
   onSelectRow(item) {
     item.$selected = !item.$selected;
-    this.selectRow.emit(item);
+    this.selectRow.emit({ item: item, parentRow: this.parentRow });
   }
 
   private returnPoTableDetailObject(value: any) {

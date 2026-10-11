@@ -1,32 +1,54 @@
 import { Component, OnInit } from '@angular/core';
+import { NgForm } from '@angular/forms';
 
-import { PoCheckboxGroupOption, PoSelectOption, PoTreeViewItem } from '@po-ui/ng-components';
+import { PoCheckboxGroupOption, PoRadioGroupOption, PoSelectOption, PoTreeViewItem } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-tree-view-labs',
-  templateUrl: 'sample-po-tree-view-labs.component.html'
+  templateUrl: 'sample-po-tree-view-labs.component.html',
+  standalone: false
 })
 export class SamplePoTreeViewLabsComponent implements OnInit {
+  componentsSize: string = 'medium';
+  disabled: boolean = false;
   event: string;
   items: Array<PoTreeViewItem>;
   itemProperties: Array<string>;
+  maxLevel: number = 4;
+  noBorder: boolean = false;
   parent: string;
   parentList: Array<PoSelectOption>;
-  selectable: boolean;
+  selectable: boolean = false;
+  singleSelect: boolean = false;
   treeViewItem: PoTreeViewItem;
 
+  readonly componentsSizeOptions: Array<PoRadioGroupOption> = [
+    { value: 'small', label: 'Small' },
+    { value: 'medium', label: 'Medium' }
+  ];
+
   readonly itemPropertiesOptions: Array<PoCheckboxGroupOption> = [
+    { value: 'disabled', label: 'Disabled' },
+    { value: 'expanded', label: 'Expanded' },
     { value: 'selected', label: 'Selected' },
-    { value: 'expanded', label: 'Expanded' }
+    { value: 'showIcon', label: 'Show Icon' }
   ];
 
   ngOnInit() {
     this.restore();
   }
 
+  addTreeViewItem(treeViewItemForm: NgForm) {
+    this.add(this.treeViewItem);
+    treeViewItemForm.reset();
+    this.itemProperties = [];
+  }
+
   add(treeViewItem: PoTreeViewItem) {
-    treeViewItem.selected = this.itemProperties.includes('selected');
+    treeViewItem.disabled = this.itemProperties.includes('disabled');
     treeViewItem.expanded = this.itemProperties.includes('expanded');
+    treeViewItem.selected = this.itemProperties.includes('selected');
+    treeViewItem.showIcon = this.itemProperties.includes('showIcon');
 
     const treeViewItemClone = { ...treeViewItem };
 
@@ -51,12 +73,17 @@ export class SamplePoTreeViewLabsComponent implements OnInit {
   }
 
   restore() {
+    this.componentsSize = 'medium';
+    this.disabled = false;
     this.event = undefined;
     this.items = [];
+    this.itemProperties = [];
+    this.maxLevel = 4;
+    this.noBorder = false;
     this.parent = undefined;
     this.parentList = [];
-    this.itemProperties = [];
-    this.selectable = undefined;
+    this.selectable = false;
+    this.singleSelect = false;
     this.treeViewItem = <any>{};
   }
 

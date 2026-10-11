@@ -1,23 +1,25 @@
 import {
-  AfterViewInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
-  ComponentFactoryResolver,
   ComponentRef,
   ElementRef,
   OnInit,
   ViewChild,
-  ViewContainerRef
+  ViewContainerRef,
+  inject
 } from '@angular/core';
 import { NgForm } from '@angular/forms';
-
-import { fromEvent, Observable } from 'rxjs';
-import { debounceTime, filter, switchMap, tap } from 'rxjs/operators';
-import { PoDynamicFormComponent } from './../../../po-dynamic/po-dynamic-form/po-dynamic-form.component';
-
+import { Observable } from 'rxjs';
+import { switchMap, tap } from 'rxjs/operators';
+import { PO_TABLE_ROW_HEIGHT_BY_SPACING, sortArrayOfObjects } from '../../../../utils/util';
+import { PoTableColumnSpacing } from '../../../po-table';
 import { PoTableColumnSort } from '../../../po-table/interfaces/po-table-column-sort.interface';
-
+import { PoDisclaimer } from '../../../po-disclaimer/po-disclaimer.interface';
+import { PoLookupAdvancedFilter } from '../interfaces/po-lookup-advanced-filter.interface';
 import { PoLookupModalBaseComponent } from '../po-lookup-modal/po-lookup-modal-base.component';
 import { PoLanguageService } from './../../../../services/po-language/po-language.service';
+import { PoFieldSize } from './../../../../../lib/enums/po-field-size.enum';
 
 /**
  * @docsPrivate
@@ -26,22 +28,26 @@ import { PoLanguageService } from './../../../../services/po-language/po-languag
  */
 @Component({
   selector: 'po-lookup-modal',
-  templateUrl: './po-lookup-modal.component.html'
+  templateUrl: './po-lookup-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
-export class PoLookupModalComponent extends PoLookupModalBaseComponent implements OnInit, AfterViewInit {
+export class PoLookupModalComponent extends PoLookupModalBaseComponent implements OnInit {
   @ViewChild('inpsearch') inputSearchEl: ElementRef;
   @ViewChild('container', { read: ViewContainerRef }) container: ViewContainerRef;
 
   keyUpObservable: Observable<any> = null;
 
-  containerHeight: number = 375;
-  tableHeight: number = 370;
+  tableHeight: number;
 
-  componentRef: ComponentRef<PoDynamicFormComponent>;
+  componentRef: ComponentRef<any>;
   dynamicForm: NgForm;
 
-  constructor(private componentFactory: ComponentFactoryResolver, poLanguage: PoLanguageService) {
-    super(poLanguage);
+  constructor() {
+    const poLanguage = inject(PoLanguageService);
+    const changeDetector = inject(ChangeDetectorRef);
+
+    super(poLanguage, changeDetector);
   }
 
   ngOnInit() {
@@ -49,19 +55,74 @@ export class PoLookupModalComponent extends PoLookupModalBaseComponent implement
     this.setTableHeight();
   }
 
-  ngAfterViewInit() {
-    this.initializeEventInput();
+  // Seleciona um item na tabela
+  onSelect(item) {
+    const formattedItem = {
+      value: item[this.fieldValue],
+      label: item[this.fieldLabel],
+      ...item
+    };
+    if (this.multiple) {
+      this.selectedItems = this.selectedItems ? [...this.selectedItems, formattedItem] : [formattedItem];
+    } else {
+      this.selectedItems = [formattedItem];
+    }
+    this.selecteds = [...this.selectedItems];
   }
 
-  initializeEventInput(): void {
-    this.keyUpObservable = fromEvent(this.inputSearchEl.nativeElement, 'keyup').pipe(
-      filter((e: any) => this.validateEnterPressed(e)),
-      debounceTime(400)
+  // Remove a seleção de um item na tabela
+  onUnselect(unselectedItem) {
+    if (this.multiple) {
+      this.selectedItems = this.selectedItems.filter(item => item.value !== unselectedItem[this.fieldValue]);
+    } else {
+      this.selectedItems = [];
+    }
+    this.selecteds = [...this.selectedItems];
+  }
+
+  onUnselectFromDisclaimer(removedDisclaimer) {
+    this.selectedItems = this.selectedItems.filter(item => item.value !== removedDisclaimer.value);
+    if (this.selectedItems.length === 0) {
+      this.selecteds = [];
+    } else {
+      this.selecteds = [...this.selectedItems];
+    }
+    this.poTable.unselectRowItem(item => item[this.fieldValue] === removedDisclaimer.value);
+  }
+
+  // Seleciona todos os itens visíveis na tabela
+  onAllSelected(items) {
+    const newItems = items
+      .filter(item => !this.selectedItems?.some(selected => selected[this.fieldValue] === item[this.fieldValue]))
+      .map(item => ({
+        value: item[this.fieldValue],
+        label: item[this.fieldLabel],
+        ...item
+      }));
+
+    this.selectedItems = [...this.selectedItems, ...newItems];
+    this.selecteds = [...this.selectedItems];
+  }
+
+  // Remove a seleção de todos os itens visíveis na tabela
+  onAllUnselected(items) {
+    const newItems = this.selectedItems?.filter(
+      item => !items.some(selected => selected[this.fieldValue] === item[this.fieldValue])
     );
 
-    this.keyUpObservable.subscribe(() => {
-      this.search();
-    });
+    if (newItems?.length) {
+      this.selectedItems = [...newItems];
+      this.selecteds = [...this.selectedItems];
+    } else {
+      this.selectedItems = [];
+      this.selecteds = [];
+    }
+  }
+
+  onAllUnselectedTag(items) {
+    this.poTable.unselectRows();
+    this.selectedItems = [];
+    this.selecteds = [];
   }
 
   openModal() {
@@ -69,18 +130,10 @@ export class PoLookupModalComponent extends PoLookupModalBaseComponent implement
   }
 
   sortBy(sort: PoTableColumnSort) {
+    const order = sort.type === 'ascending';
+    sortArrayOfObjects(this.items, sort.column.property, order);
+
     this.sort = sort;
-  }
-
-  private setTableHeight() {
-    if (window.innerHeight < 615) {
-      this.tableHeight -= 50;
-      this.containerHeight -= 50;
-    }
-  }
-
-  private validateEnterPressed(e: any) {
-    return e.keyCode === 13;
   }
 
   destroyDynamicForm() {
@@ -94,28 +147,70 @@ export class PoLookupModalComponent extends PoLookupModalBaseComponent implement
     this.createDynamicForm();
   }
 
+  private setTableHeight(): void {
+    const visibleRows = 10;
+    const headerHeight = this.spacing === PoTableColumnSpacing.ExtraSmall ? 32 : 48;
+    const footerHeight = this.size === PoFieldSize.Small ? 48 : 60;
+    const currentRowHeight = PO_TABLE_ROW_HEIGHT_BY_SPACING[this.spacing];
+    const extraHeight = this.infiniteScroll ? headerHeight : headerHeight + footerHeight;
+
+    this.tableHeight = currentRowHeight * visibleRows + extraHeight;
+  }
+
   private setupModalAdvancedFilter() {
-    this.dynamicFormValue = {};
+    this.dynamicFormValue = this.isAdvancedFilterApplied
+      ? this.getValuesFromDisclaimers(this.disclaimerGroup?.disclaimers)
+      : this.getInitialValuesFromFilter(this.advancedFilters);
+
     this.isAdvancedFilter = true;
   }
 
+  private getInitialValuesFromFilter(filters: Array<PoLookupAdvancedFilter>): Record<string, any> {
+    const initialValues: Record<string, any> = {};
+
+    filters?.forEach(filter => {
+      if (filter.initValue !== undefined) {
+        initialValues[filter.property] = filter.initValue;
+      }
+    });
+
+    return initialValues;
+  }
+
+  private getValuesFromDisclaimers(disclaimers: Array<PoDisclaimer>): Record<string, any> {
+    const values: Record<string, any> = {};
+
+    disclaimers?.forEach(disclaimer => {
+      values[disclaimer.property] = disclaimer.value;
+    });
+
+    return values;
+  }
+
   private createDynamicForm() {
-    const component = this.componentFactory.resolveComponentFactory(PoDynamicFormComponent);
+    // Utilizado o `import` para quebrar a dependência circular
+    // PoDynamicFormComponent -> PoDynamicFormFieldsComponent-> PoLookupComponent ->
+    //  PoLookupModalService -> PoLookupModalComponent -> PoDynamicFormComponent
 
-    this.componentRef = this.container.createComponent<PoDynamicFormComponent>(component);
-    this.componentRef.instance.fields = this.advancedFilters;
-    this.componentRef.instance.value = this.dynamicFormValue;
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    import('./../../../po-dynamic/po-dynamic-form/po-dynamic-form.component').then(({ PoDynamicFormComponent }) => {
+      this.componentRef = this.container.createComponent(PoDynamicFormComponent);
+      this.componentRef.instance.fields = this.advancedFilters;
+      this.componentRef.instance.value = this.dynamicFormValue;
+      this.componentRef.instance.componentsSize = this.size;
 
-    this.componentRef.instance.formOutput
-      .pipe(
-        tap(form => {
-          this.dynamicForm = form;
+      this.componentRef.instance.formOutput
+        .pipe(
+          tap((form: NgForm) => {
+            this.dynamicForm = form;
+            this.primaryActionAdvancedFilter.disabled = this.dynamicForm.invalid;
+          }),
+          switchMap((form: NgForm) => form.valueChanges)
+        )
+        .subscribe(() => {
           this.primaryActionAdvancedFilter.disabled = this.dynamicForm.invalid;
-        }),
-        switchMap(form => form.valueChanges)
-      )
-      .subscribe(() => {
-        this.primaryActionAdvancedFilter.disabled = this.dynamicForm.invalid;
-      });
+        });
+      this.changeDetector.markForCheck();
+    });
   }
 }

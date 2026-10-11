@@ -1,18 +1,34 @@
-import { Input, Directive } from '@angular/core';
+import { Input, Directive, HostBinding, HostListener } from '@angular/core';
 
 import { PoInfoOrientation } from './po-info-orietation.enum';
+import { getDefaultSizeFn, validateSizeFn } from '../../utils/util';
+import { PoFieldSize } from '../../enums/po-field-size.enum';
 
 const poInfoOrientationDefault = PoInfoOrientation.Vertical;
 
 @Directive()
 export class PoInfoBaseComponent {
-  private _labelSize: number;
-  private _orientation: PoInfoOrientation = poInfoOrientationDefault;
+  /** Valor do rótulo a ser exibido. */
+  @Input('p-label') label: string;
+
+  /**
+   * Ao informar uma URL, o conteúdo será exibido na forma de um *link* e ao ser clicado será redirecionado para a URL informada.
+   *
+   * > Caso informar `http://` será aberto uma nova aba.
+   * Caso informar um caminho relativo, exemplo: `/customers`, será aberto na aba atual.
+   *
+   */
+  @Input('p-url') url?: string;
+
+  /** Valor do conteúdo a ser exibido. */
+  @Input('p-value') value?: string;
 
   public readonly poInfoOrientation = PoInfoOrientation;
 
-  /** Valor do rótulo a ser exibido. */
-  @Input('p-label') label: string;
+  private _labelSize: number;
+  private _orientation: PoInfoOrientation = poInfoOrientationDefault;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
 
   /**
    * @optional
@@ -55,19 +71,41 @@ export class PoInfoBaseComponent {
   @Input('p-orientation') set orientation(value: PoInfoOrientation) {
     this._orientation = (<any>Object).values(PoInfoOrientation).includes(value) ? value : poInfoOrientationDefault;
   }
+
   get orientation(): PoInfoOrientation {
     return this._orientation;
   }
 
   /**
-   * Ao informar uma URL, o conteúdo será exibido na forma de um *link* e ao ser clicado será redirecionado para a URL informada.
+   * @optional
    *
-   * > Caso informar `http://` será aberto uma nova aba.
-   * Caso informar um caminho relativo, exemplo: `/customers`, será aberto na aba atual.
+   * @description
    *
+   * Define o tamanho do componente entre `small` ou `medium`.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
    */
-  @Input('p-url') url?: string;
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
 
-  /** Valor do conteúdo a ser exibido. */
-  @Input('p-value') value?: string;
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
+  }
 }

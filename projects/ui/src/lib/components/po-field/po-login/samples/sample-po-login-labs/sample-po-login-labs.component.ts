@@ -1,12 +1,14 @@
 import { Component, OnInit } from '@angular/core';
 
-import { PoCheckboxGroupOption } from '@po-ui/ng-components';
+import { PoCheckboxGroupOption, PoRadioGroupOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-login-labs',
-  templateUrl: './sample-po-login-labs.component.html'
+  templateUrl: './sample-po-login-labs.component.html',
+  standalone: false
 })
 export class SamplePoLoginLabsComponent implements OnInit {
+  helperText: string;
   errorPattern: string;
   event: string;
   help: string;
@@ -17,14 +19,26 @@ export class SamplePoLoginLabsComponent implements OnInit {
   pattern: string;
   placeholder: string;
   properties: Array<string>;
+  size: string;
 
   public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [
     { value: 'clean', label: 'Clean' },
     { value: 'disabled', label: 'Disabled' },
+    { value: 'errorLimit', label: 'Limit Error Message' },
+    { value: 'labelTextWrap', label: 'Label Text Wrap' },
+    { value: 'compactLabel', label: 'Compact Label' },
+    { value: 'loading', label: 'Loading' },
     { value: 'noAutocomplete', label: 'No Autocomplete' },
     { value: 'optional', label: 'Optional' },
     { value: 'readonly', label: 'Read Only' },
-    { value: 'required', label: 'Required' }
+    { value: 'required', label: 'Required' },
+    { value: 'requiredFieldErrorMessage', label: 'Required Field Error Message' },
+    { value: 'showRequired', label: 'Show Required' }
+  ];
+
+  public readonly sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
   ];
 
   ngOnInit() {
@@ -36,6 +50,7 @@ export class SamplePoLoginLabsComponent implements OnInit {
   }
 
   restore() {
+    this.helperText = '';
     this.errorPattern = '';
     this.event = '';
 
@@ -50,5 +65,6 @@ export class SamplePoLoginLabsComponent implements OnInit {
     this.pattern = '';
     this.placeholder = '';
     this.properties = [];
+    this.size = 'medium';
   }
 }

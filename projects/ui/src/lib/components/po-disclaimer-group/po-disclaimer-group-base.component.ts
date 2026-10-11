@@ -1,8 +1,8 @@
-import { DoCheck, EventEmitter, Input, IterableDiffers, Output, Directive } from '@angular/core';
+import { ChangeDetectorRef, Directive, DoCheck, EventEmitter, Input, IterableDiffers, Output } from '@angular/core';
 
-import { convertToBoolean, isKeyCodeEnter, uuid } from '../../utils/util';
-import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { convertToBoolean, uuid, PoUtils } from '../../utils/util';
 
 import { PoDisclaimer } from '../po-disclaimer/po-disclaimer.interface';
 
@@ -28,13 +28,48 @@ export const poDisclaimerGroupLiteralsDefault = {
  */
 @Directive()
 export class PoDisclaimerGroupBaseComponent implements DoCheck {
+  /** Título do grupo de *disclaimers*. */
+  @Input('p-title') title?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Função que será disparada quando a lista de *disclaimers* for modificada.
+   */
+  @Output('p-change') change: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Função que será disparada quando um *disclaimer* for removido da lista de *disclaimers* pelo usuário.
+   *
+   * Recebe como parâmetro um objeto conforme a interface `PoDisclaimerGroupRemoveAction`.
+   */
+  @Output('p-remove') remove: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Função que será disparada quando todos os *disclaimers* forem removidos da lista de *disclaimers* pelo usuário,
+   * utilizando o botão "remover todos".
+   *
+   * Recebe como parâmetro uma lista contendo todos os `disclaimers` removidos.
+   */
+  @Output('p-remove-all') removeAll: EventEmitter<any> = new EventEmitter<any>();
+
+  literals;
+
   private _disclaimers: Array<PoDisclaimer> = [];
   private _hideRemoveAll: boolean = false;
 
-  private differ;
+  private readonly differ;
   private previousDisclaimers: Array<PoDisclaimer> = [];
-
-  literals;
 
   /** Lista de *disclaimers*. */
 
@@ -86,42 +121,11 @@ export class PoDisclaimerGroupBaseComponent implements DoCheck {
     return this._hideRemoveAll;
   }
 
-  /** Título do grupo de *disclaimers*. */
-  @Input('p-title') title?: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Função que será disparada quando a lista de *disclaimers* for modificada.
-   */
-  @Output('p-change') change: EventEmitter<any> = new EventEmitter<any>();
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Função que será disparada quando um *disclaimer* for removido da lista de *disclaimers* pelo usuário.
-   *
-   * Recebe como parâmetro um objeto conforme a interface `PoDisclaimerGroupRemoveAction`.
-   */
-  @Output('p-remove') remove: EventEmitter<any> = new EventEmitter<any>();
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Função que será disparada quando todos os *disclaimers* forem removidos da lista de *disclaimers* pelo usuário,
-   * utilizando o botão "remover todos".
-   *
-   * Recebe como parâmetro uma lista contendo todos os `disclaimers` removidos.
-   */
-  @Output('p-remove-all') removeAll: EventEmitter<any> = new EventEmitter<any>();
-
-  constructor(differs: IterableDiffers, languageService: PoLanguageService) {
+  constructor(
+    differs: IterableDiffers,
+    languageService: PoLanguageService,
+    protected changeDetector: ChangeDetectorRef
+  ) {
     const language = languageService.getShortLanguage();
 
     this.differ = differs.find([]).create(null);
@@ -136,22 +140,12 @@ export class PoDisclaimerGroupBaseComponent implements DoCheck {
     this.checkChanges();
   }
 
-  onCloseAction(disclaimer) {
-    this.removeDisclaimer(disclaimer);
-
-    this.emitChangeDisclaimers();
-    this.remove.emit({
-      removedDisclaimer: { ...disclaimer },
-      currentDisclaimers: [...this.disclaimers]
-    });
-  }
-
   isRemoveAll() {
     return !this.hideRemoveAll && this.disclaimers.filter(c => !c.hideClose).length > 1;
   }
 
   onKeyPress(event: any) {
-    if (isKeyCodeEnter(event)) {
+    if (PoUtils.isKeyCodeEnter(event)) {
       this.removeAllItems();
     }
   }
@@ -171,9 +165,17 @@ export class PoDisclaimerGroupBaseComponent implements DoCheck {
     this.removeAll.emit([...removeItems]);
   }
 
-  private removeDisclaimer(disclaimer: any) {
+  protected removeDisclaimer(disclaimer: any) {
     const itemIndex = this.disclaimers.findIndex(d => d['$id'] === disclaimer['$id']);
     this.disclaimers.splice(itemIndex, 1);
+  }
+
+  protected emitChangeDisclaimers() {
+    setTimeout(() => {
+      this.change.emit(this.disclaimers);
+    });
+    this.previousDisclaimers = [...this._disclaimers];
+    this.changeDetector?.detectChanges();
   }
 
   private checkChanges() {
@@ -183,6 +185,8 @@ export class PoDisclaimerGroupBaseComponent implements DoCheck {
       if (changes && this.disclaimersAreChanged(this.disclaimers)) {
         this.emitChangeDisclaimers();
       }
+    } else {
+      this.changeDetector?.detectChanges();
     }
   }
 
@@ -217,12 +221,5 @@ export class PoDisclaimerGroupBaseComponent implements DoCheck {
         disclaimer.value !== this.previousDisclaimers[index].value ||
         disclaimer.property !== this.previousDisclaimers[index].property
     );
-  }
-
-  private emitChangeDisclaimers() {
-    setTimeout(() => {
-      this.change.emit(this.disclaimers);
-    });
-    this.previousDisclaimers = [...this._disclaimers];
   }
 }

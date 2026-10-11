@@ -1,14 +1,34 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { Directive, EventEmitter, Input, Output, TemplateRef } from '@angular/core';
 
-import { convertToBoolean } from '../../utils/util';
+import { PoCaptionTagColorEnum } from '../../enums/po-caption-tag-color.enum';
 import { PoColorPaletteEnum } from '../../enums/po-color-palette.enum';
+import { convertToBoolean } from '../../utils/util';
 
-import { PoTagItem } from './interfaces/po-tag-item.interface';
+import { PoLanguageService } from './../../services/po-language/po-language.service';
+import { poLocaleDefault } from '../../services/po-language/po-language.constant';
 import { PoTagOrientation } from './enums/po-tag-orientation.enum';
 import { PoTagType } from './enums/po-tag-type.enum';
+import { PoTagItem } from './interfaces/po-tag-item.interface';
+import { PoTagLiterals } from './interfaces/po-tag-literals.interface';
 
-const poTagColors = (<any>Object).values(PoColorPaletteEnum);
+const poTagColors = [...(<any>Object).values(PoColorPaletteEnum), ...(<any>Object).values(PoCaptionTagColorEnum)];
+const poTagTextColors = (<any>Object).values(PoColorPaletteEnum);
 const poTagOrientationDefault = PoTagOrientation.Vertical;
+
+export const PoTagLiteralsDefault = {
+  en: {
+    remove: 'Clear'
+  },
+  es: {
+    remove: 'Eliminar'
+  },
+  pt: {
+    remove: 'Remover'
+  },
+  ru: {
+    remove: 'удалять'
+  }
+};
 
 /**
  * @description
@@ -20,42 +40,172 @@ const poTagOrientationDefault = PoTagOrientation.Vertical;
  * utilizando a tecla *tab*.
  *
  * Seu uso é recomendado para informações que necessitem de destaque em forma de marcação.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                    |
+ * |----------------------------------------|-------------------------------------------------------|-------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                 |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                      |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-sm)`                           |
+ * | `--line-height`                        | Tamanho da label                                      | `var(---line-height-sm)`                        |
+ * | `--border-radius`                      | Contém o valor do raio dos cantos do elemento&nbsp;   | `var(--border-radius-pill)`                     |
+ * | `--gap`                                | Espaçamento entre o label e o value                   | `var(--spacing-xs)`                             |
+ * | **Neutral**                            |                                                       |                                                 |
+ * | `--color-neutral`                      | Cor principal no estado neutral                       | `var(--color-neutral-light-10)`                 |
+ * | `--text-color-positive`                | Cor do texto no estado neutral                        | `var(--color-neutral-dark-80)`                  |
+ * | **Positive**                           |                                                       |                                                 |
+ * | `--color-positive`                     | Cor principal no estado positive                      | `var(--color-feedback-positive-lightest)`       |
+ * | `--text-color-positive`                | Cor do texto no estado positive                       | `var(--color-feedback-positive-dark)`           |
+ * | **Negative**                           |                                                       |                                                 |
+ * | `--color-negative`                     | Cor principal no estado danger                        | `var(--color-feedback-negative-lightest)`       |
+ * | `--text-color-negative`                | Cor do texto no estado danger                         | `var(--color-feedback-negative-darker)`         |
+ * | **Warning**                            |                                                       |                                                 |
+ * | `--color-tag-warning`                  | Cor principal no estado warning                       | `var(--color-feedback-warning-lightest)`        |
+ * | `--text-color-warning`                 | Cor do texto no estado warning                        | `var(--color-feedback-warning-darkest)`         |
+ * | **Info**                               |                                                       |                                                 |
+ * | `--color-info`                         | Cor principal no estado info                          | `var(--color-feedback-info-lightest)`           |
+ * | `--text-color-info`                    | Cor do texto no estado info                           | `var(--color-feedback-info-dark)`               |
+ * | **Removable**                          |                                                       |                                                 |
+ * | `--color`                              | Cor principal quando removable                        | `var(--color-brand-01-lightest)`                |
+ * | `--border-color`                       | Cor de borda quando removable &nbsp;                  | `var(--color-brand-01-lighter)`                 |
+ * | `--color-icon`                         | Cor do ícone quando removable &nbsp;                  | `var(--color-action-default)`                   |
+ * | `--text-color`                         | Cor do texto quando removable &nbsp;                  | `var(--color-neutral-dark-80)`                  |
+ * | `--color-hover`                        | Cor do hover no estado removable &nbsp;               | `var(--color-brand-01-lighter)`                 |
+ * | **Focused**                            |                                                       |                                                 |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                     |
+ * | **Disabled**                           |                                                       |                                                 |
+ * | `--color-disabled`                     | Cor principal no estado disabled                      | `var(--color-neutral-light-20)`                 |
+ * | `--border-color-disabled`              | Cor da borda no estado disabled &nbsp;                | `var(--color-action-disabled)`                  |
+ * | `--color-icon-disabled`                | Cor do icone no estado disabled &nbsp;                | `var(--color-action-disabled)`                  |
+ * | `--text-color-disabled`                | Cor do texto no estado disabled &nbsp;                | `var(--color-neutral-mid-60)`                   |
+ *
  */
 @Directive()
 export class PoTagBaseComponent {
-  private _color?: string;
-  private _icon?: boolean | string;
-  private _inverse?: boolean;
-  private _orientation?: PoTagOrientation = poTagOrientationDefault;
-  private _type?: PoTagType;
-
-  public readonly poTagOrientation = PoTagOrientation;
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define uma legenda que será exibida acima ou ao lado da *tag*, de acordo com a `p-orientation`.
+   */
+  @Input('p-label') label?: string;
 
   /**
    * @optional
    *
    * @description
    *
-   * Define uma cor para a *tag*.
+   * Habilita a opção de remover a tag
    *
+   * @default `false`
+   */
+  @Input({ alias: 'p-removable', transform: convertToBoolean }) removable: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Desabilita o `po-tag` e não permite que o usuário interaja com o mesmo.
+   * > A propriedade `p-disabled` somente terá efeito caso a propriedade `p-removable` esteja definida como `true`.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-disabled', transform: convertToBoolean }) disabled: boolean = false;
+
+  /** Texto da tag. */
+  @Input('p-value') value: string;
+
+  //input interno para o multiselect
+  @Input('p-append-in-body') appendInBody: boolean;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Ação que será executada ao clicar sobre o `po-tag` e que receberá como parâmetro um objeto contendo o seu valor e tipo.
+   *
+   * O evento de click só funciona se a tag não for removível.
+   */
+  @Output('p-click') click: EventEmitter<any> = new EventEmitter<PoTagItem>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Ação que sera executada quando clicar sobre o ícone de remover no `po-tag`
+   */
+  @Output('p-close') remove: EventEmitter<any> = new EventEmitter<any>();
+
+  public readonly poTagOrientation = PoTagOrientation;
+  public customColor;
+  public customTextColor;
+  private _color?: string;
+  private _textColor?: string;
+  private _icon?: boolean | string | TemplateRef<void>;
+  private _orientation?: PoTagOrientation = poTagOrientationDefault;
+  private _type?: PoTagType;
+  private _literals: PoTagLiterals;
+  private readonly language: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Determina a cor da tag. As maneiras de customizar as cores são:
+   * - Hexadeximal, por exemplo `#c64840`;
+   * - RGB, como `rgb(0, 0, 165)`;
+   * - O nome da cor, por exemplo `blue`;
+   * - Usando uma das cores do tema do PO:
    * Valores válidos:
-   *  - <span class="dot po-color-01"></span> `color-01`
-   *  - <span class="dot po-color-02"></span> `color-02`
-   *  - <span class="dot po-color-03"></span> `color-03`
-   *  - <span class="dot po-color-04"></span> `color-04`
-   *  - <span class="dot po-color-05"></span> `color-05`
-   *  - <span class="dot po-color-06"></span> `color-06`
-   *  - <span class="dot po-color-07"></span> `color-07`
-   *  - <span class="dot po-color-08"></span> `color-08`
-   *  - <span class="dot po-color-09"></span> `color-09`
-   *  - <span class="dot po-color-10"></span> `color-10`
-   *  - <span class="dot po-color-11"></span> `color-11`
-   *  - <span class="dot po-color-12"></span> `color-12`
+   *   - <span class="dot po-color-01"></span> `color-01`
+   *   - <span class="dot po-color-02"></span> `color-02`
+   *   - <span class="dot po-color-03"></span> `color-03`
+   *   - <span class="dot po-color-04"></span> `color-04`
+   *   - <span class="dot po-color-05"></span> `color-05`
+   *   - <span class="dot po-color-06"></span> `color-06`
+   *   - <span class="dot po-color-07"></span> `color-07`
+   *   - <span class="dot po-color-08"></span> `color-08`
+   *   - <span class="dot po-color-09"></span> `color-09`
+   *   - <span class="dot po-color-10"></span> `color-10`
+   *   - <span class="dot po-color-11"></span> `color-11`
+   *   - <span class="dot po-color-12"></span> `color-12`
+   *
+   * > Também é possível utilizar as 35 cores da paleta **Caption Tag Colors**:
+   *
+   *   - <span class="dot po-caption-tag-01"></span> `caption-tag-01` <span class="dot po-caption-tag-02"></span> `caption-tag-02` <span class="dot po-caption-tag-03"></span> `caption-tag-03` <span class="dot po-caption-tag-04"></span> `caption-tag-04` <span class="dot po-caption-tag-05"></span> `caption-tag-05`
+   *   - <span class="dot po-caption-tag-06"></span> `caption-tag-06` <span class="dot po-caption-tag-07"></span> `caption-tag-07` <span class="dot po-caption-tag-08"></span> `caption-tag-08` <span class="dot po-caption-tag-09"></span> `caption-tag-09` <span class="dot po-caption-tag-10"></span> `caption-tag-10`
+   *   - <span class="dot po-caption-tag-11"></span> `caption-tag-11` <span class="dot po-caption-tag-12"></span> `caption-tag-12` <span class="dot po-caption-tag-13"></span> `caption-tag-13` <span class="dot po-caption-tag-14"></span> `caption-tag-14` <span class="dot po-caption-tag-15"></span> `caption-tag-15`
+   *   - <span class="dot po-caption-tag-16"></span> `caption-tag-16` <span class="dot po-caption-tag-17"></span> `caption-tag-17` <span class="dot po-caption-tag-18"></span> `caption-tag-18` <span class="dot po-caption-tag-19"></span> `caption-tag-19` <span class="dot po-caption-tag-20"></span> `caption-tag-20`
+   *   - <span class="dot po-caption-tag-21"></span> `caption-tag-21` <span class="dot po-caption-tag-22"></span> `caption-tag-22` <span class="dot po-caption-tag-23"></span> `caption-tag-23` <span class="dot po-caption-tag-24"></span> `caption-tag-24` <span class="dot po-caption-tag-25"></span> `caption-tag-25`
+   *   - <span class="dot po-caption-tag-26"></span> `caption-tag-26` <span class="dot po-caption-tag-27"></span> `caption-tag-27` <span class="dot po-caption-tag-28"></span> `caption-tag-28` <span class="dot po-caption-tag-29"></span> `caption-tag-29` <span class="dot po-caption-tag-30"></span> `caption-tag-30`
+   *   - <span class="dot po-caption-tag-31"></span> `caption-tag-31` <span class="dot po-caption-tag-32"></span> `caption-tag-32` <span class="dot po-caption-tag-33"></span> `caption-tag-33` <span class="dot po-caption-tag-34"></span> `caption-tag-34` <span class="dot po-caption-tag-35"></span> `caption-tag-35`
+   *
+   * Exemplo de uso:
+   * ```
+   * <po-tag p-color="caption-tag-15" p-value="Status"></po-tag>
+   * ```
+   *
+   * - Para uma melhor acessibilidade no uso do componente é recomendável utilizar cores com um melhor contraste em relação ao background;
+   * - Para as cores legacy (`color-01` a `color-12`) e cores customizadas, o componente ajusta automaticamente a cor do texto para garantir legibilidade.
+   * - Para as cores **Caption Tag Colors** (`caption-tag-01` a `caption-tag-35`), a cor do texto é fixa e definida via token CSS, não sendo possível alterá-la via `p-text-color`.
    *
    * > **Atenção:** A propriedade `p-type` sobrepõe esta definição.
    */
   @Input('p-color') set color(value: string) {
     this._color = poTagColors.includes(value) ? value : undefined;
+    if (this._color === undefined) {
+      CSS.supports('color', value) ? (this.customColor = value) : (this.customColor = undefined);
+    }
   }
 
   get color(): string {
@@ -67,58 +217,87 @@ export class PoTagBaseComponent {
    *
    * @description
    *
+   * Determina a cor do texto da tag. As maneiras de customizar as cores são:
+   * - Hexadeximal, por exemplo `#c64840`;
+   * - RGB, como `rgb(0, 0, 165)`;
+   * - O nome da cor, por exemplo `blue`;
+   * - Usando uma das cores do tema do PO:
+   * Valores válidos:
+   *   - <span class="dot po-color-01"></span> `color-01`
+   *   - <span class="dot po-color-02"></span> `color-02`
+   *   - <span class="dot po-color-03"></span> `color-03`
+   *   - <span class="dot po-color-04"></span> `color-04`
+   *   - <span class="dot po-color-05"></span> `color-05`
+   *   - <span class="dot po-color-06"></span> `color-06`
+   *   - <span class="dot po-color-07"></span> `color-07`
+   *   - <span class="dot po-color-08"></span> `color-08`
+   *   - <span class="dot po-color-09"></span> `color-09`
+   *   - <span class="dot po-color-10"></span> `color-10`
+   *   - <span class="dot po-color-11"></span> `color-11`
+   *   - <span class="dot po-color-12"></span> `color-12`
+   *
+   * - Para uma melhor acessibilidade no uso do componente é recomendável utilizar cores com um melhor contraste em relação ao background.
+   *
+   * > **Atenção:** A propriedade `p-type` sobrepõe esta definição.
+   *
+   * > **Atenção:** As cores da paleta **Caption Tag Colors** (`caption-tag-01` a `caption-tag-35`) não são aceitas nesta propriedade,
+   * pois possuem cor de texto fixa definida via token CSS.
+   */
+  @Input('p-text-color') set textColor(value: string) {
+    this._textColor = poTagTextColors.includes(value) ? value : undefined;
+    if (this._textColor === undefined) {
+      CSS.supports('color', value) ? (this.customTextColor = value) : (this.customTextColor = undefined);
+    }
+  }
+
+  get textColor(): string {
+    return this._textColor;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
    * Define ou ativa um ícone que será exibido ao lado do valor da *tag*.
    *
-   * > Veja os valores válidos na [biblioteca de ícones](guides/icons).
-   *
    * Quando `p-type` estiver definida, basta informar um valor igual a `true` para que o ícone seja exibido conforme descrições abaixo:
-   * - <span class="po-icon po-icon-ok"></span> - `success`
-   * - <span class="po-icon po-icon-warning"></span> - `warning`
-   * - <span class="po-icon po-icon-close"></span> - `danger`
-   * - <span class="po-icon po-icon-info"></span> - `info`
+   * - <span class="an an-check"></span> - `success`
+   * - <span class="an an-warning-circle"></span> - `warning`
+   * - <span class="an an-x"></span> - `danger`
+   * - <span class="an an-info"></span> - `info`
+   *
+   * Também É possível usar qualquer um dos ícones da [Biblioteca de ícones](https://po-ui.io/icons). conforme exemplo abaixo:
+   * ```
+   * <po-tag p-icon="an an-user" p-value="PO Tag"></po-tag>
+   * ```
+   * como também utilizar outras fontes de ícones, por exemplo a biblioteca *Font Awesome*, da seguinte forma:
+   * ```
+   * <po-tag p-icon="fa fa-podcast" p-value="PO Tag"></po-button>
+   * ```
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * ```
+   * <po-tag [p-icon]="template" p-value="Tag template ionic"></po-button>
+   *
+   * <ng-template #template>
+   *  <ion-icon style="font-size: inherit" name="heart"></ion-icon>
+   * </ng-template>
+   * ```
+   * > Para o ícone enquadrar corretamente, deve-se utilizar `font-size: inherit` caso o ícone utilizado não aplique-o.
    *
    * @default `false`
    */
-  @Input('p-icon') set icon(value: boolean | string) {
-    if (this.type) {
+  @Input('p-icon') set icon(value: boolean | string | TemplateRef<void>) {
+    if (this.type && !this.forceIcon) {
       this._icon = convertToBoolean(value);
     } else {
       this._icon = value;
     }
   }
 
-  get icon(): boolean | string {
+  get icon() {
     return this._icon;
   }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Ativa a inversão de cores configuradas no componente, possibilitando uma visualização de status ativo e inativo.
-   *
-   * > A cor do texto, do ícone e da borda ficam com a cor utilizada na propriedade `p-color` ou a cor correspondente ao `p-type`,
-   * e a cor do fundo fica branca.
-   *
-   * @default `false`
-   */
-  @Input('p-inverse') set inverse(value: boolean) {
-    this._inverse = convertToBoolean(value);
-  }
-
-  get inverse(): boolean {
-    return this._inverse;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Define uma legenda que será exibida acima ou ao lado da *tag*, de acordo com a `p-orientation`.
-   */
-  @Input('p-label') label?: string;
 
   /**
    * @optional
@@ -148,29 +327,70 @@ export class PoTagBaseComponent {
    *  - `success`: cor verde utilizada para simbolizar sucesso ou êxito.
    *  - `warning`: cor amarela que representa aviso ou advertência.
    *  - `danger`: cor vermelha para erro ou aviso crítico.
-   *  - `info`: cor cinza escuro que caracteriza conteúdo informativo.
+   *  - `info`: cor azul claro que caracteriza conteúdo informativo.
+   *  - `neutral`: cor cinza claro para uso geral.
    *
    * > Quando esta propriedade for definida, irá sobrepor a definição de `p-color` e `p-icon` somente será exibido caso seja `true`.
    *
    * @default `info`
    */
   @Input('p-type') set type(value: PoTagType) {
-    this._type = (<any>Object).values(PoTagType).includes(value) ? value : undefined;
+    if (!this.removable) {
+      this._type = (<any>Object).values(PoTagType).includes(value) ? value : undefined;
+    }
   }
 
   get type(): PoTagType {
     return this._type;
   }
 
-  /** Texto da tag. */
-  @Input('p-value') value: string;
+  //propriedade interna para forçar icone mesmo com tipo definido
+  @Input({ alias: 'p-force-icon', transform: convertToBoolean }) forceIcon = false;
 
   /**
    * @optional
    *
    * @description
    *
-   * Ação que será executada ao clicar sobre o `po-tag` e que receberá como parâmetro um objeto contendo o seu valor e tipo.
+   * Objeto com as literais usadas no `po-tag`.
+   *
+   *
+   * Para utilizar, basta passar a literal customizada:
+   *
+   * ```
+   *  const customLiterals: PoTagLiterals = {
+   *    remove: 'Remover itens'
+   *  };
+   * ```
+   *
+   * E para carregar as literais customizadas, basta apenas passar o objeto para o componente:
+   *
+   * ```
+   * <po-tag
+   *   [p-literals]="customLiterals">
+   * </po-tag>
+   * ```
+   *
+   * > O objeto padrão de literais será traduzido de acordo com o idioma do
+   * [`PoI18nService`](/documentation/po-i18n) ou do browser.
    */
-  @Output('p-click') click: EventEmitter<any> = new EventEmitter<PoTagItem>();
+  @Input('p-literals') set literals(value: PoTagLiterals) {
+    if (value instanceof Object && !(value instanceof Array)) {
+      this._literals = {
+        ...PoTagLiteralsDefault[poLocaleDefault],
+        ...PoTagLiteralsDefault[this.language],
+        ...value
+      };
+    } else {
+      this._literals = PoTagLiteralsDefault[this.language];
+    }
+  }
+
+  get literals() {
+    return this._literals || PoTagLiteralsDefault[this.language];
+  }
+
+  constructor(languageService: PoLanguageService) {
+    this.language = languageService.getShortLanguage();
+  }
 }

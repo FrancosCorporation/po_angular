@@ -1,6 +1,30 @@
-import { Component, OnInit, ViewContainerRef } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  OnChanges,
+  OnInit,
+  SimpleChanges,
+  ViewChild,
+  computed,
+  inject
+} from '@angular/core';
 
+import { PoLanguageService, poLocaleDefault, PoThemeA11yEnum, PoThemeService } from '../../services';
+import { PoButtonComponent } from '../po-button';
+import { PoPopupComponent } from '../po-popup';
+import { PoKeyCodeEnum } from './../../enums/po-key-code.enum';
+import { poWidgetLiteralsDefault } from './literals/po-widget-language';
 import { PoWidgetBaseComponent } from './po-widget-base.component';
+import {
+  BORDER_WIDTH_SM,
+  SPACING_MD,
+  SPACING_SM,
+  SPACING_XS,
+  TARGET_SIZE_AA,
+  TARGET_SIZE_AAA
+} from '../../utils/design-tokens';
 
 /**
  * @docsExtends PoWidgetBaseComponent
@@ -15,11 +39,13 @@ import { PoWidgetBaseComponent } from './po-widget-base.component';
  * <example name="po-widget-labs" title="PO Widget Labs">
  *  <file name="sample-po-widget-labs/sample-po-widget-labs.component.html"> </file>
  *  <file name="sample-po-widget-labs/sample-po-widget-labs.component.ts"> </file>
+ *  <file name="sample-po-widget-labs/sample-po-widget-labs.component.css"> </file>
  * </example>
  *
  * <example name="po-widget-finance-dashboard" title="PO Widget - Finance dashboard">
  *  <file name="sample-po-widget-finance-dashboard/sample-po-widget-finance-dashboard.component.html"> </file>
  *  <file name="sample-po-widget-finance-dashboard/sample-po-widget-finance-dashboard.component.ts"> </file>
+ *  <file name="sample-po-widget-finance-dashboard/sample-po-widget-finance-dashboard.component.css"> </file>
  * </example>
  *
  * <example name="po-widget-card" title="PO Widget - Card">
@@ -30,48 +56,131 @@ import { PoWidgetBaseComponent } from './po-widget-base.component';
  */
 @Component({
   selector: 'po-widget',
-  templateUrl: './po-widget.component.html'
+  templateUrl: './po-widget.component.html',
+  standalone: false
 })
-export class PoWidgetComponent extends PoWidgetBaseComponent implements OnInit {
+export class PoWidgetComponent extends PoWidgetBaseComponent implements OnInit, OnChanges, AfterViewInit {
+  protected cd = inject(ChangeDetectorRef);
+  protected poTheme = inject(PoThemeService);
+
+  popupTarget: any;
+  literals;
+  hasContent = false;
+  @ViewChild('popup', { static: true }) poPopupComponent: PoPopupComponent;
+  @ViewChild('buttonPopUp') buttonPopUp: PoButtonComponent;
+
+  @ViewChild('wrapperInfo') wrapperInfo!: ElementRef;
+  @ViewChild('wrapperTitle') wrapperTitle!: ElementRef;
+  @ViewChild('tagElement', { read: ElementRef }) tagElement!: ElementRef;
+
+  @ViewChild('contentContainer', { read: ElementRef }) contentContainer!: ElementRef<HTMLElement>;
+
   get showTitleAction(): boolean {
     return !!this.titleAction.observers[0];
   }
 
-  constructor(viewRef: ViewContainerRef) {
+  //#region Avatar
+
+  avatarSrc = computed(() => this.avatar()?.src);
+  avatarSize = computed(() => this.avatar()?.size);
+  avatarCustomTemplate = computed(() => this.avatar()?.customTemplate);
+  avatarWidthCustomTemplate = computed(() =>
+    this.avatar()?.widthCustomTemplate && this.avatar()?.customTemplate
+      ? `${this.avatar().widthCustomTemplate}`
+      : undefined
+  );
+
+  //#endregion
+
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     super();
+    const language = languageService.getShortLanguage();
+    this.literals = {
+      ...poWidgetLiteralsDefault[poLocaleDefault],
+      ...poWidgetLiteralsDefault[language]
+    };
+  }
+
+  ngAfterViewInit(): void {
+    this.updateContent();
+  }
+
+  get a11Level() {
+    return this.poTheme.getA11yLevel();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['help'] || changes['actions']) {
+      this.checkDefaultActions();
+    }
+    if (changes['title'] || changes['tagLabel']) {
+      this.cd.detectChanges();
+    }
+    this.updateContent();
+    this.setHeight(this.height);
   }
 
   ngOnInit() {
     this.setHeight(this.height);
+    this.checkDefaultActions();
+    this.showTooltip();
+    this.cd.detectChanges();
   }
 
   hasTitleHelpOrSetting(): boolean {
-    return !!this.title || !!this.help || !!this.setting.observers[0];
+    return (
+      !!this.title ||
+      !!this.help ||
+      !!this.setting.observers[0] ||
+      !!this.tagLabel ||
+      !!this?.actions.length ||
+      !!this.subtitle()
+    );
   }
 
   onClick(event: MouseEvent) {
-    if (!this.disabled) {
+    if (this.click.observed && !this.disabled) {
       this.click.emit(event);
     }
   }
 
-  openHelp(event: MouseEvent) {
+  onKeyDown(event: KeyboardEvent) {
+    if (
+      this.click.observed &&
+      !this.disabled &&
+      (event.which === PoKeyCodeEnum.space || event.keyCode === PoKeyCodeEnum.space)
+    ) {
+      this.click.emit(event);
+
+      event.preventDefault();
+    }
+  }
+
+  /**
+   * @docsPrivate
+   *
+   * Uso interno (po-list-view): propaga a mudança da coluna de seleção.
+   */
+  protected onSelectionChange(selected: boolean): void {
+    this.selection()?.change?.(selected);
+  }
+
+  openHelp() {
     if (!this.disabled) {
-      event.stopPropagation();
       window.open(this.help, '_blank');
     }
   }
 
-  runPrimaryAction(event: MouseEvent) {
+  runPrimaryAction() {
     if (!this.disabled) {
-      event.stopPropagation();
       this.primaryAction.emit();
     }
   }
 
-  runSecondaryAction(event: MouseEvent) {
+  runSecondaryAction() {
     if (!this.disabled) {
-      event.stopPropagation();
       this.secondaryAction.emit();
     }
   }
@@ -84,41 +193,120 @@ export class PoWidgetComponent extends PoWidgetBaseComponent implements OnInit {
   }
 
   setHeight(height: number) {
-    if (height) {
-      let bodyHeight = height;
-      const hasSettingOrHelp = this.setting.observers.length > 0 || this.help;
-      const footerBorder = 1;
-      const footerHeight = 40;
-      const settingHeight = 37;
-      const shadowHeight = 2;
-      const titleHeight = 50;
+    this.checkDefaultActions();
 
-      if (this.noShadow) {
-        bodyHeight -= shadowHeight;
-      }
-
-      if (hasSettingOrHelp && !this.title) {
-        bodyHeight -= settingHeight;
-      }
-
-      if (this.title) {
-        bodyHeight -= titleHeight;
-      }
-
-      if (this.primaryLabel) {
-        bodyHeight -= footerHeight + footerBorder;
-      }
-
-      this.containerHeight = `${bodyHeight}px`;
-    } else {
+    if (!height) {
       this.containerHeight = `auto`;
+      return;
+    }
+
+    const buttonSmall = TARGET_SIZE_AA + SPACING_SM + SPACING_XS; // 56
+    const buttonMedium = TARGET_SIZE_AAA + SPACING_SM + SPACING_XS; // 68
+    const tagPosition = this.tagPosition();
+
+    const actionsHeight = this.a11Level === PoThemeA11yEnum.AA && this.size === 'small' ? buttonSmall : buttonMedium;
+    const actionsButton = this.a11Level === PoThemeA11yEnum.AA && this.size === 'small' ? buttonSmall : buttonMedium;
+
+    const tagInRight = this.tagLabel && tagPosition === 'right';
+    let bodyHeight = height - BORDER_WIDTH_SM * 2;
+
+    if ((this.title || tagInRight) && !this.actions.length) {
+      bodyHeight -= SPACING_MD + SPACING_SM + SPACING_XS; // 48
+    }
+
+    if (this.actions.length) {
+      bodyHeight -= actionsHeight;
+    }
+
+    if (this.primaryLabel || this.secondaryLabel) {
+      bodyHeight -= actionsButton;
+    }
+
+    if (this.tagLabel && (tagPosition === 'top' || tagPosition === 'bottom')) {
+      bodyHeight -= SPACING_MD + SPACING_XS; // 32
+    }
+
+    this.containerHeight = `${bodyHeight}px`;
+  }
+
+  settingOutput() {
+    if (!this.disabled) {
+      this.setting.emit();
     }
   }
 
-  settingOutput(event: MouseEvent) {
-    if (!this.disabled) {
-      event.stopPropagation();
-      this.setting.emit();
+  togglePopup(targetRef, event) {
+    event.stopPropagation();
+    this.popupTarget = targetRef;
+    this.cd.detectChanges();
+    this.poPopupComponent.toggle();
+  }
+
+  showTooltip() {
+    const sumGap = this.tagLabel ? 12 : 6;
+    return (
+      this.title &&
+      this.wrapperTitle?.nativeElement.offsetWidth + sumGap + (this.tagElement?.nativeElement.offsetWidth || 0) >=
+        this.wrapperInfo?.nativeElement.offsetWidth
+    );
+  }
+
+  closePopUp() {
+    this.buttonPopUp?.focus();
+  }
+
+  private checkDefaultActions() {
+    if (this.setting.observed && !this.actions.some(action => action.$id === 'widget_configuration')) {
+      this.actions = [
+        ...this.actions,
+        {
+          icon: 'ICON_SETTINGS',
+          label: this.literals.configuration,
+          type: 'default',
+          action: this.settingOutput.bind(this),
+          $id: 'widget_configuration'
+        }
+      ];
     }
+
+    if (this.help && !this.actions.some(action => action.$id === 'widget_help')) {
+      this.actions = [
+        ...this.actions,
+        {
+          icon: 'ICON_HELP',
+          label: this.literals.help,
+          type: 'default',
+          action: this.openHelp.bind(this),
+          $id: 'widget_help'
+        }
+      ];
+    }
+
+    if (!this.help) {
+      this.actions = this.actions.filter(action => action.$id !== 'widget_help');
+    }
+  }
+
+  private updateContent() {
+    const el = this.contentContainer?.nativeElement;
+
+    if (!el) {
+      return;
+    }
+
+    const existContent = Array.from(el.childNodes).some(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return (node.textContent || '').trim().length > 0;
+      }
+
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        return true;
+      }
+
+      return false;
+    });
+
+    this.hasContent = existContent;
+    this.cd.detectChanges();
   }
 }

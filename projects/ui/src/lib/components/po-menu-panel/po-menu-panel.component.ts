@@ -1,14 +1,14 @@
-import { Component, OnDestroy, OnInit, ViewContainerRef } from '@angular/core';
 import { Location } from '@angular/common';
+import { Component, OnDestroy, OnInit, ViewContainerRef, inject } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 
 import { Subscription } from 'rxjs';
 
-import { callFunction, getFormattedLink, openExternalLink } from '../../utils/util';
+import { getFormattedLink, openExternalLink } from '../../utils/util';
 
 import { PoMenuPanelBaseComponent } from './po-menu-panel-base.component';
-import { PoMenuPanelItem } from './po-menu-panel-item/po-menu-panel-item.interface';
 import { PoMenuPanelItemInternal } from './po-menu-panel-item/po-menu-panel-item-internal.interface';
+import { PoMenuPanelItem } from './po-menu-panel-item/po-menu-panel-item.interface';
 import { PoMenuPanelItemsService } from './services/po-menu-panel-items.service';
 
 /**
@@ -19,7 +19,7 @@ import { PoMenuPanelItemsService } from './services/po-menu-panel-items.service'
  * Para o menu funcionar corretamente é necessário importar o `RouterModule` e `Routes` do módulo principal de
  *  sua aplicação:
  *
- * ````
+ * ```
  * import { RouterModule, Routes } from '@angular/router';
  *
  * ...
@@ -81,23 +81,19 @@ import { PoMenuPanelItemsService } from './services/po-menu-panel-items.service'
 
 @Component({
   selector: 'po-menu-panel',
-  templateUrl: './po-menu-panel.component.html'
+  templateUrl: './po-menu-panel.component.html',
+  standalone: false
 })
 export class PoMenuPanelComponent extends PoMenuPanelBaseComponent implements OnDestroy, OnInit {
+  private readonly location = inject(Location);
+  private readonly menuItemsService = inject(PoMenuPanelItemsService);
+  private readonly router = inject(Router);
+
   activeMenuItem: PoMenuPanelItem;
   linkActive: string;
 
   private routeSubscription: Subscription;
   private itemSubscription: Subscription;
-
-  constructor(
-    viewRef: ViewContainerRef,
-    private location: Location,
-    private menuItemsService: PoMenuPanelItemsService,
-    private router: Router
-  ) {
-    super();
-  }
 
   ngOnDestroy() {
     this.itemSubscription.unsubscribe();

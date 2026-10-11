@@ -3,7 +3,7 @@
   </po-info>
 </div>
 
-<hr />
+<po-divider />
 
 <form #f="ngForm">
   <div class="po-row">
@@ -19,6 +19,7 @@
       [p-columns]="columns"
       [p-field-format]="fieldFormat"
       [p-filter-service]="service"
+      [p-hide-columns-manager]="true"
       [p-advanced-filters]="advancedFilters"
       [p-literals]="{ 'modalTitle': 'Heroes available for mission' }"
     >

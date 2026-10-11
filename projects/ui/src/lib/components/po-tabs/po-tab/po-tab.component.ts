@@ -1,21 +1,36 @@
-import { AfterContentInit, Component, ElementRef } from '@angular/core';
+import { AfterContentInit, Component, ElementRef, OnChanges, SimpleChanges, inject } from '@angular/core';
 
 import { PoTabBaseComponent } from './po-tab-base.component';
+import { PoTabsService } from '../po-tabs.service';
 
 /**
  * @docsExtends PoTabBaseComponent
  */
 @Component({
   selector: 'po-tab',
-  templateUrl: './po-tab.component.html'
+  templateUrl: './po-tab.component.html',
+  standalone: false
 })
-export class PoTabComponent extends PoTabBaseComponent implements AfterContentInit {
-  constructor(private elementRef: ElementRef) {
-    super();
-  }
+export class PoTabComponent extends PoTabBaseComponent implements AfterContentInit, OnChanges {
+  elementRef = inject(ElementRef);
+  private readonly tabsService = inject(PoTabsService);
+
+  // Propriedade interna utilizada no po-context-tabs
+  removed = false;
+  // Propriedade interna utilizada no po-context-tabs
+  showTooltip = false;
 
   ngAfterContentInit() {
     this.setDisplayOnActive();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    setTimeout(() => {
+      this.tabsService.triggerOnChanges(this);
+      if (changes?.active?.currentValue) {
+        this.tabsService.triggerActiveOnChanges(this);
+      }
+    }, 100);
   }
 
   protected setDisplayOnActive() {

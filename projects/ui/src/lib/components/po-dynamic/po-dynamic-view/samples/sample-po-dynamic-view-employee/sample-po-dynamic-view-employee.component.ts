@@ -4,7 +4,8 @@ import { PoDynamicViewField } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-dynamic-view-employee',
-  templateUrl: './sample-po-dynamic-view-employee.component.html'
+  templateUrl: './sample-po-dynamic-view-employee.component.html',
+  standalone: false
 })
 export class SamplePoDynamicViewEmployeeComponent {
   fields: Array<PoDynamicViewField> = [
@@ -15,15 +16,36 @@ export class SamplePoDynamicViewEmployeeComponent {
     { property: 'rg', label: 'RG', gridColumns: 4, order: 3 },
     { property: 'graduation', label: 'Graduation', gridColumns: 4 },
     { property: 'company', label: 'Company', divider: 'Work Data' },
-    { property: 'job', tag: true, inverse: true, color: 'color-03', icon: 'po-icon-copy' },
+    { property: 'job', tag: true, icon: 'an an-copy' },
     { property: 'admissionDate', label: 'Admission date', type: 'date' },
     { property: 'hoursPerDay', label: 'Hours per day', type: 'time' },
     { property: 'wage', label: 'Wage', type: 'currency' },
-    { property: 'availability', tag: true, color: 'color-11', icon: 'po-icon-ok' },
+    { property: 'availability', tag: true, color: '#C596E7', icon: 'an an-check' },
     { property: 'city', label: 'City', divider: 'Address' },
     { property: 'addressStreet', label: 'Street' },
     { property: 'addressNumber', label: 'Number' },
-    { property: 'zipCode', label: 'Zip Code' }
+    { property: 'zipCode', label: 'Zip Code' },
+    {
+      property: 'marriedStatus',
+      options: [{ label: 'MARRIED', value: '1' }],
+      label: 'Marital status',
+      divider: 'ADDITIONAL DATA',
+      tag: true,
+      color: '#C596E7'
+    },
+    {
+      property: 'children',
+      options: [
+        { label: 'yes ', value: '1' },
+        { label: 'no', value: '2' }
+      ]
+    },
+    {
+      property: 'hobbies',
+      label: 'Hobbies',
+      gridColumns: 12,
+      divider: 'Additional Information'
+    }
   ];
 
   employee = {
@@ -44,6 +66,13 @@ export class SamplePoDynamicViewEmployeeComponent {
     wage: 8000.5,
     availability: 'Available',
     admissionDate: '2014-10-14T13:45:00-00:00',
-    hoursPerDay: '08:30:00'
+    hoursPerDay: '08:30:00',
+    marriedStatus: '1',
+    children: '1',
+    hobbies:
+      'Leitura de livros técnicos e ficção científica.\n' +
+      'Prática de corrida ao ar livre.\n' +
+      'Jogos de tabuleiro e videogames.\n' +
+      'Culinária, especialmente cozinha italiana.'
   };
 }

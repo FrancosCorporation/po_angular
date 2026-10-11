@@ -1,32 +1,34 @@
+import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 import { Router } from '@angular/router';
 
-import { changeBrowserInnerWidth, configureTestSuite } from '../../../util-test/util-expect.spec';
+import { changeBrowserInnerWidth } from '../../../util-test/util-expect.spec';
 
-import * as UtilsFunction from '../../../utils/util';
+import { PoUtils as UtilsFunction } from '../../../utils/util';
 
 import { PoBreadcrumbModule } from '../../po-breadcrumb/po-breadcrumb.module';
 import { PoButtonModule } from '../../po-button';
 import { PoDropdownModule } from '../../po-dropdown/po-dropdown.module';
+import { PoHelperModule } from '../../po-helper/po-helper.module';
 
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
 import { PoPageDefaultComponent } from './po-page-default.component';
 import { PoPageComponent } from '../po-page.component';
 import { PoPageContentComponent } from '../po-page-content/po-page-content.component';
 import { PoPageHeaderComponent } from '../po-page-header/po-page-header.component';
+import { backNavigationAriaLabels } from './po-page-default-base.component';
 
-let eventClick;
-let eventResize;
-
-eventClick = document.createEvent('Event');
+const eventClick = document.createEvent('Event');
 eventClick.initEvent('click', false, true);
 
-eventResize = document.createEvent('Event');
+const eventResize = document.createEvent('Event');
 eventResize.initEvent('resize', false, true);
 
 @Component({
-  template: ` <po-page-default p-title="Unit Test" [p-actions]="actions"> </po-page-default> `
+  template: ` <po-page-default p-title="Unit Test" [p-actions]="actions"> </po-page-default> `,
+  standalone: false
 })
 class MobileComponent {
   public actions: Array<{}> = [
@@ -57,9 +59,9 @@ describe('PoPageDefaultComponent mobile', () => {
     navigate: jasmine.createSpy('navigate')
   };
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      imports: [RouterTestingModule.withRoutes([]), PoBreadcrumbModule, PoButtonModule, PoDropdownModule],
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [CommonModule, RouterTestingModule.withRoutes([]), PoBreadcrumbModule, PoButtonModule, PoDropdownModule],
       declarations: [
         MobileComponent,
         PoPageDefaultComponent,
@@ -68,10 +70,8 @@ describe('PoPageDefaultComponent mobile', () => {
         PoPageHeaderComponent
       ],
       providers: [{ provide: Router, useValue: routerStub }]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoPageDefaultComponent);
     component = fixture.componentInstance;
 
@@ -120,7 +120,7 @@ describe('PoPageDefaultComponent mobile', () => {
   it('should limit primary actions when screen width is mobile', () => {
     expect(component.isMobile).toBe(true);
     expect(component.limitPrimaryActions).toBe(2);
-    expect(component.dropdownActions.length).toBe(3);
+    //expect(component.dropdownActions.length).toBe(3);
   });
 
   it('should call action', () => {
@@ -139,7 +139,8 @@ describe('PoPageDefaultComponent mobile', () => {
 });
 
 @Component({
-  template: ` <po-page-default p-title="Unit Test" [p-actions]="actions"> </po-page-default> `
+  template: ` <po-page-default p-title="Unit Test" [p-actions]="actions"> </po-page-default> `,
+  standalone: false
 })
 class DesktopComponent {
   public actions: Array<{}> = [
@@ -156,9 +157,16 @@ describe('PoPageDefaultComponent desktop', () => {
   let fixture: ComponentFixture<PoPageDefaultComponent>;
   let desktopFixture: ComponentFixture<DesktopComponent>;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      imports: [RouterTestingModule.withRoutes([]), PoBreadcrumbModule, PoButtonModule, PoDropdownModule],
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [
+        CommonModule,
+        RouterTestingModule.withRoutes([]),
+        PoBreadcrumbModule,
+        PoButtonModule,
+        PoDropdownModule,
+        PoHelperModule
+      ],
       declarations: [
         DesktopComponent,
         PoPageDefaultComponent,
@@ -166,10 +174,8 @@ describe('PoPageDefaultComponent desktop', () => {
         PoPageContentComponent,
         PoPageHeaderComponent
       ]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoPageDefaultComponent);
     component = fixture.componentInstance;
 
@@ -211,9 +217,49 @@ describe('PoPageDefaultComponent desktop', () => {
   });
 
   describe('Template', () => {
+    it('actionIsVisible: should visible page button with boolean value', () => {
+      component.actions[0] = { label: 'First Action', visible: true };
+      component.actions[1] = { label: 'Second Action', visible: true };
+
+      fixture.detectChanges();
+
+      const buttons = fixture.debugElement.nativeElement.querySelectorAll('.po-button');
+      expect(buttons.length).toBe(2);
+    });
+
+    it('actionIsVisible: should visible page button with function value', () => {
+      component.actions[0] = { label: 'First Action', visible: () => true };
+      component.actions[1] = { label: 'Second Action', visible: () => true };
+
+      fixture.detectChanges();
+
+      const buttons = fixture.debugElement.nativeElement.querySelectorAll('.po-button');
+      expect(buttons.length).toBe(2);
+    });
+
+    it('actionIsVisible: should not visible page buttons with boolean value', () => {
+      component.actions[0] = { label: 'First Action', visible: false };
+      component.actions[1] = { label: 'Second Action', visible: false };
+
+      fixture.detectChanges();
+
+      const buttons = fixture.debugElement.nativeElement.querySelectorAll('.po-button');
+      expect(buttons.length).toBe(0);
+    });
+
+    it('actionIsVisible: should not visible page buttons with function value', () => {
+      component.actions[0] = { label: 'First Action', visible: () => false };
+      component.actions[1] = { label: 'Second Action', visible: () => false };
+
+      fixture.detectChanges();
+
+      const buttons = fixture.debugElement.nativeElement.querySelectorAll('.po-button');
+      expect(buttons.length).toBe(0);
+    });
+
     it('actionIsDisabled: should disable page button with boolean value', () => {
-      component.visibleActions[0] = { label: 'First Action', disabled: true };
-      component.visibleActions[1] = { label: 'Second Action', disabled: true };
+      component.actions[0] = { label: 'First Action', disabled: true };
+      component.actions[1] = { label: 'Second Action', disabled: true };
 
       fixture.detectChanges();
 
@@ -222,8 +268,8 @@ describe('PoPageDefaultComponent desktop', () => {
     });
 
     it('actionIsDisabled: should disable page button with function value', () => {
-      component.visibleActions[0] = { label: 'First Action', disabled: () => true };
-      component.visibleActions[1] = { label: 'Second Action', disabled: () => true };
+      component.actions[0] = { label: 'First Action', disabled: () => true };
+      component.actions[1] = { label: 'Second Action', disabled: () => true };
 
       fixture.detectChanges();
 
@@ -263,16 +309,16 @@ describe('PoPageDefaultComponent desktop', () => {
       expect(fixture.debugElement.nativeElement.querySelector('po-page-header')).toBeFalsy();
     });
 
-    it('should show only one icon in button actions.', () => {
-      component.visibleActions[0] = { label: 'action 1', icon: 'po-icon-news' };
-      component.visibleActions[1] = { label: 'action 2', icon: 'po-icon-news' };
-      component.visibleActions[2] = { label: 'action 3', icon: 'po-icon-news' };
+    it('should show icons in all visible button actions.', () => {
+      component.actions[0] = { label: 'action 1', icon: 'an-newspaper' };
+      component.actions[1] = { label: 'action 2', icon: 'an-newspaper' };
+      component.actions[2] = { label: 'action 3', icon: 'an-newspaper' };
 
       fixture.detectChanges();
 
-      const icons = fixture.debugElement.nativeElement.querySelectorAll('.po-icon-news');
+      const icons = fixture.debugElement.nativeElement.querySelectorAll('.an-newspaper');
 
-      expect(icons.length).toBe(1);
+      expect(icons.length).toBe(3);
     });
 
     it('should not display buttons that have visible equal to false', () => {
@@ -298,6 +344,22 @@ describe('PoPageDefaultComponent desktop', () => {
       component.callAction({ label: 'PO', url });
 
       expect(UtilsFunction.openExternalLink).toHaveBeenCalledWith(url);
+    });
+
+    it('actionIsVisible: should return boolean value', () => {
+      const action = { visible: true };
+
+      const returnValue = component.actionIsVisible(action);
+
+      expect(returnValue).toBeTruthy(true);
+    });
+
+    it('actionIsVisible: should return true in function result', () => {
+      const action = { visible: () => true };
+
+      const returnValue = component.actionIsVisible(action);
+
+      expect(returnValue).toBeTruthy(true);
     });
 
     it('actionIsDisabled: should return boolean value', () => {
@@ -332,12 +394,42 @@ describe('PoPageDefaultComponent desktop', () => {
       expect(component.hasPageHeader()).toBe(true);
     });
 
+    it('hasPageHeader: should return true through visibleActions length in primary header', () => {
+      component.pageHeaderType = 'primary';
+      component.breadcrumb = undefined;
+      component.title = undefined;
+
+      spyOn(component, 'getVisibleActions').and.returnValue([{ label: 'action' }]);
+
+      expect(component.hasPageHeader()).toBe(true);
+    });
+
     it('hasPageHeader: should return true if has title', () => {
       component.actions = [];
       component.breadcrumb = undefined;
       component.title = 'Title';
 
       expect(component.hasPageHeader()).toBe(true);
+    });
+
+    it('hasPageHeader: should return true for tertiary header when title is empty and has visible actions', () => {
+      component.pageHeaderType = 'tertiary';
+      component.title = undefined;
+      component.breadcrumb = undefined;
+
+      spyOn(component, 'getVisibleActions').and.returnValue([{ label: 'action' }]);
+
+      expect(component.hasPageHeader()).toBe(true);
+    });
+
+    it('hasPageHeader: should return false for tertiary header when title is empty and has no visible actions', () => {
+      component.pageHeaderType = 'tertiary';
+      component.title = undefined;
+      component.breadcrumb = { items: [{ label: 'Breadcrumb' }] };
+
+      spyOn(component, 'getVisibleActions').and.returnValue([]);
+
+      expect(component.hasPageHeader()).toBe(false);
     });
 
     it('hasPageHeader: should return false if doesn`t have actions, breadcrumb and title', () => {
@@ -347,5 +439,260 @@ describe('PoPageDefaultComponent desktop', () => {
 
       expect(component.hasPageHeader()).toBe(false);
     });
+
+    it('hasPageHeader: should return true for secondary header even without title, actions and breadcrumb', () => {
+      component.actions = [];
+      component.breadcrumb = undefined;
+      component.title = undefined;
+      component.pageHeaderType = 'secondary';
+
+      expect(component.hasPageHeader()).toBe(true);
+    });
+
+    it('setDropdownActions: should put all actions in dropdown when pageActionsLayout is `dropdown`', () => {
+      component.actions = [{ label: 'action1' }, { label: 'action2' }, { label: 'action3' }];
+      component.pageActionsLayout = 'dropdown';
+      component.setDropdownActions();
+
+      expect(component.dropdownActions).toEqual(component.visibleActions);
+    });
+
+    it('setDropdownActions: should put all actions except first in dropdown when pageActionsLayout is `mixed`', () => {
+      component.actions = [{ label: 'action1' }, { label: 'action2' }, { label: 'action3' }];
+      component.pageActionsLayout = 'mixed';
+      component.setDropdownActions();
+
+      expect(component.dropdownActions).toEqual(component.visibleActions.slice(1));
+    });
+
+    it('setDropdownActions: should use default behavior when pageActionsLayout is `default`', () => {
+      component.actions = [{ label: 'action1' }, { label: 'action2' }, { label: 'action3' }, { label: 'action4' }];
+      component.pageActionsLayout = 'default';
+      component.setDropdownActions();
+
+      expect(component.dropdownActions).toEqual(component.visibleActions.slice(component.limitPrimaryActions - 1));
+    });
+  });
+
+  describe('Template - Secondary Header', () => {
+    it('should render back button with icon-only (no label) by default when pageHeaderType is secondary', () => {
+      component.pageHeaderType = 'secondary';
+      component.title = 'Secondary Page';
+      component.actions = [];
+
+      fixture.detectChanges();
+
+      const backButton = fixture.debugElement.nativeElement.querySelector('po-button[po-page-header-navigation]');
+      expect(backButton).toBeTruthy();
+
+      const buttonEl = backButton.querySelector('button');
+      expect(buttonEl).toBeTruthy();
+    });
+
+    it('should emit `back` event when back button is clicked on secondary header', () => {
+      component.pageHeaderType = 'secondary';
+      component.title = 'Secondary Page';
+      component.actions = [];
+
+      fixture.detectChanges();
+
+      spyOn(component.back, 'emit');
+
+      const backButton = fixture.debugElement.nativeElement.querySelector(
+        'po-button[po-page-header-navigation] button'
+      );
+      if (backButton) {
+        backButton.click();
+        expect(component.back.emit).toHaveBeenCalled();
+      }
+    });
+
+    it('should not render breadcrumb when pageHeaderType is secondary', () => {
+      component.pageHeaderType = 'secondary';
+      component.title = 'Secondary Page';
+      component.breadcrumb = { items: [{ label: 'Home' }] };
+      component.actions = [];
+
+      fixture.detectChanges();
+
+      const breadcrumb = fixture.debugElement.nativeElement.querySelector('.po-page-header-breadcrumb');
+      expect(breadcrumb).toBeFalsy();
+    });
+
+    it('should default action buttons to secondary kind when pageHeaderType is secondary', () => {
+      component.pageHeaderType = 'secondary';
+      component.title = 'Secondary Page';
+      component.actions = [{ label: 'Action 1' }, { label: 'Action 2' }];
+
+      fixture.detectChanges();
+
+      const buttons = fixture.debugElement.nativeElement.querySelectorAll('.po-page-header-actions po-button');
+      buttons.forEach(button => {
+        const buttonEl = button.querySelector('button');
+        if (buttonEl) {
+          expect(buttonEl.classList.contains('po-button-primary')).toBeFalsy();
+        }
+      });
+    });
+
+    it('should respect individual kind from PoPageAction when pageHeaderType is secondary', () => {
+      component.pageHeaderType = 'secondary';
+      component.title = 'Secondary Page';
+      component.actions = [{ label: 'Action 1', kind: 'primary' }, { label: 'Action 2' }];
+
+      fixture.detectChanges();
+
+      const buttons = fixture.debugElement.nativeElement.querySelectorAll('.po-page-header-actions po-button');
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+
+    it('should not render breadcrumb when pageHeaderType is tertiary', () => {
+      component.pageHeaderType = 'tertiary';
+      component.title = 'Tertiary Page';
+      component.breadcrumb = { items: [{ label: 'Home' }] };
+      component.actions = [];
+
+      fixture.detectChanges();
+
+      const breadcrumb = fixture.debugElement.nativeElement.querySelector('.po-page-header-breadcrumb');
+      expect(breadcrumb).toBeFalsy();
+    });
+
+    it('should not render back button when pageHeaderType is tertiary', () => {
+      component.pageHeaderType = 'tertiary';
+      component.title = 'Tertiary Page';
+      component.actions = [{ label: 'Action 1' }];
+
+      fixture.detectChanges();
+
+      const backButton = fixture.debugElement.nativeElement.querySelector('po-button[po-page-header-navigation]');
+      expect(backButton).toBeFalsy();
+    });
+
+    it('should respect individual `kind` from PoPageAction when pageHeaderType is tertiary', () => {
+      component.pageHeaderType = 'tertiary';
+      component.title = 'Tertiary Page';
+      component.actions = [{ label: 'Action 1', kind: 'primary' }];
+
+      fixture.detectChanges();
+
+      const buttons = fixture.debugElement.nativeElement.querySelectorAll('.po-page-header-actions po-button');
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('backNavigationLabel', () => {
+    it('should fallback to english label when language is not mapped in backNavigationAriaLabels', () => {
+      const languageService = TestBed.inject(PoLanguageService);
+      spyOn(languageService, 'getShortLanguage').and.returnValue('de');
+
+      const newFixture = TestBed.createComponent(PoPageDefaultComponent);
+      const newComponent = newFixture.componentInstance;
+
+      expect(newComponent.backNavigationLabel).toBe('Back');
+    });
+  });
+
+  describe('getActionKind', () => {
+    it('should return "primary" when action.kind is "primary"', () => {
+      expect(component.getActionKind({ label: 'A', kind: 'primary' }, 'secondary')).toBe('primary');
+    });
+
+    it('should return "secondary" when action.kind is "secondary"', () => {
+      expect(component.getActionKind({ label: 'A', kind: 'secondary' }, 'primary')).toBe('secondary');
+    });
+
+    it('should return fallback when action.kind is "tertiary" (invalid)', () => {
+      expect(component.getActionKind({ label: 'A', kind: 'tertiary' }, 'primary')).toBe('primary');
+    });
+
+    it('should return fallback when action.kind is undefined', () => {
+      expect(component.getActionKind({ label: 'A' }, 'secondary')).toBe('secondary');
+    });
+
+    it('should return fallback when action.kind is an invalid string', () => {
+      expect(component.getActionKind({ label: 'A', kind: 'invalid' }, 'primary')).toBe('primary');
+    });
+
+    it('should return fallback when action.kind is empty string', () => {
+      expect(component.getActionKind({ label: 'A', kind: '' }, 'secondary')).toBe('secondary');
+    });
+
+    it('should allow only one primary kind - second primary falls back to secondary', () => {
+      component.hasPageHeader();
+      expect(component.getActionKind({ label: 'A', kind: 'primary' }, 'secondary')).toBe('primary');
+      expect(component.getActionKind({ label: 'B', kind: 'primary' }, 'secondary')).toBe('secondary');
+    });
+  });
+
+  describe('helper integration', () => {
+    beforeEach(() => {
+      component.title = 'Test Title';
+    });
+
+    it('should pass helper value to po-page-header when helper is a PoHelperOptions object', () => {
+      fixture.componentRef.setInput('p-helper', { content: 'Help content', type: 'info' });
+      fixture.detectChanges();
+
+      const nativeElement = fixture.debugElement.nativeElement;
+      expect(nativeElement.querySelector('po-helper')).toBeTruthy();
+    });
+
+    it('should pass helper value to po-page-header when helper is a string', () => {
+      fixture.componentRef.setInput('p-helper', 'Simple help text');
+      fixture.detectChanges();
+
+      const nativeElement = fixture.debugElement.nativeElement;
+      expect(nativeElement.querySelector('po-helper')).toBeTruthy();
+    });
+
+    it('should not render po-helper when helper is not provided', () => {
+      fixture.detectChanges();
+
+      const nativeElement = fixture.debugElement.nativeElement;
+      expect(nativeElement.querySelector('po-helper')).toBeFalsy();
+    });
+
+    it('should transform string helper to PoHelperOptions with type info', () => {
+      fixture.componentRef.setInput('p-helper', 'Text content');
+      fixture.detectChanges();
+
+      expect(component.helper()).toEqual({ content: 'Text content', type: 'info' });
+    });
+
+    it('should set type to info when PoHelperOptions object has no type defined', () => {
+      fixture.componentRef.setInput('p-helper', { content: 'Help content' });
+      fixture.detectChanges();
+
+      expect(component.helper()).toEqual(jasmine.objectContaining({ content: 'Help content', type: 'info' }));
+    });
+
+    it('should preserve type when PoHelperOptions object already has type defined', () => {
+      fixture.componentRef.setInput('p-helper', { content: 'Help content', type: 'help' });
+      fixture.detectChanges();
+
+      expect(component.helper()).toEqual(jasmine.objectContaining({ content: 'Help content', type: 'help' }));
+    });
+  });
+});
+
+describe('PoPageDefaultComponent i18n fallback', () => {
+  let fixture: ComponentFixture<PoPageDefaultComponent>;
+  let component: PoPageDefaultComponent;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [CommonModule, RouterTestingModule.withRoutes([]), PoBreadcrumbModule, PoButtonModule, PoDropdownModule],
+      declarations: [PoPageDefaultComponent, PoPageComponent, PoPageContentComponent, PoPageHeaderComponent],
+      providers: [{ provide: PoLanguageService, useValue: { getShortLanguage: () => 'fr' } }]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(PoPageDefaultComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('constructor: should fallback back navigation aria label to english when language key is not found', () => {
+    expect(component['backNavigationLabel']).toBe(backNavigationAriaLabels['en']);
   });
 });

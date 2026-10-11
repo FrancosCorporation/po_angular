@@ -1,5 +1,6 @@
-import { Input, Directive } from '@angular/core';
+import { Directive, HostBinding, HostListener, Input } from '@angular/core';
 
+import { getDefaultSizeFn, validateSizeFn } from '../../utils/util';
 import { PoPageBlockedUserReason } from './enums/po-page-blocked-user-reason.enum';
 import { PoPageBlockedUserReasonParams } from './interfaces/po-page-blocked-user-reason-params.interface';
 
@@ -68,10 +69,6 @@ const PoPageBlockedUserParamsDefault: PoPageBlockedUserReasonParams = { attempts
  */
 @Directive()
 export class PoPageBlockedUserBaseComponent {
-  private _params: PoPageBlockedUserReasonParams = { ...PoPageBlockedUserParamsDefault };
-  private _reason: PoPageBlockedUserReason = PoPageBlockedUserReason.None;
-  private _urlBack: string = '/';
-
   /**
    * @optional
    *
@@ -92,6 +89,54 @@ export class PoPageBlockedUserBaseComponent {
    * > A propriedade não contem tratamento de máscara, fica a critério do desenvolvedor defini-la.
    */
   @Input('p-contact-phone') contactPhone: string;
+
+  /** Caminho para a logomarca localizada na parte superior, caso não seja definida ou seja inválida assume a logo padrão do PO UI. */
+  @Input('p-logo') logo?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Caminho para a logomarca localizada no rodapé.
+   */
+  @Input('p-secondary-logo') secondaryLogo?: string;
+
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _params: PoPageBlockedUserReasonParams = { ...PoPageBlockedUserParamsDefault };
+  private _reason: PoPageBlockedUserReason = PoPageBlockedUserReason.None;
+  private _urlBack: string = '/';
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
 
   /**
    * @optional
@@ -133,9 +178,6 @@ export class PoPageBlockedUserBaseComponent {
     return this._params;
   }
 
-  /** Caminho para a logomarca localizada na parte superior, caso não seja definida ou seja inválida assume a logo padrão do PO UI. */
-  @Input('p-logo') logo?: string;
-
   /**
    * @optional
    *
@@ -162,15 +204,6 @@ export class PoPageBlockedUserBaseComponent {
    *
    * @description
    *
-   * Caminho para a logomarca localizada no rodapé.
-   */
-  @Input('p-secondary-logo') secondaryLogo?: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
    * URL para a ação de retorno da página.
    *
    * @default `/`
@@ -181,5 +214,9 @@ export class PoPageBlockedUserBaseComponent {
 
   get urlBack() {
     return this._urlBack;
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
   }
 }

@@ -1,13 +1,13 @@
+import { Component, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Component, OnInit } from '@angular/core';
 
 import { PoLanguageService, poLocaleDefault } from '@po-ui/ng-components';
 
-import { isExternalLink } from '../../utils/util';
+import { PoUtils } from '../../utils/util';
 
 import { PoPageBlockedUserBaseComponent } from './po-page-blocked-user-base.component';
 
-export const poPageBlockedUserButtonLiterals: Object = {
+export const poPageBlockedUserButtonLiterals: object = {
   en: <any>{
     primaryButton: 'Back to home screen'
   },
@@ -50,12 +50,18 @@ export const poPageBlockedUserButtonLiterals: Object = {
 
 @Component({
   selector: 'po-page-blocked-user',
-  templateUrl: './po-page-blocked-user.component.html'
+  templateUrl: './po-page-blocked-user.component.html',
+  standalone: false
 })
 export class PoPageBlockedUserComponent extends PoPageBlockedUserBaseComponent implements OnInit {
+  private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
   literals;
 
-  constructor(private activatedRoute: ActivatedRoute, private router: Router, languageService: PoLanguageService) {
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     super();
 
     const language = languageService.getShortLanguage();
@@ -71,7 +77,7 @@ export class PoPageBlockedUserComponent extends PoPageBlockedUserBaseComponent i
   }
 
   navigateTo(url: string) {
-    isExternalLink(url) ? window.open(url) : this.router.navigate([url || '/']);
+    PoUtils.isExternalLink(url) ? window.open(url) : this.router.navigate([url || '/']);
   }
 
   private checkingForMetadataProperty(object, property) {

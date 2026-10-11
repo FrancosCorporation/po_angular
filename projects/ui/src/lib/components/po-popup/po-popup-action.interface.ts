@@ -1,46 +1,76 @@
+import { TemplateRef } from '@angular/core';
+
 /**
- * @usedBy PoPopupComponent
+ * @usedBy PoPopupComponent, PoWidgetComponent
  *
  * @description
  *
  * Interface para lista de ações do componente.
  */
 export interface PoPopupAction {
-  /** Rótulo da ação. */
+  /**
+   * @description
+   *
+   * Rótulo da ação.
+   *
+   * A label também pode representar o agrupador de subitens quando a ação possuir `subItems`.
+   */
   label: string;
 
   /**
+   * @optional
+   *
+   * @description
+   *
    * Ação que será executada, sendo possível passar o nome ou a referência da função.
    *
-   * > Para que a função seja executada no contexto do elemento filho o mesmo deve ser passado utilizando *bind*.
+   * A action também pode ser executada para o agrupador de subitens quando a ação possuir `subItems`.
    *
-   * Exemplo: `action: this.myFunction.bind(this)`
+   * > Para que a função seja executada no contexto do componente, utilize *bind*:
+   * `action: this.myFunction.bind(this)`
    */
   action?: Function;
 
   /**
+   * @optional
+   *
    * @description
    *
-   * Ícone que será exibido ao lado esquerdo do rótulo.
+   * Ícone exibido ao lado esquerdo do rótulo.
    *
-   * > Veja os valores válidos na [Biblioteca de ícones](/guides/icons).
+   * Aceita ícones da [Biblioteca de ícones](https://po-ui.io/icons), fontes externas (ex: Font Awesome)
+   * ou um `TemplateRef` para ícones customizados.
+   *
+   * ```
+   * { label: 'Ação', icon: 'an an-newspaper' }
+   * ```
    */
-  icon?: string;
+  icon?: string | TemplateRef<void>;
 
-  /** Atribui uma linha separadora acima do item. */
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Atribui uma linha separadora acima do item.
+   */
   separator?: boolean;
 
   /**
-   * Função que deve retornar um booleano para habilitar ou desabilitar a ação para o registro selecionado.
+   * @optional
    *
-   * Também é possível informar diretamente um valor booleano que vai habilitar ou desabilitar a ação para todos os registros.
+   * @description
+   *
+   * Desabilita a ação. Aceita um valor booleano ou uma função que retorna booleano.
    */
   disabled?: boolean | Function;
 
   /**
+   * @optional
+   *
    * @description
    *
-   * Define a cor do item, sendo `default` o padrão.
+   * Define a cor do item.
    *
    * Valores válidos:
    *  - `default`
@@ -48,18 +78,62 @@ export interface PoPopupAction {
    */
   type?: string;
 
-  /** URL utilizada no redirecionamento das páginas. */
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * URL para redirecionamento. Aceita rotas internas e links externos.
+   *
+   * A url também pode ser configurada para o agrupador de subitens.
+   * Entretanto, quando a `url` é informada em um agrupador, o clique **não abrirá os subitens**, pois o item será
+   * tratado como um link e o redirecionamento terá prioridade sobre a exibição da lista.
+   *
+   * > Quando informada, tem prioridade sobre a propriedade `action`.
+   */
   url?: string;
 
-  /** Define se a ação está selecionada. */
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define se a ação está selecionada.
+   */
   selected?: boolean;
 
   /**
+   * @optional
+   *
    * @description
    *
-   * Define se a ação será visível.
+   * Define a visibilidade da ação. Aceita um valor booleano ou uma função que retorna booleano.
    *
-   * > Caso o valor não seja especificado a ação será visível.
+   * @default `true`
    */
-  visible?: boolean;
+  visible?: boolean | Function;
+
+  // id interno
+  $id?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define uma lista de subitens para criação de menus aninhados.
+   *
+   * Ao definir esta propriedade, o item exibirá um ícone indicador de subnível.
+   * Recomenda-se utilizar no máximo três níveis hierárquicos para garantir a usabilidade.
+   *
+   * > As propriedades `disabled`, `type` e `visible` não são aplicadas visualmente ao item agrupador.
+   *
+   * > Quando `url` é informada em um agrupador, o redirecionamento terá prioridade e os subitens não serão abertos.
+   *
+   * > Em subníveis aninhados, o `icon` do agrupador é substituído pelo indicador de navegação (seta).
+   */
+  subItems?: Array<PoPopupAction>;
+
+  // template interno
+  $subItemTemplate?: TemplateRef<any>;
 }

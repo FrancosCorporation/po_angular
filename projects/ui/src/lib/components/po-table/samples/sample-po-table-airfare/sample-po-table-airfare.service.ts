@@ -2,7 +2,9 @@ import { Injectable } from '@angular/core';
 
 import { PoTableColumn, PoTableDetail } from '@po-ui/ng-components';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class SamplePoTableAirfareService {
   getColumns(): Array<PoTableColumn> {
     const airfareDetail: PoTableDetail = {
@@ -19,19 +21,18 @@ export class SamplePoTableAirfareService {
       {
         property: 'status',
         type: 'label',
-        width: '100px',
         labels: [
-          { value: 'available', color: 'color-11', label: 'Available' },
-          { value: 'reserved', color: 'color-08', label: 'Reserved' },
-          { value: 'closed', color: 'color-07', label: 'Closed' }
+          { value: 'available', color: 'caption-tag-13', label: 'Available' },
+          { value: 'reserved', color: 'caption-tag-08', label: 'Reserved' },
+          { value: 'closed', color: 'caption-tag-03', label: 'Closed' }
         ]
       },
-      { property: 'country', width: '150px' },
-      { property: 'destination', width: '150px' },
+      { property: 'country' },
+      { property: 'destination' },
       {
         property: 'region',
         type: 'subtitle',
-        width: '80px',
+        width: '180px',
         subtitles: [
           { value: 'Alps', color: 'color-01', label: 'Alps', content: 'AL' },
           { value: 'Australasia', color: 'color-02', label: 'Australasia', content: 'AU' },
@@ -47,20 +48,19 @@ export class SamplePoTableAirfareService {
           { value: 'Western Africa', color: 'color-12', label: 'Western Africa', content: 'WA' }
         ]
       },
-      { property: 'date', type: 'date', width: '100px' },
-      { property: 'returnDate', label: 'Return Date', type: 'date', width: '100px' },
-      { property: 'id', label: 'Flight Number', type: 'number', width: '150px' },
+      { property: 'date', type: 'date' },
+      { property: 'returnDate', label: 'Return Date', type: 'date' },
+      { property: 'value', type: 'currency', format: 'USD' },
+      { property: 'id', label: 'Flight Number', type: 'number' },
       {
         property: 'onBoardService',
         label: 'On Board Service',
         type: 'boolean',
-        width: '150px',
         boolean: {
           trueLabel: 'Yes',
           falseLabel: 'No'
         }
       },
-      { property: 'value', type: 'currency', format: 'USD', width: '100px' },
       { property: 'detail', label: 'Details', type: 'detail', detail: airfareDetail }
     ];
   }

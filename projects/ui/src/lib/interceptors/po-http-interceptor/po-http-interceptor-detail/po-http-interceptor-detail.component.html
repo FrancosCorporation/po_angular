@@ -1,15 +1,33 @@
 <po-modal p-hide-close p-size="lg" [p-primary-action]="primaryAction" [p-title]="title">
   <div class="po-row">
-    <po-accordion class="po-md-12 po-mt-1 po-mb-1">
-      <po-accordion-item *ngFor="let detail of details" [p-label]="formatDetailItemTitle(detail)">
-        <div *ngIf="detail.type" class="po-row po-mb-1">
-          <po-tag [p-color]="typeColor(detail.type)" [p-value]="typeValue(detail.type)"></po-tag>
-        </div>
-
-        <div class="po-row">
-          <p>{{ detail.detailedMessage }}</p>
-        </div>
-      </po-accordion-item>
-    </po-accordion>
+    @if (details.length > 1) {
+      <po-accordion class="po-md-12 po-mt-1 po-mb-1">
+        @for (detail of details; track detail) {
+          <po-accordion-item [p-label]="formatDetailItemTitle(detail)">
+            <ng-template [ngTemplateOutlet]="body" [ngTemplateOutletContext]="{ detail }"></ng-template>
+          </po-accordion-item>
+        }
+      </po-accordion>
+    } @else {
+      <ng-container [ngTemplateOutlet]="body" [ngTemplateOutletContext]="{ detail: details[0] || {} }"></ng-container>
+    }
   </div>
 </po-modal>
+
+<ng-template #body let-detail="detail">
+  @if (detail.type) {
+    <div class="po-row po-mb-1">
+      <po-tag [p-color]="typeColor(detail.type)" [p-value]="typeValue(detail.type)"></po-tag>
+    </div>
+  }
+
+  @if (detail.detailTitle) {
+    <p>
+      <strong>{{ detail.code }}</strong>
+    </p>
+  }
+
+  <div class="po-row">
+    <p>{{ detail.detailedMessage }}</p>
+  </div>
+</ng-template>

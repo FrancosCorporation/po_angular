@@ -9,10 +9,12 @@ import { Observable, Subject } from 'rxjs';
  *
  * Serviço que implementa a comunicação entre os items do po-menu-panel.
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoMenuPanelItemsService {
-  private subjectChild = new Subject<any>();
-  private subjectParent = new Subject<any>();
+  private readonly subjectChild = new Subject<any>();
+  private readonly subjectParent = new Subject<any>();
 
   // Recebe do po-menu-panel-item sua informação de click.
   receiveFromChildMenuClicked() {

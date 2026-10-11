@@ -2,12 +2,11 @@ import { By } from '@angular/platform-browser';
 import { Component } from '@angular/core';
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 
-import { configureTestSuite } from './../../../../util-test/util-expect.spec';
-
 import { PoUploadDragDropDirective } from './po-upload-drag-drop.directive';
 
 @Component({
-  template: ` <div p-upload-drag-drop></div> `
+  template: ` <div p-upload-drag-drop></div> `,
+  standalone: false
 })
 export class TestComponent {}
 
@@ -19,13 +18,11 @@ describe('PoUploadDragDropDirective:', () => {
 
   let event;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       declarations: [PoUploadDragDropDirective, TestComponent]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(TestComponent);
 
     directiveElement = fixture.debugElement.query(By.directive(PoUploadDragDropDirective));
@@ -170,9 +167,7 @@ describe('PoUploadDragDropDirective:', () => {
         disabled: false,
         directoryCompatible: true,
         invalidFileType: 0,
-        getOnlyDirectories: arg => {
-          return { then: callback => callback() };
-        },
+        getOnlyDirectories: arg => ({ then: callback => callback() }),
         sendFiles: (arg1, arg2) => {},
         getOnlyFiles: () => {}
       };
@@ -214,8 +209,6 @@ describe('PoUploadDragDropDirective:', () => {
       expect(directive['sendFeedback']).not.toHaveBeenCalled();
       expect(directive['getOnlyDirectories']).not.toHaveBeenCalled();
     });
-
-    describe('getFilesFromEntry:', () => {});
 
     it('should call `readFile` if `entry.isFile`', () => {
       const entry = {
@@ -274,9 +267,7 @@ describe('PoUploadDragDropDirective:', () => {
     it('should call `webkitGetAsEntry`, increment `invalidFileType` and not to call `getFilesFromEntry`', () => {
       const dataTransfer = [
         {
-          webkitGetAsEntry: () => {
-            return { isFile: true };
-          }
+          webkitGetAsEntry: () => ({ isFile: true })
         }
       ];
       directive['invalidFileType'] = 0;
@@ -294,9 +285,7 @@ describe('PoUploadDragDropDirective:', () => {
     it('getOnlyDirectories: should call `webkitGetAsEntry`, not increment `invalidFileType` and call `getFilesFromEntry`', () => {
       const dataTransfer = [
         {
-          webkitGetAsEntry: () => {
-            return { isFile: false };
-          }
+          webkitGetAsEntry: () => ({ isFile: false })
         }
       ];
       directive['invalidFileType'] = 0;
@@ -391,22 +380,39 @@ describe('PoUploadDragDropDirective:', () => {
       expect(directive.notification.information).toHaveBeenCalledWith('fileType 2');
     });
 
-    it(`getOnlyFiles: should return an array of files that only contain type and increment 'invalidFileType'`, () => {
+    it(`getOnlyFiles: should return an array of files and increment 'invalidFileType'`, () => {
       directive['invalidFileType'] = 0;
-      const fileList = [
-        { name: 'file1', type: '', size: 300 },
-        { name: 'file2', type: '.pdf', size: 500 },
-        { name: 'file3', type: '.txt', size: 100 },
-        { name: 'file4', type: '', size: 700 }
+
+      function webkitGetAsEntry() {
+        return {
+          name: this.name,
+          isFile: this.name !== 'folder'
+        };
+      }
+
+      const dataTransfer = {
+        files: [
+          { name: 'file1.zpl', type: '', size: 300 },
+          { name: 'file2.pdf', type: '.pdf', size: 500 },
+          { name: 'file3.txt', type: '.txt', size: 100 },
+          { name: 'folder', type: '', size: 100 }
+        ],
+        items: [
+          { name: 'file1.zpl', webkitGetAsEntry },
+          { name: 'file2.pdf', webkitGetAsEntry },
+          { name: 'file3.txt', webkitGetAsEntry },
+          { name: 'folder', webkitGetAsEntry }
+        ]
+      };
+
+      const expectedValue = [
+        { name: 'file1.zpl', type: '', size: 300 },
+        { name: 'file2.pdf', type: '.pdf', size: 500 },
+        { name: 'file3.txt', type: '.txt', size: 100 }
       ];
 
-      const result = [
-        { name: 'file2', type: '.pdf', size: 500 },
-        { name: 'file3', type: '.txt', size: 100 }
-      ];
-
-      expect(directive.getOnlyFiles(fileList)).toEqual(result);
-      expect(directive['invalidFileType']).toBe(2);
+      expect(directive.getOnlyFiles(dataTransfer)).toEqual(expectedValue);
+      expect(directive['invalidFileType']).toBe(1);
     });
 
     it(`sendFiles: should call 'fileChange.emit' with 'files' if 'areaElement' contains 'event.target' and 'files.length'

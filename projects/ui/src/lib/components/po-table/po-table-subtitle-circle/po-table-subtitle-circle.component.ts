@@ -13,9 +13,14 @@ import { PoTableSubtitleColumn } from './../po-table-subtitle-footer/po-table-su
 @Component({
   selector: 'po-table-subtitle-circle',
   templateUrl: './po-table-subtitle-circle.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
 export class PoTableSubtitleCircleComponent {
+  /** Esconde a tooltip. */
+  @Input('p-hide-title')
+  hideTitle: boolean = false;
+
   private _subtitle: PoTableSubtitleColumn;
 
   /** Objeto com os dados da legenda. */
@@ -29,9 +34,5 @@ export class PoTableSubtitleCircleComponent {
     return this._subtitle;
   }
 
-  /** Esconde a tooltip. */
-  @Input('p-hide-title')
-  hideTitle: boolean = false;
-
-  constructor(private poColorPaletteService: PoColorPaletteService) {}
+  constructor(private readonly poColorPaletteService: PoColorPaletteService) {}
 }

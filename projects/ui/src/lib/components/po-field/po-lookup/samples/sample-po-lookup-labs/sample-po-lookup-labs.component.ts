@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 
 import {
   PoCheckboxGroupOption,
@@ -6,7 +6,9 @@ import {
   PoLookupFilter,
   PoLookupLiterals,
   PoDynamicFormField,
-  PoSelectOption
+  PoSelectOption,
+  PoTableColumnSpacing,
+  PoRadioGroupOption
 } from '@po-ui/ng-components';
 
 import { SamplePoLookupService } from '../sample-po-lookup.service';
@@ -14,9 +16,13 @@ import { SamplePoLookupService } from '../sample-po-lookup.service';
 @Component({
   selector: 'sample-po-lookup-labs',
   templateUrl: './sample-po-lookup-labs.component.html',
-  providers: [SamplePoLookupService]
+  providers: [SamplePoLookupService],
+  standalone: false
 })
 export class SamplePoLookupLabsComponent implements OnInit {
+  sampleFilterService = inject(SamplePoLookupService);
+
+  helperText: string;
   columns: Array<PoLookupColumn>;
   columnsName: Array<string>;
   customLiterals: PoLookupLiterals;
@@ -32,14 +38,11 @@ export class SamplePoLookupLabsComponent implements OnInit {
   lookup: any;
   placeholder: string;
   properties: Array<string>;
+  fieldErrorMessage: string;
   advancedFilters: string;
   customAdvancedFilters: Array<PoDynamicFormField>;
-
-  private readonly columnsDefinition = {
-    id: <PoLookupColumn>{ property: 'id', label: 'Id' },
-    name: <PoLookupColumn>{ property: 'name', label: 'Name' },
-    email: <PoLookupColumn>{ property: 'email', label: 'Email' }
-  };
+  size: string;
+  spacing: PoTableColumnSpacing = PoTableColumnSpacing.Medium;
 
   public readonly columnsOptions: Array<PoCheckboxGroupOption> = [
     { value: 'id', label: 'Id' },
@@ -58,13 +61,41 @@ export class SamplePoLookupLabsComponent implements OnInit {
   ];
 
   public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [
+    { value: 'clean', label: 'Clean' },
     { value: 'disabled', label: 'Disabled' },
     { value: 'noAutocomplete', label: 'No Autocomplete' },
     { value: 'optional', label: 'Optional' },
-    { value: 'required', label: 'Required' }
+    { value: 'required', label: 'Required' },
+    { value: 'showRequired', label: 'Show Required' },
+    { value: 'infiniteScroll', label: 'Infinite Scroll' },
+    { value: 'multiple', label: 'Multiple' },
+    { value: 'autoHeight', label: 'Auto Height' },
+    { value: 'hideColumnsManager', label: 'Hide Columns Manager' },
+    { value: 'textWrap', label: 'Text Wrap' },
+    { value: 'virtualScroll', label: 'Virtual Sroll' },
+    { value: 'errorLimit', label: 'Limit Error Message' },
+    { value: 'labelTextWrap', label: 'Label Text Wrap' },
+    { value: 'loading', label: 'Loading' },
+    { value: 'compactLabel', label: 'Compact Label' }
   ];
 
-  constructor(public sampleFilterService: SamplePoLookupService) {}
+  private readonly columnsDefinition = {
+    id: <PoLookupColumn>{ property: 'id', label: 'Id' },
+    name: <PoLookupColumn>{ property: 'name', label: 'Name' },
+    email: <PoLookupColumn>{ property: 'email', label: 'Email' }
+  };
+
+  public readonly typeSpacing: Array<PoRadioGroupOption> = [
+    { label: 'ExtraSmall', value: 'extraSmall' },
+    { label: 'Small', value: 'small' },
+    { label: 'Medium', value: 'medium' },
+    { label: 'Large', value: 'large' }
+  ];
+
+  public readonly sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
+  ];
 
   ngOnInit(): void {
     this.restore();
@@ -99,6 +130,7 @@ export class SamplePoLookupLabsComponent implements OnInit {
   }
 
   restore() {
+    this.helperText = '';
     this.columnsName = ['id', 'name'];
     this.customLiterals = undefined;
     this.updateColumns();
@@ -115,7 +147,9 @@ export class SamplePoLookupLabsComponent implements OnInit {
     this.lookup = undefined;
     this.placeholder = '';
     this.properties = [];
+    this.fieldErrorMessage = '';
     this.customAdvancedFilters = [];
+    this.size = 'medium';
   }
 
   updateColumns() {

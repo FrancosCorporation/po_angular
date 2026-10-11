@@ -3,6 +3,8 @@ import { Directive, EventEmitter, Input, Output } from '@angular/core';
 const PO_AVATAR_SIZES = ['xs', 'sm', 'md', 'lg', 'xl'];
 const PO_AVATAR_SIZE_DEFAULT = 'md';
 
+export const validateAvatarSize = (value: string) => (PO_AVATAR_SIZES.includes(value) ? value : PO_AVATAR_SIZE_DEFAULT);
+
 /**
  * @description
  *
@@ -14,13 +16,31 @@ const PO_AVATAR_SIZE_DEFAULT = 'md';
  */
 @Directive()
 export class PoAvatarBaseComponent {
-  private _size: string = 'md';
-
   /**
    * Fonte da imagem que pode ser um caminho local (`./assets/images/logo-black-small.png`)
    * ou um servidor externo (`https://po-ui.io/assets/images/logo-black-small.png`).
    */
   @Input('p-src') src: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Indica como o navegador deve carregar a imagem.
+   *
+   * Valores válidos:
+   *  - `eager` (a imagem é carregada imediatamente, independente de estar visível ou não)
+   *  - `lazy` (a imagem só é carregada quando estiver próxima de ser renderizada)
+   *
+   * @default `eager`
+   */
+  @Input('p-loading') loading: 'eager' | 'lazy' = 'eager';
+
+  /** Evento disparado ao clicar na imagem do *avatar*. */
+  @Output('p-click') click = new EventEmitter<any>();
+
+  private _size: string = 'md';
 
   /**
    * @optional
@@ -39,14 +59,11 @@ export class PoAvatarBaseComponent {
    * @default `md`
    */
   @Input('p-size') set size(value: string) {
-    this._size = PO_AVATAR_SIZES.includes(value) ? value : PO_AVATAR_SIZE_DEFAULT;
+    this._size = validateAvatarSize(value);
   }
   get size(): string {
     return this._size;
   }
-
-  /** Evento disparado ao clicar na imagem do *avatar*. */
-  @Output('p-click') click? = new EventEmitter<any>();
 
   get hasClickEvent() {
     return !!this.click.observers.length;

@@ -1,46 +1,143 @@
-<po-field-container [p-help]="help" [p-label]="label" [p-optional]="!required && optional">
-  <div class="po-field-container-content">
-    <input
-      #inp
-      class="po-input po-datepicker"
-      [ngClass]="clean && inp.value ? 'po-input-double-icon-right' : 'po-input-icon-right'"
-      type="text"
-      [attr.name]="name"
-      [autocomplete]="autocomplete"
-      [disabled]="disabled"
-      [placeholder]="placeholder"
-      [readonly]="readonly"
-      [required]="required"
-      (blur)="eventOnBlur($event)"
-      (click)="eventOnClick($event)"
-    />
-
-    <div class="po-field-icon-container-right">
-      <po-clean *ngIf="clean && !disabled && !readonly" [p-element-ref]="inputEl" (p-change-event)="clear()">
-      </po-clean>
-
-      <span
-        #iconDatepicker
-        class="po-icon po-field-icon po-icon-calendar"
-        [class.po-field-icon]="!disabled && !readonly"
-        [class.po-field-icon-disabled]="disabled || readonly"
-        (click)="togglePicker()"
-      >
-      </span>
-    </div>
-  </div>
-
-  <div #dialogPicker [class.po-datepicker-popup-calendar]="!verifyMobile()">
-    <po-calendar
-      #calendar
-      [p-date-end]="maxDate"
-      [p-date-start]="minDate"
-      [p-locale]="locale"
-      [(p-selected-date)]="date"
-      (p-submit)="dateSelected()"
+@let poHelper = setHelper(label, additionalHelpTooltip);
+<po-field-container
+  [class.po-date-picker-container-disabled]="isDisabled"
+  [p-disabled]="isDisabled"
+  [p-id]="id"
+  [p-label]="label"
+  [p-optional]="optional"
+  [p-required]="required"
+  [p-show-required]="showRequired"
+  [p-helper]="label ? poHelper.helperSettings : undefined"
+  [p-show-helper]="label ? displayAdditionalHelp : undefined"
+  [p-size]="size"
+  [p-text-wrap]="labelTextWrap()"
+  [p-compact-label]="compactLabel()"
+>
+  <div #outerContainer>
+    <div
+      cdkOverlayOrigin
+      #trigger="cdkOverlayOrigin"
+      class="po-field-container-content po-field-container-content-datepicker"
     >
-    </po-calendar>
+      <div class="po-field-container-input">
+        <input
+          #inp
+          type="text"
+          class="po-input po-datepicker"
+          [class.po-input-icon-right]="clean && inp.value && !isDisabled"
+          [class.po-datepicker-field-disabled]="isDisabled"
+          [attr.data-focused-element]="!isDisabled"
+          [attr.data-inactive-component]="isDisabled || readonly"
+          [attr.name]="name"
+          [attr.p-size]="size"
+          [autocomplete]="autocomplete"
+          [disabled]="isDisabled"
+          [id]="id"
+          [placeholder]="isDisabled ? '' : placeholder"
+          [readonly]="readonly"
+          [required]="required"
+          [attr.data-append-in-body]="appendBox"
+          (blur)="eventOnBlur($event)"
+          (click)="eventOnClick($event)"
+          (keydown)="onKeyDown($event)"
+          (keydown.tab)="handleCleanKeyboardTab($event)"
+        />
+        @if (loading) {
+          <po-loading-icon [p-size]="mapSizeToIcon(size)"></po-loading-icon>
+        } @else {
+          <div class="po-field-icon-container-right">
+            @if (clean && dateInputValue && !isDisabled && !readonly) {
+              <po-clean
+                #iconClean
+                tabindex="0"
+                role="button"
+                [attr.aria-label]="literals.clean"
+                class="po-icon-input"
+                p-icon="ICON_FILL_CLEAR_CONTENT"
+                [p-element-ref]="inputEl"
+                [p-size]="size"
+                (p-change-event)="clear()"
+                (keydown)="handleCleanKeyboardTab($event)"
+                (keydown.enter)="clearAndFocus(); $event.preventDefault()"
+                (keydown.space)="clearAndFocus(); $event.preventDefault()"
+              >
+              </po-clean>
+              <div class="po-button-vertical-divider"></div>
+            }
+            <po-button
+              #iconDatepicker
+              class="po-datepicker-button"
+              [class.po-button-tertiary-danger]="getErrorPattern()"
+              p-icon="ICON_CALENDAR_DOTS"
+              p-kind="tertiary"
+              [p-disabled]="isDisabled || readonly"
+              [p-size]="size"
+              (keydown)="onKeyPress($event)"
+              (keydown.tab)="handleCleanKeyboardTab($event)"
+              (p-click)="togglePicker(false)"
+            >
+            </po-button>
+          </div>
+        }
+      </div>
+      @if ((!this.label && poHelperComponent()) || (!this.label && poHelper.hideAdditionalHelp)) {
+        <po-helper
+          #helperEl
+          class="po-field-helper-button"
+          [p-size]="size"
+          [p-helper]="poHelper.helperSettings"
+          [p-disabled]="isDisabled"
+          [p-append-in-body]="appendBox"
+        >
+        </po-helper>
+      }
+    </div>
+
+    @if (appendBox) {
+      <ng-template
+        cdkConnectedOverlay
+        [cdkConnectedOverlayOrigin]="trigger"
+        [cdkConnectedOverlayOpen]="true"
+        [cdkConnectedOverlayDisableClose]="true"
+      >
+        <ng-container *ngTemplateOutlet="sharedCalendarContent"></ng-container>
+      </ng-template>
+    } @else {
+      <ng-container *ngTemplateOutlet="sharedCalendarContent"></ng-container>
+    }
+
+    <ng-template #sharedCalendarContent>
+      <div #dialogPicker [class.po-datepicker-popup-calendar]="!verifyMobile()" tabindex="-1" [hidden]="!visible">
+        @if (verifyMobile()) {
+          <div class="po-datepicker-calendar-overlay"></div>
+        }
+        <po-calendar
+          #calendar
+          [class.po-datepicker-calendar-mobile]="verifyMobile()"
+          [(ngModel)]="date"
+          [p-max-date]="maxDate"
+          [p-min-date]="minDate"
+          [p-locale]="locale"
+          [p-size]="size"
+          [p-mode]="mode"
+          [p-year-range-limit]="yearRangeLimit"
+          (p-change)="dateSelected($event)"
+          (p-change-month-year)="adjustCalendarPosition()"
+          (keydown)="onCalendarKeyDown($event)"
+          (p-close)="closeCalendar(false)"
+        ></po-calendar>
+      </div>
+    </ng-template>
   </div>
 
-  <po-field-container-bottom [p-error-pattern]="getErrorPattern()"></po-field-container-bottom>
+  @if (!readonly) {
+    <po-field-container-bottom
+      [p-append-in-body]="appendBox"
+      [p-help]="help"
+      [p-disabled]="isDisabled"
+      [p-error-pattern]="getErrorPattern()"
+      [p-error-limit]="errorLimit"
+      [p-size]="size"
+    ></po-field-container-bottom>
+  }
 </po-field-container>

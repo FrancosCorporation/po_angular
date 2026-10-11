@@ -1,26 +1,26 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import * as UtilsFunction from '../../../../utils/util';
-import { configureTestSuite } from '../../../../util-test/util-expect.spec';
+import { PoUtils as UtilsFunction } from '../../../../utils/util';
 
 import { PoFieldModule } from '../../po-field.module';
 import { PoButtonGroupModule } from '../../../po-button-group';
 import { PoModalModule } from '../../../po-modal/po-modal.module';
 import { PoRichTextImageModalComponent } from './po-rich-text-image-modal.component';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('PoRichTextImageModalComponent', () => {
   let component: PoRichTextImageModalComponent;
   let fixture: ComponentFixture<PoRichTextImageModalComponent>;
   let nativeElement;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [],
       imports: [PoButtonGroupModule, PoModalModule, PoFieldModule],
-      declarations: []
-    });
-  });
+      providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoRichTextImageModalComponent);
     component = fixture.componentInstance;
     nativeElement = fixture.debugElement.nativeElement;

@@ -1,8 +1,10 @@
 import { Injectable } from '@angular/core';
 
-import { PoTableColumn } from '@po-ui/ng-components';
+import { PoTableColumn, PoTagType } from '@po-ui/ng-components';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class SamplePoTableTransportService {
   getColumns(): Array<PoTableColumn> {
     return [
@@ -18,9 +20,10 @@ export class SamplePoTableTransportService {
         type: 'label',
         width: '8%',
         labels: [
-          { value: 'delivered', color: 'color-11', label: 'Delivered' },
-          { value: 'transport', color: 'color-08', label: 'Transport' },
-          { value: 'production', color: 'color-01', label: 'Production' }
+          { value: 'delivered', color: 'caption-tag-23', label: 'Delivered' },
+          { value: 'transport', color: 'caption-tag-14', label: 'Transport' },
+          { value: 'production', color: 'caption-tag-03', label: 'Production' },
+          { value: 'stock', color: 'caption-tag-33', label: 'Stock', icon: 'an an-package' }
         ]
       }
     ];
@@ -92,6 +95,19 @@ export class SamplePoTableTransportService {
         license_plate: 'XXI2312',
         batch_product: 18041825,
         driver: 'Antonio Lima'
+      },
+      {
+        code: 1551,
+        product: 'Cream cheese',
+        customer: 'Barbosa',
+        quantity: 15,
+        icms: 1119,
+        exit_forecast: this.generateRandomDate(),
+        time_since_purchase: this.generateRandomTime(),
+        status: 'stock',
+        license_plate: 'XXI2359',
+        batch_product: 18041888,
+        driver: 'Vitoria Felix'
       }
     ];
   }

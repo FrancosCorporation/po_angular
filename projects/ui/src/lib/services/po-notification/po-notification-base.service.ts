@@ -1,9 +1,9 @@
 import { ComponentRef } from '@angular/core';
 
+import { PoToaster, PoToasterMode, PoToasterOrientation, PoToasterType } from '../../components/po-toaster';
+import { PoFieldSize } from '../../enums/po-field-size.enum';
+import { validateSizeFn } from '../../utils/util';
 import { PoNotification } from './po-notification.interface';
-import { PoToaster } from './po-toaster/po-toaster.interface';
-import { PoToasterOrientation } from './po-toaster/po-toaster-orientation.enum';
-import { PoToasterType } from './po-toaster/po-toaster-type.enum';
 
 /**
  * @description
@@ -15,11 +15,15 @@ import { PoToasterType } from './po-toaster/po-toaster-type.enum';
  * - error,
  * - information.
  *
- * Cada um destes métodos recebe como parâmetro o objeto "PoNotification" que contém os dados da mensagem e o
+ * Cada um destes métodos recebe como parâmetro o objeto `PoNotification` que contém os dados da mensagem e o
  * objeto ViewContainerRef que é a representação do container do componente onde será criada a notificação.
  *
- * Estas notificações serão exibidas durante 10 segundos por padrão, podendo ser alterada conforme necessidade.
+ * Estas notificações serão exibidas durante 9 segundos por padrão, podendo ser alterada conforme necessidade.
  * Após este tempo a mesma é removida automaticamente.
+ *
+ * Notificações com ação ou notificações de `erro` permanecerão em tela até o usuário fecha-lá ou clicar na ação.
+ *
+ * O serviço possui um limite de até 5 notificações por vez, a partir do sexto a primeira notificação será removida dando lugar a nova.
  *
  */
 export abstract class PoNotificationBaseService {
@@ -30,7 +34,7 @@ export abstract class PoNotificationBaseService {
   stackBottom: Array<ComponentRef<any>> = [];
 
   // Duração da notificação ativa.
-  private defaultDuration = 10000;
+  private defaultDuration = 9000;
 
   /**
    * Emite uma notificação de sucesso.
@@ -71,7 +75,7 @@ export abstract class PoNotificationBaseService {
   /**
    * Define em milissegundos a duração padrão para as notificações.
    *
-   * > Padrão 10 segundos.
+   * > Padrão 9 segundos.
    *
    * @param {number} defaultDuration Duração em milisegundos
    */
@@ -90,6 +94,8 @@ export abstract class PoNotificationBaseService {
     let index = 0;
     let orientation;
 
+    notification = notification ?? '';
+
     if (
       (<PoNotification>notification).orientation === undefined ||
       (<PoNotification>notification).orientation === PoToasterOrientation.Bottom
@@ -101,14 +107,19 @@ export abstract class PoNotificationBaseService {
       orientation = PoToasterOrientation.Top;
     }
 
+    const sizeActions = validateSizeFn((<PoNotification>notification).sizeActions, PoFieldSize);
     const toaster: PoToaster = {
       componentRef: undefined,
-      message: (<PoNotification>notification).message || <string>notification,
+      message: this.getMessage(notification),
       type: type,
       orientation: orientation,
       action: (<PoNotification>notification).action,
       actionLabel: (<PoNotification>notification).actionLabel,
       position: index,
+      mode: (<PoNotification>notification).mode || PoToasterMode.Alert,
+      showClose: (<PoNotification>notification).showClose || true,
+      sizeActions: sizeActions,
+      supportMessage: (<PoNotification>notification).supportMessage,
       duration: (<PoNotification>notification).duration || this.defaultDuration
     };
 
@@ -120,6 +131,14 @@ export abstract class PoNotificationBaseService {
     }
 
     return toaster;
+  }
+
+  private getMessage(notification: PoNotification | string): string {
+    if (typeof notification === 'string') {
+      return notification;
+    }
+
+    return notification?.message ?? '';
   }
 
   /**

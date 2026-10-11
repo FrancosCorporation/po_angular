@@ -2,8 +2,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 
 import { of } from 'rxjs';
 
-import * as UtilsFunction from '../../../../utils/util';
-import { configureTestSuite } from './../../../../util-test/util-expect.spec';
+import { PoUtils as UtilsFunction } from '../../../../utils/util';
 
 import { PoRichTextBodyComponent } from './po-rich-text-body.component';
 import { PoRichTextService } from '../po-rich-text.service';
@@ -13,14 +12,18 @@ describe('PoRichTextBodyComponent:', () => {
   let fixture: ComponentFixture<PoRichTextBodyComponent>;
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+
+    await TestBed.configureTestingModule({
       declarations: [PoRichTextBodyComponent],
       providers: [PoRichTextService]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoRichTextBodyComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -60,14 +63,35 @@ describe('PoRichTextBodyComponent:', () => {
       expect(component.modelValue).toEqual(response);
     }));
 
-    it('ngOnDestroy: should unsubscribe modelSubscription.', () => {
-      component['modelSubscription'] = fakeSubscription;
+    describe('ngOnChanges:', () => {
+      it('should call `checkScrollState` when `loading` changes', fakeAsync(() => {
+        spyOn<any>(component, 'checkScrollState');
 
-      spyOn(fakeSubscription, <any>'unsubscribe');
+        component.ngOnChanges({
+          loading: { currentValue: true, previousValue: false, firstChange: false, isFirstChange: () => false }
+        });
+        tick();
+
+        expect(component['checkScrollState']).toHaveBeenCalled();
+      }));
+
+      it('should not call `checkScrollState` when `loading` does not change', fakeAsync(() => {
+        spyOn<any>(component, 'checkScrollState');
+
+        component.ngOnChanges({});
+        tick();
+
+        expect(component['checkScrollState']).not.toHaveBeenCalled();
+      }));
+    });
+
+    it('should unsubscribe modelSubscription', () => {
+      component['modelSubscription'] = <any>{ unsubscribe: jasmine.createSpy('unsubscribe') };
+      component['resizeObserver'] = <any>{ disconnect: jasmine.createSpy('disconnect') };
 
       component.ngOnDestroy();
 
-      expect(fakeSubscription.unsubscribe).toHaveBeenCalled();
+      expect(component['modelSubscription'].unsubscribe).toHaveBeenCalled();
     });
 
     it('ngOnDestroy: should not unsubscribe if modelSubscription is falsy.', () => {
@@ -79,6 +103,21 @@ describe('PoRichTextBodyComponent:', () => {
       component.ngOnDestroy();
 
       expect(fakeSubscription.unsubscribe).not.toHaveBeenCalled();
+    });
+
+    it('ngOnDestroy: should disconnect resizeObserver if it exists', () => {
+      const disconnectSpy = jasmine.createSpy('disconnect');
+      component['resizeObserver'] = { disconnect: disconnectSpy } as any;
+
+      component.ngOnDestroy();
+
+      expect(disconnectSpy).toHaveBeenCalled();
+    });
+
+    it('ngOnDestroy: should not disconnect resizeObserver if it does not exist', () => {
+      component['resizeObserver'] = undefined;
+
+      expect(() => component.ngOnDestroy()).not.toThrow();
     });
 
     describe('executeCommand:', () => {
@@ -161,6 +200,7 @@ describe('PoRichTextBodyComponent:', () => {
         modelValue: 'value',
         valueBeforeChange: '1',
         change: component.change,
+        blur: component.blur,
         bodyElement: {
           nativeElement: {
             innerHTML: 'value'
@@ -169,9 +209,11 @@ describe('PoRichTextBodyComponent:', () => {
       };
 
       spyOn(fakeThis.change, 'emit');
+      spyOn(fakeThis.blur, 'emit');
       component.onBlur.call(fakeThis);
       tick(250);
 
+      expect(fakeThis.blur.emit).toHaveBeenCalled();
       expect(fakeThis.change.emit).toHaveBeenCalledWith(fakeThis.modelValue);
     }));
 
@@ -182,6 +224,9 @@ describe('PoRichTextBodyComponent:', () => {
         change: {
           emit: () => {}
         },
+        blur: {
+          emit: () => {}
+        },
         bodyElement: {
           nativeElement: {
             innerHTML: 'value'
@@ -189,10 +234,13 @@ describe('PoRichTextBodyComponent:', () => {
         }
       };
 
+      spyOn(fakeThis.blur, 'emit');
       spyOn(fakeThis.change, 'emit');
+
       component.onBlur.call(fakeThis);
       tick(250);
 
+      expect(fakeThis.blur.emit).toHaveBeenCalled();
       expect(fakeThis.change.emit).not.toHaveBeenCalled();
     }));
 
@@ -297,6 +345,37 @@ describe('PoRichTextBodyComponent:', () => {
 
       expect(fakeEvent.preventDefault).not.toHaveBeenCalled();
       expect(component.shortcutCommand.emit).not.toHaveBeenCalled();
+    });
+
+    it('onKeyDown: should emit event when field is focused', () => {
+      const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      component.bodyElement = {
+        nativeElement: {
+          focus: () => {}
+        }
+      };
+
+      spyOn(component.keydown, 'emit');
+      spyOnProperty(document, 'activeElement', 'get').and.returnValue(component.bodyElement.nativeElement);
+
+      component.onKeyDown(fakeEvent);
+
+      expect(component.keydown.emit).toHaveBeenCalledWith(fakeEvent);
+    });
+
+    it('onKeyDown: should not emit event when field is not focused', () => {
+      const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      component.bodyElement = {
+        nativeElement: {
+          focus: () => {}
+        }
+      };
+
+      spyOn(component.keydown, 'emit');
+      spyOnProperty(document, 'activeElement', 'get').and.returnValue(document.createElement('div'));
+      component.onKeyDown(fakeEvent);
+
+      expect(component.keydown.emit).not.toHaveBeenCalled();
     });
 
     it('onKeyUp: should call `toggleCursorOnLink` with `event` and `remove` before `updateModel`', () => {
@@ -1096,13 +1175,9 @@ describe('PoRichTextBodyComponent:', () => {
     it('verifyCursorPositionInFirefoxIEEdge: should return true if childNodes of fragmentDocument is an A tag', () => {
       const element = { element: 'test', nodeName: 'A' };
       const textSelection = {
-        getRangeAt: () => {
-          return {
-            cloneContents: () => {
-              return { childNodes: [{ element: 'test', nodeName: 'A' }] };
-            }
-          };
-        }
+        getRangeAt: () => ({
+          cloneContents: () => ({ childNodes: [{ element: 'test', nodeName: 'A' }] })
+        })
       };
 
       spyOn(document, 'getSelection').and.returnValue(<any>textSelection);
@@ -1114,16 +1189,12 @@ describe('PoRichTextBodyComponent:', () => {
     it('verifyCursorPositionInFirefoxIEEdge: should return true if firstElementChild of fragmentDocument is an A tag', () => {
       const element = { element: 'test', nodeName: 'A' };
       const textSelection = {
-        getRangeAt: () => {
-          return {
-            cloneContents: () => {
-              return {
-                firstElementChild: { element: 'test', nodeName: 'A' },
-                childNodes: []
-              };
-            }
-          };
-        }
+        getRangeAt: () => ({
+          cloneContents: () => ({
+            firstElementChild: { element: 'test', nodeName: 'A' },
+            childNodes: []
+          })
+        })
       };
 
       spyOn(document, 'getSelection').and.returnValue(<any>textSelection);
@@ -1135,16 +1206,12 @@ describe('PoRichTextBodyComponent:', () => {
     it(`verifyCursorPositionInFirefoxIEEdge: should return false if focusNode and firstElementChild of fragmentDocument
       are not an A tag and childNodes is undefined `, () => {
       const textSelection = {
-        getRangeAt: () => {
-          return {
-            cloneContents: () => {
-              return {
-                firstElementChild: { element: 'test', nodeName: 'DIV' },
-                childNodes: []
-              };
-            }
-          };
-        }
+        getRangeAt: () => ({
+          cloneContents: () => ({
+            firstElementChild: { element: 'test', nodeName: 'DIV' },
+            childNodes: []
+          })
+        })
       };
 
       spyOn(document, 'getSelection').and.returnValue(<any>textSelection);
@@ -1156,16 +1223,12 @@ describe('PoRichTextBodyComponent:', () => {
     it(`verifyCursorPositionInFirefoxIEEdge: should return false if focusNode and childNodes of fragmentDocument
       are not an A tag and firstElementChild is undefined`, () => {
       const textSelection = {
-        getRangeAt: () => {
-          return {
-            cloneContents: () => {
-              return {
-                firstElementChild: undefined,
-                childNodes: [{ element: 'test', nodeName: 'DIV' }]
-              };
-            }
-          };
-        }
+        getRangeAt: () => ({
+          cloneContents: () => ({
+            firstElementChild: undefined,
+            childNodes: [{ element: 'test', nodeName: 'DIV' }]
+          })
+        })
       };
 
       spyOn(document, 'getSelection').and.returnValue(<any>textSelection);
@@ -1173,11 +1236,178 @@ describe('PoRichTextBodyComponent:', () => {
       expect(component['verifyCursorPositionInFirefoxIEEdge']()).toBe(false);
       expect(component['linkElement']).toBe(undefined);
     });
+
+    describe('checkScrollState:', () => {
+      it('should set `hasScroll` to true when content overflows', () => {
+        const el = component.bodyElement.nativeElement;
+        Object.defineProperty(el, 'scrollHeight', { value: 200, configurable: true });
+        Object.defineProperty(el, 'clientHeight', { value: 100, configurable: true });
+
+        component['checkScrollState']();
+
+        expect(component.hasScroll).toBeTrue();
+      });
+
+      it('should set `hasScroll` to false when content does not overflow', () => {
+        const el = component.bodyElement.nativeElement;
+        Object.defineProperty(el, 'scrollHeight', { value: 100, configurable: true });
+        Object.defineProperty(el, 'clientHeight', { value: 200, configurable: true });
+
+        component['checkScrollState']();
+
+        expect(component.hasScroll).toBeFalse();
+      });
+
+      it('should call `cd.markForCheck`', () => {
+        spyOn<any>(component['cd'], 'markForCheck');
+
+        component['checkScrollState']();
+
+        expect(component['cd'].markForCheck).toHaveBeenCalled();
+      });
+
+      it('should not throw if bodyEl is undefined', () => {
+        spyOnProperty<any>(component, 'bodyEl', 'get').and.returnValue(undefined);
+
+        expect(() => component['checkScrollState']()).not.toThrow();
+      });
+    });
+
+    describe('updateHasValue:', () => {
+      it('should set `hasValue` to true when body has text', () => {
+        component.bodyElement.nativeElement.innerText = 'algum texto';
+
+        component['updateHasValue']();
+
+        expect(component.hasValue).toBeTrue();
+      });
+
+      it('should set `hasValue` to false when body is empty', () => {
+        component.bodyElement.nativeElement.innerText = '';
+
+        component['updateHasValue']();
+
+        expect(component.hasValue).toBeFalse();
+      });
+    });
+
+    describe('onWindowResize:', () => {
+      it('should call `checkScrollState`', () => {
+        spyOn<any>(component, 'checkScrollState');
+
+        component.onWindowResize();
+
+        expect(component['checkScrollState']).toHaveBeenCalled();
+      });
+    });
+
+    describe('initResizeObserver:', () => {
+      it('should execute ResizeObserver callback and call `checkScrollState`', () => {
+        spyOn(component as any, 'checkScrollState');
+
+        let observerCallback: any;
+
+        const originalResizeObserver = (window as any).ResizeObserver;
+        (window as any).ResizeObserver = class {
+          constructor(cb: any) {
+            observerCallback = cb;
+          }
+          observe() {}
+          disconnect() {}
+        };
+
+        component['initResizeObserver']();
+
+        if (observerCallback) {
+          observerCallback();
+        }
+
+        expect(component['checkScrollState']).toHaveBeenCalled();
+
+        (window as any).ResizeObserver = originalResizeObserver;
+      });
+
+      it('should return early if ResizeObserver is undefined', () => {
+        const originalResizeObserver = (window as any).ResizeObserver;
+        (window as any).ResizeObserver = undefined;
+
+        component['resizeObserver'] = undefined;
+        component['initResizeObserver']();
+
+        expect(component['resizeObserver']).toBeUndefined();
+
+        (window as any).ResizeObserver = originalResizeObserver;
+      });
+
+      it('should return early if bodyEl is undefined', () => {
+        Object.defineProperty(component, 'bodyEl', { value: undefined, writable: true });
+
+        component['resizeObserver'] = undefined;
+
+        component['initResizeObserver']();
+
+        expect(component['resizeObserver']).toBeUndefined();
+      });
+    });
   });
 
   describe('Templates:', () => {
     it('should contain `po-rich-text-body`', () => {
       expect(nativeElement.querySelector('.po-rich-text-body')).toBeTruthy();
+    });
+
+    it('should add `has-loading` class when `loading` is true', () => {
+      component.loading = true;
+      fixture.detectChanges();
+
+      const bodyEl = nativeElement.querySelector('.po-rich-text-body');
+      expect(bodyEl.classList.contains('has-loading')).toBeTrue();
+    });
+
+    it('should not add `has-loading` class when `loading` is false', () => {
+      component.loading = false;
+      fixture.detectChanges();
+
+      const bodyEl = nativeElement.querySelector('.po-rich-text-body');
+      expect(bodyEl.classList.contains('has-loading')).toBeFalse();
+    });
+
+    it('should add `po-rich-text-disabled` class when `disabled` is true', () => {
+      component.disabled = true;
+      fixture.detectChanges();
+
+      const bodyEl = nativeElement.querySelector('.po-rich-text-body');
+      expect(bodyEl.classList.contains('po-rich-text-disabled')).toBeTrue();
+    });
+
+    it('should render loading icon when `loading` is true', () => {
+      component.loading = true;
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('.po-rich-text-loading-container')).toBeTruthy();
+    });
+
+    it('should not render loading icon when `loading` is false', () => {
+      component.loading = false;
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('.po-rich-text-loading-container')).toBeFalsy();
+    });
+
+    it('should set `tabindex` to -1 when `disabled` is true', () => {
+      component.disabled = true;
+      fixture.detectChanges();
+
+      const bodyEl = nativeElement.querySelector('.po-rich-text-body');
+      expect(bodyEl.getAttribute('tabindex')).toBe('-1');
+    });
+
+    it('should set `contenteditable` to false when `disabled` is true', () => {
+      component.disabled = true;
+      fixture.detectChanges();
+
+      const bodyEl = nativeElement.querySelector('.po-rich-text-body');
+      expect(bodyEl.getAttribute('contenteditable')).toBe('false');
     });
   });
 });

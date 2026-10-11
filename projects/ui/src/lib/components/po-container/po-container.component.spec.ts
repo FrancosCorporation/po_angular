@@ -43,23 +43,19 @@ describe('PoContainerComponent:', () => {
       expect(nativeElement.querySelector('.po-container-no-border')).toBeFalsy();
     });
 
-    it('should have shadow and padding.', () => {
-      component.noShadow = false;
+    it('should have padding.', () => {
       component.noPadding = false;
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('.po-container-no-shadow')).toBeNull();
       expect(nativeElement.querySelector('.po-container-no-padding')).toBeNull();
     });
 
-    it('shouldn`t have shadow and padding.', () => {
-      component.noShadow = true;
+    it('shouldn`t have padding.', () => {
       component.noPadding = true;
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('.po-container-no-shadow')).toBeTruthy();
       expect(nativeElement.querySelector('.po-container-no-padding')).toBeTruthy();
     });
 
@@ -69,7 +65,7 @@ describe('PoContainerComponent:', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('.po-container').style.height).toBe('500px');
+      expect(nativeElement.querySelector('.po-container-content').style.height).toBe('500px');
       expect(nativeElement.querySelector('.po-container-no-padding')).toBeTruthy();
     });
 
@@ -78,7 +74,23 @@ describe('PoContainerComponent:', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('.po-container').style.height).toBe('auto');
+      expect(nativeElement.querySelector('.po-container-content').style.height).toBe('auto');
+    });
+
+    it('should have title.', () => {
+      component.title = 'Title';
+
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('.po-container-title')).toBeTruthy();
+    });
+
+    it('should not have title.', () => {
+      component.title = undefined;
+
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('.po-container-title')).toBeFalsy();
     });
   });
 });

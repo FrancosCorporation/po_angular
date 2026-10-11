@@ -1,5 +1,3 @@
-import { AbstractControl, NgForm } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
 import {
   AfterViewChecked,
   ChangeDetectorRef,
@@ -8,22 +6,25 @@ import {
   IterableDiffers,
   OnInit,
   ViewChild,
-  ViewContainerRef
+  ViewContainerRef,
+  inject
 } from '@angular/core';
+import { AbstractControl, NgForm } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { PoLanguageService } from '@po-ui/ng-components';
 
-import { isExternalLink } from '../../utils/util';
 import { PoComponentInjectorService } from '@po-ui/ng-components';
+import { isExternalLink } from '../../utils/util';
 
-import { PoModalPasswordRecoveryComponent } from '../po-modal-password-recovery/po-modal-password-recovery.component';
 import { PoModalPasswordRecoveryType } from '../po-modal-password-recovery/enums/po-modal-password-recovery-type.enum';
+import { PoModalPasswordRecoveryComponent } from '../po-modal-password-recovery/po-modal-password-recovery.component';
+import { PoPageLoginRecovery } from './interfaces/po-page-login-recovery.interface';
 import {
   PoPageLoginBaseComponent,
   poPageLoginLiteralIn,
   poPageLoginLiteralsDefault
 } from './po-page-login-base.component';
-import { PoPageLoginRecovery } from './interfaces/po-page-login-recovery.interface';
 import { PoPageLoginService } from './po-page-login.service';
 
 /**
@@ -55,26 +56,29 @@ import { PoPageLoginService } from './po-page-login.service';
 
 @Component({
   selector: 'po-page-login',
-  templateUrl: './po-page-login.component.html'
+  templateUrl: './po-page-login.component.html',
+  standalone: false
 })
 export class PoPageLoginComponent extends PoPageLoginBaseComponent implements AfterViewChecked, OnInit {
-  private componentRef: ComponentRef<any> = null;
-  private differ: any;
-  private readonly customPasswordError = { custom: false };
-  initialSelectLanguage: string;
+  changeDetector = inject(ChangeDetectorRef);
+  private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly poComponentInjector = inject(PoComponentInjectorService);
 
   @ViewChild('loginForm', { read: NgForm, static: true }) loginForm: NgForm;
   @ViewChild('pageLogin', { read: ViewContainerRef, static: true }) pageLogin: ViewContainerRef;
 
-  constructor(
-    public changeDetector: ChangeDetectorRef,
-    private activatedRoute: ActivatedRoute,
-    private poComponentInjector: PoComponentInjectorService,
-    differs: IterableDiffers,
-    loginService: PoPageLoginService,
-    router: Router,
-    poLanguageService: PoLanguageService
-  ) {
+  initialSelectLanguage: string;
+
+  private componentRef: ComponentRef<any> = null;
+  private readonly differ: any;
+  private readonly customPasswordError = { custom: false };
+
+  constructor() {
+    const differs = inject(IterableDiffers);
+    const loginService = inject(PoPageLoginService);
+    const router = inject(Router);
+    const poLanguageService = inject(PoLanguageService);
+
     super(loginService, router, poLanguageService);
     this.differ = differs.find([]).create(null);
   }
@@ -145,6 +149,23 @@ export class PoPageLoginComponent extends PoPageLoginBaseComponent implements Af
         break;
       }
     }
+  }
+
+  protected concatenateLoginHintWithContactEmail(contactEmail: string) {
+    const defaultLoginHintLiteral = poPageLoginLiteralsDefault[this.language].loginHint;
+    const prepositionLiteral = poPageLoginLiteralIn[this.language];
+
+    return this.concatenateLiteral(contactEmail, 'loginHint', defaultLoginHintLiteral, prepositionLiteral);
+  }
+
+  protected setLoginErrors(errors: Array<string>) {
+    const control = this.loginForm.form.controls['login'];
+    this.setControlErrors('allLoginErrors', control, errors, this.pageLoginLiterals.loginErrorPattern);
+  }
+
+  protected setPasswordErrors(errors: Array<string>) {
+    const control = this.loginForm.form.controls['password'];
+    this.setControlErrors('allPasswordErrors', control, errors, this.pageLoginLiterals.passwordErrorPattern);
   }
 
   private checkingForMetadataProperty(object, property) {
@@ -240,23 +261,6 @@ export class PoPageLoginComponent extends PoPageLoginBaseComponent implements Af
         this.changeDetector.detectChanges();
       }
     });
-  }
-
-  protected concatenateLoginHintWithContactEmail(contactEmail: string) {
-    const defaultLoginHintLiteral = poPageLoginLiteralsDefault[this.language].loginHint;
-    const prepositionLiteral = poPageLoginLiteralIn[this.language];
-
-    return this.concatenateLiteral(contactEmail, 'loginHint', defaultLoginHintLiteral, prepositionLiteral);
-  }
-
-  protected setLoginErrors(errors: Array<string>) {
-    const control = this.loginForm.form.controls['login'];
-    this.setControlErrors('allLoginErrors', control, errors, this.pageLoginLiterals.loginErrorPattern);
-  }
-
-  protected setPasswordErrors(errors: Array<string>) {
-    const control = this.loginForm.form.controls['password'];
-    this.setControlErrors('allPasswordErrors', control, errors, this.pageLoginLiterals.passwordErrorPattern);
   }
 
   private initializeLanguage() {

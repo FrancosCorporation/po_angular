@@ -1,11 +1,13 @@
-import { Component, ViewChild, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 
 import {
   PoCheckboxGroupOption,
-  PoRadioGroupOption,
   PoModalComponent,
+  PoRadioGroupOption,
+  PoSearchFilterMode,
   PoTableAction,
   PoTableColumn,
+  PoTableColumnSpacing,
   PoTableLiterals
 } from '@po-ui/ng-components';
 
@@ -14,9 +16,12 @@ import { SamplePoTableLabsService } from './sample-po-table-labs.service';
 @Component({
   selector: 'sample-po-table-labs',
   templateUrl: './sample-po-table-labs.component.html',
-  providers: [SamplePoTableLabsService]
+  providers: [SamplePoTableLabsService],
+  standalone: false
 })
 export class SamplePoTableLabsComponent implements OnInit {
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+
   actions: Array<PoTableAction>;
   actionsDefinition: any;
   actionTableFirst: PoTableAction = {
@@ -27,17 +32,23 @@ export class SamplePoTableLabsComponent implements OnInit {
   actionTableSecond: PoTableAction = { action: this.openModal.bind(this), label: 'Second Action' };
 
   columns: Array<PoTableColumn>;
+  columnsDefinition: any;
   columnsName: Array<string>;
+  componentsSize: string;
   container: string;
   currentItem: string;
   customLiterals: PoTableLiterals;
   event: string;
   height: number;
   items: Array<any>;
+  itemIndex = 0;
   literals: string;
   maxColumns: number;
-  properties: Array<string>;
+  properties: Array<string> = ['hideBatchActions', 'hideTableSearch'];
   selection: Array<string>;
+  spacing: PoTableColumnSpacing = PoTableColumnSpacing.Medium;
+  filterType: PoSearchFilterMode = PoSearchFilterMode.startsWith;
+  filteredColumns: Array<string> = [];
 
   actionsDefinitionOptions: Array<PoCheckboxGroupOption> = [
     { label: 'Actions', value: 'actions' },
@@ -52,7 +63,16 @@ export class SamplePoTableLabsComponent implements OnInit {
     { label: 'Single select', value: 'singleSelect', disabled: true }
   ];
 
-  public readonly columnsDefinition = this.samplePoTableLabsService.getColumns();
+  public readonly componentsSizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
+  ];
+
+  public readonly filterModeOptions: Array<PoRadioGroupOption> = [
+    { label: 'Starts With', value: PoSearchFilterMode.startsWith },
+    { label: 'Contains', value: PoSearchFilterMode.contains },
+    { label: 'Ends With', value: PoSearchFilterMode.endsWith }
+  ];
 
   public readonly columnsOptions: Array<PoCheckboxGroupOption> = [
     { value: 'text', label: 'Text' },
@@ -70,13 +90,7 @@ export class SamplePoTableLabsComponent implements OnInit {
     { value: 'boolean', label: 'Boolean' }
   ];
 
-  public readonly containerOptions: Array<PoRadioGroupOption> = [
-    { label: 'Border', value: 'border' },
-    { label: 'Shadow', value: 'shadow' }
-  ];
-
   public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [
-    { label: 'Hide text overflow', value: 'hideTextOverflow' },
     { label: 'Sort', value: 'sort' },
     { label: 'Striped', value: 'striped' },
     { label: 'Show more disabled', value: 'showMoreDisabled' },
@@ -84,7 +98,13 @@ export class SamplePoTableLabsComponent implements OnInit {
     { label: 'Hide detail', value: 'hideDetail' },
     { label: 'Loading', value: 'loading' },
     { label: 'Auto collapse', value: 'autoCollapse' },
-    { label: 'Hide columns manager', value: 'hideColumnsManager' }
+    { label: 'Hide columns manager', value: 'hideColumnsManager' },
+    { label: 'Hide batch actions', value: 'hideBatchActions' },
+    { label: 'Actions Right', value: 'actionsRight' },
+    { label: 'Draggable', value: 'draggable' },
+    { label: 'Hide action fixed columns', value: 'fixed' },
+    { label: 'Hide Table Search', value: 'hideTableSearch' },
+    { label: 'Virtual Scroll', value: 'virtualScroll' }
   ];
 
   public readonly typeHeaderOptions: Array<PoRadioGroupOption> = [
@@ -93,16 +113,24 @@ export class SamplePoTableLabsComponent implements OnInit {
     { label: 'Top', value: 'top' }
   ];
 
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+  public readonly typeSpacing: Array<PoRadioGroupOption> = [
+    { label: 'ExtraSmall', value: 'extraSmall' },
+    { label: 'Small', value: 'small' },
+    { label: 'Medium', value: 'medium' },
+    { label: 'Large', value: 'large' }
+  ];
 
-  constructor(private samplePoTableLabsService: SamplePoTableLabsService) {}
+  constructor(private samplePoTableLabsService: SamplePoTableLabsService) {
+    this.columnsDefinition = this.samplePoTableLabsService?.getColumns();
+  }
 
   ngOnInit() {
     this.restore();
   }
 
   addItem() {
-    this.items.push(this.samplePoTableLabsService.generateNewItem(this.items.length + 1));
+    this.items = [...this.items, this.samplePoTableLabsService.generateNewItem(this.itemIndex)];
+    this.itemIndex++;
   }
 
   changeActionOptions() {
@@ -120,6 +148,7 @@ export class SamplePoTableLabsComponent implements OnInit {
         : [this.actionTableFirst, this.actionTableSecond]
       : [];
     this.actionTableFirst.visible = this.actionsDefinition.visibleAction;
+    this.spacingSelectOrAction();
   }
 
   changeEvent(event: string) {
@@ -134,6 +163,10 @@ export class SamplePoTableLabsComponent implements OnInit {
     }
   }
 
+  changeFilteredColumns() {
+    this.filteredColumns = this.filteredColumns.toString().split(/,\s*/);
+  }
+
   changeSelectionOptions() {
     const singleSelect = this.selection.includes('singleSelect');
     const selectable = this.selection.includes('selectable');
@@ -142,6 +175,13 @@ export class SamplePoTableLabsComponent implements OnInit {
     this.selectionOptions[2].disabled = !selectable;
 
     this.selectionOptions = [].concat(this.selectionOptions);
+    this.spacingSelectOrAction();
+  }
+
+  deleteItems(items: Array<any>) {
+    if (this.height) {
+      this.items = items;
+    }
   }
 
   disableAction() {
@@ -156,16 +196,21 @@ export class SamplePoTableLabsComponent implements OnInit {
   restore() {
     this.actionsDefinition = { visibleAction: null };
     this.actions = [];
+    //this.columnsDefinition = this.samplePoTableLabsService.getColumns();
     this.columnsDefinition.detail.detail.typeHeader = undefined;
     this.columnsName = [];
     this.container = '';
     this.customLiterals = undefined;
     this.height = undefined;
+    this.componentsSize = 'medium';
     this.items = [];
+    this.itemIndex = 0;
     this.literals = '';
     this.maxColumns = undefined;
-    this.properties = [];
+    this.properties = ['hideBatchActions', 'hideTableSearch'];
     this.selection = [];
+    this.spacing = PoTableColumnSpacing.Medium;
+    this.filteredColumns = [];
 
     this.updateColumns();
     this.changeActionOptions();
@@ -177,6 +222,14 @@ export class SamplePoTableLabsComponent implements OnInit {
 
   updateColumns() {
     this.columns = [];
-    this.columnsName.forEach(column => this.columns.push(this.columnsDefinition[column]));
+    this.columnsName.forEach(column => {
+      this.columns.push(this.columnsDefinition[column]);
+    });
+  }
+
+  private spacingSelectOrAction() {
+    if (this.columnsName.length > 0) {
+      this.updateColumns();
+    }
   }
 }

@@ -1,1 +1,10 @@
-<span *ngIf="showIcon()" class="po-icon po-field-icon po-icon-close" (click)="clear()"> </span>
+@if (showIcon()) {
+  <po-icon
+    class="po-field-icon"
+    [class.po-field-icon-aa]="size === 'small'"
+    [class.po-field-icon-large]="size === 'large'"
+    [p-icon]="icon || 'ICON_CLEAR_CONTENT'"
+    (click)="clear()"
+  >
+  </po-icon>
+}

@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, inject } from '@angular/core';
 import { NgForm } from '@angular/forms';
 
 import { PoComboOption, PoComboOptionGroup, PoNotificationService, PoSelectOption } from '@po-ui/ng-components';
@@ -7,16 +7,23 @@ import { SamplePoComboSchedulingService } from './sample-po-combo-scheduling.ser
 @Component({
   selector: 'sample-po-combo-scheduling',
   templateUrl: './sample-po-combo-scheduling.component.html',
-  providers: [SamplePoComboSchedulingService]
+  styleUrls: ['./sample-po-combo-scheduling.component.css'],
+  providers: [SamplePoComboSchedulingService],
+  standalone: false
 })
 export class SamplePoComboSchedulingComponent implements OnInit {
+  private poNotification = inject(PoNotificationService);
+  private schedulingService = inject(SamplePoComboSchedulingService);
+
+  @ViewChild('schedulingForm', { static: true }) form: NgForm;
+
   birthday: string;
   citiesOptions: Array<PoComboOptionGroup>;
   city: string;
   email: string;
   informations: string;
   medicalSpecialty: string;
-  medicalSpecialtyOptions: Array<PoComboOption>;
+  medicalSpecialtyOptions: Array<any>;
   name: string;
   phone: string;
   typeScheduling: string;
@@ -25,13 +32,6 @@ export class SamplePoComboSchedulingComponent implements OnInit {
     { label: 'Particular', value: 'particular' },
     { label: 'Health Insurance', value: 'healthInsurance' }
   ];
-
-  @ViewChild('schedulingForm', { static: true }) form: NgForm;
-
-  constructor(
-    private poNotification: PoNotificationService,
-    private schedulingService: SamplePoComboSchedulingService
-  ) {}
 
   ngOnInit() {
     this.citiesOptions = this.schedulingService.getcities();

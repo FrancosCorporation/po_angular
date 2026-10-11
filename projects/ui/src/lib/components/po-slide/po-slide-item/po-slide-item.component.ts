@@ -13,12 +13,11 @@ import { PoSlideContentTemplateDirective } from '../directives/po-slide-content-
  */
 @Component({
   selector: 'po-slide-item',
-  templateUrl: './po-slide-item.component.html'
+  templateUrl: './po-slide-item.component.html',
+  standalone: false
 })
 export class PoSlideItemComponent {
   @ViewChild('slideItem', { static: true }) itemElement: ElementRef;
-
-  isIEOrEdge: any = isIEOrEdge();
 
   /** Ação executada ao clicar em uma imagem */
   @Input('p-action') action: Function;
@@ -40,6 +39,8 @@ export class PoSlideItemComponent {
 
   /** Link executado ao clicar em uma imagem */
   @Input('p-link') link: string;
+
+  isIEOrEdge: any = isIEOrEdge();
 
   setLinkType() {
     if (!this.template && this.link) {

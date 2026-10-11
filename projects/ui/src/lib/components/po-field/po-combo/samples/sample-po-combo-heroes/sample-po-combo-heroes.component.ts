@@ -1,17 +1,18 @@
-import { Component } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Component, inject } from '@angular/core';
 
 import { Observable } from 'rxjs';
 
 @Component({
   selector: 'sample-po-combo-heroes',
-  templateUrl: './sample-po-combo-heroes.component.html'
+  templateUrl: './sample-po-combo-heroes.component.html',
+  standalone: false
 })
 export class SamplePoComboHeroesComponent {
+  private http = inject(HttpClient);
+
   hero$: Observable<any>;
   heroName: string;
-
-  constructor(private http: HttpClient) {}
 
   get knowMoreLabel() {
     return this.heroName ? 'Know more' : undefined;
@@ -26,6 +27,6 @@ export class SamplePoComboHeroesComponent {
   }
 
   private getHero(heroName: string) {
-    return this.http.get(`https://po-sample-api.herokuapp.com/v1/heroes/${heroName}`);
+    return this.http.get(`https://po-sample-api.onrender.com/v1/heroes/${heroName}`);
   }
 }

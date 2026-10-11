@@ -4,49 +4,58 @@
   [p-custom-positions]="customPositions"
   [p-hide-arrow]="properties.includes('hideArrow')"
   [p-position]="position"
+  [p-size]="size"
   [p-target]="targetRef"
 >
 </po-popup>
 
 <div class="po-row sample-button-container">
   <div class="po-offset-xl-5 po-offset-lg-5 po-md-2 po-lg-2">
-    <po-button #target p-label="PopUp" (p-click)="popup.toggle()"> </po-button>
+    <po-button #target p-label="Popup" (p-click)="popup.toggle()"> </po-button>
   </div>
 </div>
 
-<hr />
+<po-divider />
 
 <form #formAction="ngForm">
-  <div class="po-row">
-    <po-input class="po-md-4" name="actionAction" [(ngModel)]="action.action" p-clean p-label="Action"> </po-input>
+  <po-input class="po-md-6 po-lg-4" name="actionLabel" [(ngModel)]="action.label" p-label="Label" p-required>
+  </po-input>
 
-    <po-input class="po-md-4" name="actionLabel" [(ngModel)]="action.label" p-label="Label" p-required> </po-input>
+  <po-input class="po-md-6 po-lg-4" name="actionAction" [(ngModel)]="action.action" p-clean p-label="Action">
+  </po-input>
 
-    <po-input class="po-md-4" name="actionURL" [(ngModel)]="action.url" p-label="URL"> </po-input>
-  </div>
+  <po-input class="po-md-6 po-lg-4" name="actionURL" [(ngModel)]="action.url" p-label="URL"> </po-input>
 
-  <div class="po-row">
-    <po-select class="po-md-3" name="type" [(ngModel)]="action.type" p-label="Type" [p-options]="typeOptions">
-    </po-select>
+  <po-select class="po-md-6 po-lg-4" name="type" [(ngModel)]="action.type" p-label="Type" [p-options]="typeOptions">
+  </po-select>
 
-    <po-select class="po-md-3" name="icon" [(ngModel)]="action.icon" p-label="Icon" [p-options]="iconOptions">
-    </po-select>
+  <po-select class="po-md-6 po-lg-4" name="icon" [(ngModel)]="action.icon" p-label="Icon" [p-options]="iconOptions">
+  </po-select>
 
-    <po-checkbox-group
-      class="po-md-6"
-      name="action"
-      [(ngModel)]="action"
-      p-columns="4"
-      p-indeterminate
-      p-label="Action properties"
-      [p-options]="actionOptions"
-    >
-    </po-checkbox-group>
-  </div>
+  <po-select
+    class="po-md-6 po-lg-4"
+    name="parent"
+    [(ngModel)]="action.parent"
+    p-label="Subitems"
+    p-placeholder="Add subitems"
+    [p-options]="parentList"
+  >
+  </po-select>
+
+  <po-checkbox-group
+    class="po-md-12"
+    name="action"
+    [(ngModel)]="action"
+    p-columns="4"
+    p-indeterminate
+    p-label="Action properties"
+    [p-options]="actionOptions"
+  >
+  </po-checkbox-group>
 
   <div class="po-row">
     <po-button
-      class="po-md-6 po-lg-3"
+      class="po-lg-2 po-md-4"
       p-label="Add Action"
       [p-disabled]="formAction.form.invalid"
       (p-click)="addAction(action)"
@@ -55,7 +64,7 @@
   </div>
 </form>
 
-<hr />
+<po-divider />
 
 <form #f="ngForm">
   <div class="po-row">
@@ -69,21 +78,38 @@
     >
     </po-input>
 
-    <po-select class="po-md-3" name="position" [(ngModel)]="position" p-label="Position" [p-options]="positionOptions">
+    <po-select
+      class="po-md-6 po-lg-3"
+      name="position"
+      [(ngModel)]="position"
+      p-label="Position"
+      [p-options]="positionOptions"
+    >
     </po-select>
 
     <po-checkbox-group
-      class="po-md-3"
+      class="po-md-12 po-lg-3"
       name="properties"
       [(ngModel)]="properties"
       p-label="Properties"
       [p-options]="propertiesOptions"
     >
     </po-checkbox-group>
+
+    <po-radio-group
+      class="po-md-12"
+      name="size"
+      [(ngModel)]="size"
+      p-columns="4"
+      p-label="Size"
+      p-help="Para aplicar o tamanho small, configure o nível de acessibilidade para AA, ajustável no navbar ou serviço de tema (https://po-ui.io/documentation/po-theme)."
+      [p-options]="sizeOptions"
+    >
+    </po-radio-group>
   </div>
 
   <div class="po-row">
-    <po-button class="po-md-3" p-label="Sample Restore" (p-click)="f.reset(); formAction.reset(); restore()">
+    <po-button class="po-lg-3 po-md-6" p-label="Sample Restore" (p-click)="f.reset(); formAction.reset(); restore()">
     </po-button>
   </div>
 </form>

@@ -1,16 +1,23 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, inject } from '@angular/core';
 import { NgForm } from '@angular/forms';
 
 import { PoCheckboxGroupOption, PoComboOption } from '@po-ui/ng-components';
 
-import { PoModalAction, PoModalComponent } from '@po-ui/ng-components';
+import { PoModalAction } from '@po-ui/ng-components';
 import { PoNotificationService } from '@po-ui/ng-components';
+import { PoModalComponent } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-modal-fruits-salad',
-  templateUrl: './sample-po-modal-fruits-salad.component.html'
+  templateUrl: './sample-po-modal-fruits-salad.component.html',
+  standalone: false
 })
 export class SamplePoModalFruitsSaladComponent {
+  private poNotification = inject(PoNotificationService);
+
+  @ViewChild('optionsForm', { static: true }) form: NgForm;
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+
   accompaniment: string = '';
   fruits: Array<string>;
   orderDetail: string = '';
@@ -44,14 +51,17 @@ export class SamplePoModalFruitsSaladComponent {
     { value: 'strawberry', label: 'Strawberry' }
   ];
 
-  @ViewChild('optionsForm', { static: true }) form: NgForm;
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
-
-  constructor(private poNotification: PoNotificationService) {}
-
   closeModal() {
     this.form.reset();
     this.poModal.close();
+  }
+
+  confirmFruits() {
+    this.proccessOrder();
+  }
+
+  restore() {
+    this.form.reset();
   }
 
   openQuestionnaire() {

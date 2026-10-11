@@ -1,20 +1,19 @@
-import { Component, OnInit } from '@angular/core';
-
+import { Component, OnInit, inject } from '@angular/core';
 import { PoRadioGroupOption } from '@po-ui/ng-components';
-
 import { SamplePoLookupSwFilmsService } from './sample-po-lookup-sw-films.service';
 
 @Component({
   selector: 'sample-po-lookup-sw-films',
   templateUrl: './sample-po-lookup-sw-films.component.html',
-  providers: [SamplePoLookupSwFilmsService]
+  providers: [SamplePoLookupSwFilmsService],
+  standalone: false
 })
 export class SamplePoLookupSwFilmsComponent implements OnInit {
+  filterService = inject(SamplePoLookupSwFilmsService);
+
   entity;
   filmItemsFiltered;
   filterParams = 'people';
-
-  private filmItems;
 
   readonly characterColumns = [
     { property: 'name', label: 'Name' },
@@ -51,7 +50,7 @@ export class SamplePoLookupSwFilmsComponent implements OnInit {
     { property: 'consumables', label: 'Consumables' }
   ];
 
-  constructor(public filterService: SamplePoLookupSwFilmsService) {}
+  private filmItems;
 
   get entityColumns() {
     return this.getEntityColumns(this.filterParams);
@@ -68,7 +67,12 @@ export class SamplePoLookupSwFilmsComponent implements OnInit {
   }
 
   onSelected(entity) {
-    this.filmItemsFiltered = this.filmItems.filter(film => entity.films.includes(film.url));
+    this.filterService.getObjectByValue(entity.name, this.filterParams).subscribe(
+      result => {
+        this.filmItemsFiltered = this.filmItems.filter(film => result?.films.includes(film.url));
+      },
+      err => console.error(err)
+    );
   }
 
   private getEntityColumns(entity) {

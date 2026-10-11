@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
 
 import { formatBytes } from '../../../../utils/util';
 import { PoLanguageService } from '../../../../services/po-language/po-language.service';
@@ -9,15 +9,20 @@ import { poUploadLiteralsDefault } from '../po-upload-base.component';
 @Component({
   selector: 'po-upload-file-restrictions',
   templateUrl: './po-upload-file-restrictions.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
 export class PoUploadFileRestrictionsComponent implements OnInit {
+  private readonly changeDetector = inject(ChangeDetectorRef);
+
+  @Input('p-max-files') maxFiles: number;
+
+  literals: any;
+
   private _allowedExtensions: string;
   private _maxFileSize: string;
   private _minFileSize: string;
-  private language: string;
-
-  literals: any;
+  private readonly language: string;
 
   @Input('p-allowed-extensions') set allowedExtensions(value) {
     this._allowedExtensions = this.formatAllowedExtensions(<any>value);
@@ -26,8 +31,6 @@ export class PoUploadFileRestrictionsComponent implements OnInit {
   get allowedExtensions(): string {
     return this._allowedExtensions;
   }
-
-  @Input('p-max-files') maxFiles: number;
 
   @Input('p-max-file-size') set maxFileSize(value) {
     this._maxFileSize = formatBytes(<any>value);
@@ -45,7 +48,9 @@ export class PoUploadFileRestrictionsComponent implements OnInit {
     return this._minFileSize;
   }
 
-  constructor(private changeDetector: ChangeDetectorRef, languageService: PoLanguageService) {
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     this.language = languageService.getShortLanguage();
   }
 

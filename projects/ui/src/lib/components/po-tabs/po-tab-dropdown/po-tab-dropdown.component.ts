@@ -1,5 +1,16 @@
-import { Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  EventEmitter,
+  HostListener,
+  Input,
+  Output,
+  ViewChild,
+  inject
+} from '@angular/core';
 
+import { PoButtonComponent } from '../../po-button/po-button.component';
 import { PoPopoverComponent } from '../../po-popover/po-popover.component';
 import { PoTabComponent } from '../po-tab/po-tab.component';
 
@@ -13,20 +24,23 @@ import { PoTabComponent } from '../po-tab/po-tab.component';
  */
 @Component({
   selector: 'po-tab-dropdown',
-  templateUrl: './po-tab-dropdown.component.html'
+  templateUrl: './po-tab-dropdown.component.html',
+  standalone: false
 })
-export class PoTabDropdownComponent {
+export class PoTabDropdownComponent implements AfterViewInit {
+  private readonly elementRef = inject(ElementRef);
+
   @ViewChild('popover', { static: true }) popover: PoPopoverComponent;
-  @ViewChild('tabDrop', { read: ElementRef, static: true }) tabDropdown: ElementRef;
+
+  @ViewChild(PoButtonComponent, { static: true }) button: PoButtonComponent;
 
   // Rótulo do `po-tab-button`
   @Input('p-label') label: string;
 
-  // Diminui o tamanho do botão
-  @Input('p-small') small: boolean;
-
   // Lista de abas
   @Input('p-tabs') tabs: Array<PoTabComponent> = [];
+
+  @Input('p-size') size: string;
 
   // Evento que será emitido ao ativar uma aba
   @Output('p-activated') activated = new EventEmitter<any>();
@@ -37,11 +51,70 @@ export class PoTabDropdownComponent {
   // Evento de click
   @Output('p-click') click = new EventEmitter<any>();
 
-  getContainerClass() {
-    return this.small ? 'po-tab-dropdown-container-sm' : 'po-tab-dropdown-container';
+  isDropdownOpen: boolean = false;
+  dropdownStyles: any = {};
+
+  ngAfterViewInit(): void {
+    this.setDropdownPosition();
   }
 
-  togglePopover(): void {
-    this.popover.isHidden ? this.popover.open() : this.popover.close();
+  toggleDropdown() {
+    this.isDropdownOpen = !this.isDropdownOpen;
+    if (this.isDropdownOpen) {
+      this.setDropdownPosition();
+    }
+  }
+
+  closeAndReturnToButtom() {
+    this.closeDropdown();
+    this.button.focus();
+  }
+
+  closeDropdown() {
+    this.isDropdownOpen = false;
+  }
+
+  get buttonElement() {
+    return this.button.buttonElement;
+  }
+
+  setDropdownPosition() {
+    const buttonRect = this.buttonElement.nativeElement.getBoundingClientRect();
+    const tabsContainerRect = this.buttonElement.nativeElement.closest('.po-tabs-container').getBoundingClientRect();
+    const dropdownWidth = 300;
+
+    const isInsidePage = this.elementRef.nativeElement.closest('.po-page-content');
+    this.dropdownStyles = this.calculateDropdownStyles(buttonRect, tabsContainerRect, dropdownWidth, isInsidePage);
+  }
+
+  private calculateDropdownStyles(
+    buttonRect: DOMRect,
+    tabsContainerRect: DOMRect,
+    dropdownWidth: number,
+    isInsidePage: boolean
+  ) {
+    if (isInsidePage) {
+      return {
+        top: `${tabsContainerRect.height + 4 + window.scrollY}px`,
+        maxWidth: `${dropdownWidth}px`,
+        right: `${tabsContainerRect.right - buttonRect.right}px`
+      };
+    }
+
+    let rightPosition = tabsContainerRect.width - buttonRect.right;
+    rightPosition = Math.max(0, rightPosition);
+
+    return {
+      top: `${tabsContainerRect.bottom + 4 + window.scrollY}px`,
+      maxWidth: `${dropdownWidth}px`,
+      right: `${rightPosition}px`
+    };
+  }
+
+  @HostListener('document:click', ['$event'])
+  onClickOutside(event: MouseEvent) {
+    if (this.isDropdownOpen && !this.elementRef.nativeElement.contains(event.target)) {
+      this.closeDropdown();
+    }
   }
 }

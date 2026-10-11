@@ -1,4 +1,5 @@
-import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
+import { UntypedFormControl } from '@angular/forms';
 
 import { configureTestSuite } from './../../../util-test/util-expect.spec';
 
@@ -6,6 +7,7 @@ import { PoEmailComponent } from './po-email.component';
 import { PoFieldContainerBottomComponent } from './../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
 import { PoFieldContainerComponent } from '../po-field-container/po-field-container.component';
 import { PoCleanComponent } from './../po-clean/po-clean.component';
+import { PoIconModule } from '../../po-icon';
 
 describe('PoEmailComponent:', () => {
   let component: PoEmailComponent;
@@ -13,6 +15,7 @@ describe('PoEmailComponent:', () => {
 
   configureTestSuite(() => {
     TestBed.configureTestingModule({
+      imports: [PoIconModule],
       declarations: [PoEmailComponent, PoFieldContainerComponent, PoCleanComponent, PoFieldContainerBottomComponent]
     });
   });
@@ -23,8 +26,7 @@ describe('PoEmailComponent:', () => {
     component.label = 'Label de teste';
     component.help = 'Help de teste';
     component.clean = true;
-
-    fixture.detectChanges();
+    component.icon = 'ICON_MAIL';
   });
 
   it('should be created', () => {
@@ -32,6 +34,7 @@ describe('PoEmailComponent:', () => {
   });
 
   it('should return null in extraValidation()', () => {
+    fixture.detectChanges();
     expect(component.extraValidation(null)).toBeNull();
   });
 
@@ -98,13 +101,24 @@ describe('PoEmailComponent:', () => {
 
       expect(component.inputEl.nativeElement.removeEventListener).not.toHaveBeenCalled();
     });
+
+    it(`ngOnChanges: should set displayAdditionalHelp false when label changes`, () => {
+      const changes: any = {
+        label: 'new label'
+      };
+
+      component.ngOnChanges(changes);
+
+      expect(component.displayAdditionalHelp).toBeFalse();
+    });
   });
 
   describe('Templates:', () => {
     const eventKeyup = new KeyboardEvent('keyup', { 'key': 'a' });
 
     it('should have `mail` icon', () => {
-      expect(fixture.debugElement.nativeElement.querySelector('.po-icon-mail')).toBeTruthy();
+      fixture.detectChanges();
+      expect(fixture.debugElement.nativeElement.querySelector('.an-envelope-simple')).toBeTruthy();
     });
 
     it('should call `getScreenValue` and `verifyPattern` on input keyup', fakeAsync(() => {
@@ -122,36 +136,28 @@ describe('PoEmailComponent:', () => {
 
       expect(component.getScreenValue).toHaveBeenCalled();
       expect(component.verifyPattern).toHaveBeenCalled();
+      flush();
     }));
+  });
 
-    it(`should show optional if the field isn't 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = false;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeTruthy();
+  describe('Integration:', () => {
+    it(`should return null on validate if email is valid`, () => {
+      expect(component.validate(new UntypedFormControl('JOHN@EMAIL.COM'))).toBe(null);
+      expect(component.validate(new UntypedFormControl('JOHN@email.com'))).toBe(null);
+      expect(component.validate(new UntypedFormControl('JOHN@EMAIL.EMAILEXTENSION'))).toBe(null);
     });
 
-    it(`shouldn't show optional if the field is 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = true;
-      component.optional = true;
-      component.label = 'label';
+    it(`should return '{ pattern: { valid: false } }' on validate if email is invalid`, () => {
+      const patternError = { pattern: { valid: false } };
 
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-    });
-
-    it(`shouldn't show optional if the field isn't 'required', has 'label' but 'p-optional' is false.`, () => {
-      component.required = true;
-      component.optional = false;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
+      expect(component.validate(new UntypedFormControl('JOHN@'))).toEqual(patternError);
+      expect(component.validate(new UntypedFormControl('JOHN@EMAIL.'))).toEqual(patternError);
+      expect(component.validate(new UntypedFormControl('JOHN'))).toEqual(patternError);
+      expect(
+        component.validate(
+          new UntypedFormControl('JOHN@EMAIL.EMAILEXTENSIONWITHMORETHANSIXTYSIXCHARACTERSBECAUSEWENEEDANERRORCONDITION')
+        )
+      ).toEqual(patternError);
     });
   });
 });

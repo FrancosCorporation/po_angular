@@ -3,8 +3,6 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 
-import { configureTestSuite } from '../../util-test/util-expect.spec';
-
 import { PoSlideCirclesComponent } from './po-slide-circles/po-slide-circles.component';
 import { PoSlideComponent } from './po-slide.component';
 import { PoSlideItemComponent } from './po-slide-item/po-slide-item.component';
@@ -16,14 +14,12 @@ describe('PoSlideComponent:', () => {
 
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [RouterTestingModule.withRoutes([]), BrowserAnimationsModule],
       declarations: [PoSlideCirclesComponent, PoSlideComponent, PoSlideControlComponent, PoSlideItemComponent]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoSlideComponent);
     component = fixture.componentInstance;
 
@@ -44,39 +40,44 @@ describe('PoSlideComponent:', () => {
       { image: '/image-slide-4.jpg' }
     ];
 
-    describe('onResize:', () => {
-      it('onResize: should trigger onResize method when window is resized ', () => {
-        const spyOnResize = spyOn(component, 'onResize');
+    it('onResize: should trigger onResize method when window is resized ', () => {
+      const spyOnResize = spyOn(component, 'onResize');
 
-        window.dispatchEvent(new Event('resize'));
+      window.dispatchEvent(new Event('resize'));
 
-        expect(spyOnResize).toHaveBeenCalled();
-      });
+      expect(spyOnResize).toHaveBeenCalled();
+    });
 
-      it('onResize: should call `setSlideItemWidth` and `goToItem` with `currentSlideIndex` if has slides', () => {
-        // define slide
-        component.slides = slides;
-        fixture.detectChanges();
+    it('onResize: should call `setSlideItemWidth` and `goToItem` with `currentSlideIndex`', fakeAsync(() => {
+      spyOn(component, <any>'setSlideItemWidth');
+      spyOn(component, 'goToItem');
 
-        spyOn(component, <any>'setSlideItemWidth');
-        spyOn(component, 'goToItem');
-        component.onResize();
+      component.onResize();
 
-        expect(component['setSlideItemWidth']).toHaveBeenCalled();
-        expect(component.goToItem).toHaveBeenCalledWith(component.currentSlideIndex);
-      });
+      tick(150);
 
-      it('onResize: shouldn`t call `setSlideItemWidth` and `goToItem` if doesn`t have slide', () => {
-        component['slide'] = undefined;
+      expect(component['setSlideItemWidth']).toHaveBeenCalled();
+      expect(component.goToItem).toHaveBeenCalledWith(component.currentSlideIndex);
+    }));
 
-        spyOn(component, <any>'setSlideItemWidth');
-        spyOn(component, 'goToItem');
+    it('ngOnDestroy: should call resizeSubscription.unsubscribe', fakeAsync(() => {
+      const spyResizeSubscription = spyOn(component['resizeSubscription'], 'unsubscribe');
 
-        component.onResize();
+      component.onResize();
 
-        expect(component['setSlideItemWidth']).not.toHaveBeenCalled();
-        expect(component['goToItem']).not.toHaveBeenCalledWith(component.currentSlideIndex);
-      });
+      tick(150);
+
+      component.ngOnDestroy();
+
+      expect(spyResizeSubscription).toHaveBeenCalled();
+    }));
+
+    it('ngOnDestroy: shouldn`t throw error if resizeSubscription is undefined', () => {
+      component['resizeSubscription'] = undefined;
+
+      const fnDestroy = () => component.ngOnDestroy();
+
+      expect(fnDestroy).not.toThrow();
     });
 
     describe('ngDoCheck:', () => {
@@ -161,6 +162,14 @@ describe('PoSlideComponent:', () => {
       component.ngOnChanges({});
 
       expect(component['setSlideHeight']).not.toHaveBeenCalled();
+    });
+
+    it('getCurrentSlideIndex: should call and return current slide index', () => {
+      component.currentSlideIndex = 1;
+
+      const index = component.getCurrentSlideIndex();
+
+      expect(index).toBe(1);
     });
 
     it('goToItem: should set `currentSlideIndex` and call `animate` with `offset`', () => {

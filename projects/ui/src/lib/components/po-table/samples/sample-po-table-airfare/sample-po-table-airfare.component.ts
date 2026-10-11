@@ -1,4 +1,4 @@
-import { Component, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ViewChild, OnInit } from '@angular/core';
 
 import {
   PoDialogService,
@@ -14,32 +14,74 @@ import { SamplePoTableAirfareService } from './sample-po-table-airfare.service';
 @Component({
   selector: 'sample-po-table-airfare',
   templateUrl: './sample-po-table-airfare.component.html',
-  providers: [SamplePoTableAirfareService, PoDialogService]
+  providers: [SamplePoTableAirfareService, PoDialogService],
+  standalone: false
 })
-export class SamplePoTableAirfareComponent {
+export class SamplePoTableAirfareComponent implements AfterViewInit, OnInit {
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+  @ViewChild(PoTableComponent, { static: true }) poTable: PoTableComponent;
+
   actions: Array<PoTableAction> = [
     {
       action: this.discount.bind(this),
-      icon: 'po-icon-finance',
+      icon: 'an an-currency-circle-dollar',
       label: 'Apply Discount',
       disabled: this.validateDiscount.bind(this)
     },
-    { action: this.details.bind(this), icon: 'po-icon-info', label: 'Details' }
+    { action: this.details.bind(this), icon: 'an an-info', label: 'Details' },
+    { action: this.remove.bind(this), icon: 'po-icon an an-trash', label: 'Remove' }
   ];
-  columns: Array<PoTableColumn> = this.sampleAirfare.getColumns();
+  columns: Array<PoTableColumn>;
+  columnsDefault: Array<PoTableColumn>;
   detail: any;
-  items: Array<any> = this.sampleAirfare.getItems();
+  items: Array<any>;
   total: number = 0;
   totalExpanded = 0;
-
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
-  @ViewChild(PoTableComponent, { static: true }) poTable: PoTableComponent;
+  initialColumns: Array<any>;
 
   constructor(
     private sampleAirfare: SamplePoTableAirfareService,
     private poNotification: PoNotificationService,
     private poDialog: PoDialogService
   ) {}
+
+  ngOnInit(): void {
+    this.columns = this.sampleAirfare.getColumns();
+    this.items = this.sampleAirfare.getItems();
+  }
+
+  ngAfterViewInit(): void {
+    this.columnsDefault = this.columns;
+    if (localStorage.getItem('initial-columns')) {
+      this.initialColumns = localStorage.getItem('initial-columns').split(',');
+
+      const result = this.columns.map(el => ({
+        ...el,
+        visible: this.initialColumns.includes(el.property)
+      }));
+
+      const newColumn = [...result];
+      newColumn.sort(this.sortFunction);
+      this.columns = newColumn;
+    }
+  }
+
+  sortFunction(a, b) {
+    const teste = localStorage.getItem('initial-columns').split(',');
+    const indexA = teste.indexOf(a['property']);
+    const indexB = teste.indexOf(b['property']);
+    if (indexA === -1) {
+      return 1;
+    }
+    if (indexB === -1) {
+      return -1;
+    }
+    if (indexA < indexB) {
+      return -1;
+    } else if (indexA > indexB) {
+      return 1;
+    }
+  }
 
   addToCart() {
     const selectedItems = this.poTable.getSelectedRows();
@@ -70,7 +112,8 @@ export class SamplePoTableAirfareComponent {
           break;
       }
     });
-    this.items.forEach(item => (item.$selected = false));
+
+    this.poTable.unselectRows();
   }
 
   collapseAll() {
@@ -88,15 +131,23 @@ export class SamplePoTableAirfareComponent {
     }
   }
 
+  deleteItems(items: Array<any>) {
+    this.items = items;
+  }
+
   details(item) {
     this.detail = item;
     this.poModal.open();
   }
 
+  remove(item: { [key: string]: any }) {
+    this.poTable.removeItem(item);
+  }
+
   discount(item) {
     if (!item.disableDiscount) {
-      item.value = item.value - item.value * 0.2;
-      item.disableDiscount = true;
+      const updatedItem = { ...item, value: item.value - item.value * 0.2, disableDiscount: true };
+      this.poTable.updateItem(item, updatedItem);
     }
   }
 
@@ -123,6 +174,14 @@ export class SamplePoTableAirfareComponent {
     if (row.value) {
       this.total += row.value;
     }
+  }
+
+  restoreColumn() {
+    this.columns = this.columnsDefault;
+  }
+
+  changeColumnVisible(event) {
+    localStorage.setItem('initial-columns', event);
   }
 
   private getDescription(item: any) {

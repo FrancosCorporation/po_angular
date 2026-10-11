@@ -1,22 +1,30 @@
 import {
   AfterViewInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   ElementRef,
   forwardRef,
   HostListener,
-  Input,
   OnDestroy,
   Renderer2,
-  ViewChild
+  ViewChild,
+  inject,
+  OnChanges,
+  SimpleChanges
 } from '@angular/core';
 import { NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
-import { formatYear, isMobile, setYearFrom0To100 } from '../../../utils/util';
+import { isMobile, setHelperSettings, uuid, PoUtils } from '../../../utils/util';
 import { PoControlPositionService } from './../../../services/po-control-position/po-control-position.service';
 
-import { PoCalendarComponent } from './po-calendar/po-calendar.component';
-import { PoDatepickerBaseComponent } from './po-datepicker-base.component';
+import { isObservable, of, Subscription, switchMap } from 'rxjs';
 import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { PoButtonComponent } from '../../po-button/po-button.component';
+import { PoCalendarComponent } from '../../po-calendar/po-calendar.component';
+import { PoDatepickerBaseComponent } from './po-datepicker-base.component';
+import { PoDatepickerLiterals } from './po-datepicker.literals';
+import { PoHelperComponent } from '../../po-helper';
 
 const poCalendarContentOffset = 8;
 const poCalendarPositionDefault = 'bottom-left';
@@ -29,13 +37,21 @@ const poCalendarPositionDefault = 'bottom-left';
  * <example name="po-datepicker-basic" title="PO Datepicker Basic">
  *  <file name="sample-po-datepicker-basic/sample-po-datepicker-basic.component.html"> </file>
  *  <file name="sample-po-datepicker-basic/sample-po-datepicker-basic.component.ts"> </file>
- *  <file name="sample-po-datepicker-basic/sample-po-datepicker-basic.component.po.ts"> </file>
- *  <file name="sample-po-datepicker-basic/sample-po-datepicker-basic.component.e2e-spec.ts"> </file>
  * </example>
  *
  * <example name="po-datepicker-labs" title="PO Datepicker Labs">
  *  <file name="sample-po-datepicker-labs/sample-po-datepicker-labs.component.html"> </file>
  *  <file name="sample-po-datepicker-labs/sample-po-datepicker-labs.component.ts"> </file>
+ * </example>
+ *
+ * <example name="po-datepicker-year" title="PO Datepicker Year">
+ *  <file name="sample-po-datepicker-year/sample-po-datepicker-year.component.html"> </file>
+ *  <file name="sample-po-datepicker-year/sample-po-datepicker-year.component.ts"> </file>
+ * </example>
+ *
+ * <example name="po-datepicker-month-year" title="PO Datepicker MonthYear">
+ *  <file name="sample-po-datepicker-month-year/sample-po-datepicker-month-year.component.html"> </file>
+ *  <file name="sample-po-datepicker-month-year/sample-po-datepicker-month-year.component.ts"> </file>
  * </example>
  *
  * <example name="po-datepicker-airfare" title="PO Datepicker - Airfare">
@@ -63,12 +79,31 @@ const poCalendarPositionDefault = 'bottom-left';
       multi: true
     },
     PoControlPositionService
-  ]
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
-export class PoDatepickerComponent extends PoDatepickerBaseComponent implements AfterViewInit, OnDestroy {
-  date;
+export class PoDatepickerComponent extends PoDatepickerBaseComponent implements AfterViewInit, OnDestroy, OnChanges {
+  private readonly controlPosition = inject(PoControlPositionService);
+  private readonly renderer = inject(Renderer2);
+
+  @ViewChild('calendar', { static: true }) calendar: PoCalendarComponent;
+  @ViewChild('dialogPicker', { read: ElementRef, static: false }) dialogPicker: ElementRef;
+  @ViewChild('iconDatepicker') iconDatepicker: PoButtonComponent;
+  @ViewChild('inp', { read: ElementRef, static: true }) inputEl: ElementRef;
+  @ViewChild('iconClean', { read: ElementRef })
+  iconClean!: ElementRef<HTMLElement>;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
+
+  displayAdditionalHelp: boolean = false;
   el: ElementRef;
-  hour: string;
+  declare hour: string;
+  id = `po-datepicker[${uuid()}]`;
+  visible: boolean = false;
+  literals: any;
+
+  eventListenerFunction: () => void;
+  eventResizeListener: () => void;
 
   private clickListener;
   private readonly dateRegex = new RegExp(
@@ -84,33 +119,85 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
   );
   private timeoutChange: any;
   private valueBeforeChange: string;
-
-  eventListenerFunction: () => void;
-  eventResizeListener: () => void;
-
-  @ViewChild('calendar', { static: true }) calendar: PoCalendarComponent;
-  @ViewChild('dialogPicker', { read: ElementRef, static: true }) dialogPicker: ElementRef;
-  @ViewChild('iconDatepicker', { read: ElementRef, static: true }) iconDatepicker: ElementRef;
-  @ViewChild('inp', { read: ElementRef, static: true }) inputEl: ElementRef;
+  private subscriptionValidator: Subscription = new Subscription();
 
   get autocomplete() {
     return this.noAutocomplete ? 'off' : 'on';
   }
 
-  /** Rótulo do campo. */
-  @Input('p-label') label?: string;
+  get dateInputValue(): string {
+    return this.inputEl.nativeElement.value;
+  }
 
-  /** Texto de apoio do campo. */
-  @Input('p-help') help?: string;
+  constructor() {
+    const languageService = inject(PoLanguageService);
+    const cd = inject(ChangeDetectorRef);
+    const el = inject(ElementRef);
 
-  constructor(
-    private controlPosition: PoControlPositionService,
-    languageService: PoLanguageService,
-    private renderer: Renderer2,
-    el: ElementRef
-  ) {
-    super(languageService);
+    super(languageService, cd);
+    this.languageService = languageService;
+    this.cd = cd;
+
+    this.shortLanguage = this.languageService.getShortLanguage();
     this.el = el;
+    const language = languageService.getShortLanguage();
+    this.literals = {
+      ...PoDatepickerLiterals[language]
+    };
+  }
+
+  @HostListener('keyup', ['$event'])
+  onKeyup($event: any) {
+    if (this.readonly || $event?.target !== this.inputEl?.nativeElement) {
+      return;
+    }
+
+    this.objMask?.keyup($event);
+
+    if (this.mode === 'month-year') {
+      this.handleMonthYearKeyup();
+      return;
+    }
+
+    if (this.mode === 'year') {
+      this.handleYearKeyup();
+      return;
+    }
+
+    // Controla a atualização do model, verificando se a data é valida
+    if (this.objMask?.valueToModel || this.objMask?.valueToModel === '') {
+      if (this.objMask?.valueToModel.length >= 10) {
+        this.controlModel(this.getDateFromString(this.inputEl.nativeElement.value));
+        this.date = this.getDateFromString(this.inputEl.nativeElement.value);
+      } else {
+        this.date = undefined;
+        this.controlModel(this.date);
+      }
+    } else {
+      this.date = undefined;
+    }
+  }
+
+  @HostListener('keydown', ['$event'])
+  onKeydown($event?: any) {
+    if (this.readonly) {
+      return;
+    }
+
+    if ($event.key === 'Escape' && this.visible) {
+      this.togglePicker(false);
+
+      $event.preventDefault();
+      $event.stopPropagation();
+    }
+
+    if ($event.key === 'Tab' && $event.shiftKey && $event.target instanceof HTMLInputElement && this.visible) {
+      this.togglePicker();
+    }
+
+    if ($event?.target === this.inputEl?.nativeElement) {
+      this.objMask?.keydown($event);
+    }
   }
 
   ngAfterViewInit() {
@@ -118,10 +205,26 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
     if (this.autoFocus) {
       this.focus();
     }
+    if (this.iconDatepicker?.buttonElement?.nativeElement) {
+      this.renderer.setAttribute(this.iconDatepicker.buttonElement.nativeElement, 'aria-label', this.literals.open);
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
   }
 
   ngOnDestroy() {
+    this.subscriptionValidator?.unsubscribe();
     this.removeListeners();
+  }
+
+  emitAdditionalHelp() {
+    if (this.label && this.isAdditionalHelpEventTriggered()) {
+      this.additionalHelp.emit();
+    }
   }
 
   /**
@@ -142,35 +245,96 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
    * ```
    */
   focus(): void {
-    if (!this.disabled) {
+    if (!this.disabled && this.inputEl?.nativeElement) {
       this.inputEl.nativeElement.focus();
     }
   }
 
-  togglePicker() {
-    if (this.disabled || this.readonly) {
+  getAdditionalHelpTooltip() {
+    return this.isAdditionalHelpEventTriggered() ? null : this.additionalHelpTooltip;
+  }
+
+  togglePicker(focusInput = true) {
+    if (this.disabled || this.readonly || !this.iconDatepicker?.buttonElement?.nativeElement) {
       return;
     }
 
-    if (!this.calendar.visible) {
-      this.calendar.init();
+    if (!this.visible) {
+      this.visible = true;
       this.setCalendarPosition();
       this.initializeListeners();
+
+      this.renderer.setAttribute(this.inputEl.nativeElement, 'aria-expanded', 'true');
+      this.renderer.setAttribute(this.iconDatepicker.buttonElement.nativeElement, 'aria-expanded', 'true');
     } else {
       this.inputEl.nativeElement.disabled = false;
-      this.closeCalendar();
+      this.closeCalendar(focusInput);
+
+      this.renderer.removeAttribute(this.inputEl.nativeElement, 'aria-expanded');
+      this.renderer.removeAttribute(this.iconDatepicker.buttonElement.nativeElement, 'aria-expanded');
     }
   }
 
-  dateSelected() {
-    if (!this.verifyMobile()) {
-      this.inputEl.nativeElement.focus();
+  closeCalendar(focusInput = true) {
+    this.visible = false;
+    this.removeListeners();
+    this.setDialogPickerStyleDisplay('none');
+
+    if (!this.verifyMobile() && focusInput) {
+      this.focus();
     }
 
-    this.inputEl.nativeElement.value = this.formatToDate(this.date);
+    if (!focusInput && this.clean && this.inputEl.nativeElement.value) {
+      setTimeout(() => {
+        this.iconDatepicker.focus();
+      }, 0);
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      this.iconDatepicker?.buttonElement?.nativeElement?.focus();
+    });
+  }
+
+  dateSelected(event?: any) {
+    if (event === '') {
+      this.clear();
+      setTimeout(() => this.closeCalendar(), 200);
+      this.onchange.emit(undefined);
+      return;
+    }
+
+    this.onTouchedModel?.();
+    if (!this.verifyMobile()) {
+      this.focus();
+    }
+
+    if (this.mode === 'month-year' && event instanceof Date) {
+      this.date = event;
+      const separator = this.languageService.getDateSeparator(this.locale);
+      const displayValue = ('0' + (event.getMonth() + 1)).slice(-2) + separator + event.getFullYear();
+      this.inputEl.nativeElement.value = displayValue;
+      const emitString = ('0' + (event.getMonth() + 1)).slice(-2) + '/' + event.getFullYear();
+      this.callOnChange(emitString);
+      this.controlChangeEmitter();
+      this.togglePicker();
+      return;
+    }
+
+    if (this.mode === 'year' && event instanceof Date) {
+      this.date = event;
+      this.inputEl.nativeElement.value = `${event.getFullYear()}`;
+      this.callOnChange(`${event.getFullYear()}`);
+      this.controlChangeEmitter();
+      this.togglePicker();
+      return;
+    }
+
+    this.inputEl.nativeElement.value = this.formatToDate(this.date) || '';
+
     this.controlModel(this.date);
     this.controlChangeEmitter();
-    this.closeCalendar();
+    this.togglePicker();
   }
 
   // Esconde Picker quando for clicado fora
@@ -178,51 +342,21 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
     if (!this.dialogPicker || !this.iconDatepicker) {
       return;
     }
-
     if (
       (!this.dialogPicker.nativeElement.contains(event.target) || this.hasOverlayClass(event.target)) &&
-      !this.iconDatepicker.nativeElement.contains(event.target) &&
+      !this.iconDatepicker.buttonElement.nativeElement.contains(event.target) &&
       !this.hasAttrCalendar(event.target)
     ) {
       this.closeCalendar();
     }
   }
 
-  @HostListener('keyup', ['$event'])
-  onKeyup($event: any) {
-    if (this.readonly) {
-      return;
-    }
-
-    this.objMask.keyup($event);
-    // Controla a atualização do model, verificando se a data é valida
-    if (this.objMask.valueToModel || this.objMask.valueToModel === '') {
-      if (this.objMask.valueToModel.length >= 10) {
-        this.controlModel(this.getDateFromString(this.inputEl.nativeElement.value));
-        this.date = this.getDateFromString(this.inputEl.nativeElement.value);
-      } else {
-        this.date = undefined;
-        this.controlModel(this.date);
-      }
-    } else {
-      this.date = undefined;
-    }
-  }
-
-  @HostListener('keydown', ['$event'])
-  onKeydown($event?: any) {
-    if (this.readonly) {
-      return;
-    }
-
-    this.objMask.keydown($event);
-  }
-
   hasInvalidClass() {
     return (
       this.el.nativeElement.classList.contains('ng-invalid') &&
       this.el.nativeElement.classList.contains('ng-dirty') &&
-      this.inputEl.nativeElement.value !== ''
+      (this.inputEl.nativeElement.value !== '' ||
+        (this.showErrorMessageRequired && (this.required || this.hasValidatorRequired)))
     );
   }
 
@@ -233,18 +367,43 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
   clear() {
     this.valueBeforeChange = this.formatToDate(this.date);
     this.date = undefined;
+    this.inputEl.nativeElement.value = '';
+
     this.controlModel(this.date);
 
     this.controlChangeEmitter();
   }
 
+  clearAndFocus() {
+    this.clear();
+
+    setTimeout(() => {
+      this.focus();
+    }, 200);
+  }
+
   eventOnBlur($event: any) {
-    const date = this.inputEl.nativeElement.value;
-    const newDate = date ? this.getDateFromString(date) : undefined;
-    this.objMask.blur($event);
+    this.onTouchedModel?.();
+
+    this.objMask?.blur($event);
     this.onblur.emit();
 
-    if (this.objMask.valueToModel) {
+    if (this.mode === 'month-year') {
+      this.handleMonthYearBlur();
+      this.controlChangeEmitter();
+      return;
+    }
+
+    if (this.mode === 'year') {
+      this.handleYearBlur();
+      this.controlChangeEmitter();
+      return;
+    }
+
+    const date = this.inputEl.nativeElement.value;
+    const newDate = date ? this.getDateFromString(date) : undefined;
+
+    if (this.objMask?.valueToModel) {
       if (this.objMask.valueToModel.length >= 10) {
         this.controlModel(newDate);
         this.date = newDate;
@@ -268,20 +427,54 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
       setTimeout(() => this.togglePicker(), 0);
     } else {
       // Atualiza a posição do cursor ao clicar
-      this.objMask.click($event);
+      this.objMask?.click($event);
     }
   }
 
-  formatToDate(value: Date) {
+  onKeyDown(event: KeyboardEvent): void {
+    const isFieldFocused = document.activeElement === this.inputEl.nativeElement;
+
+    if (isFieldFocused) {
+      this.keydown.emit(event);
+    }
+  }
+
+  onKeyPress(event: any) {
+    if (event.key === 'Tab' && event.shiftKey && !this.visible && this.clean && this.inputEl.nativeElement.value) {
+      this.iconClean.nativeElement?.focus();
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === 'Tab' && event.shiftKey && !this.visible) {
+      this.focus();
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  formatToDate(value: any) {
     if (!value) {
       return undefined;
     }
 
-    let dateFormatted = this.format;
+    if (this.mode === 'month-year' && typeof value === 'string') {
+      return value;
+    }
+
+    if (this.mode === 'year' && (typeof value === 'string' || typeof value === 'number')) {
+      return `${value}`;
+    }
+
+    if (!(value instanceof Date)) {
+      return undefined;
+    }
+
+    let dateFormatted = PoUtils.replaceFormatSeparator(this.format, this.languageService.getDateSeparator(this.locale));
 
     dateFormatted = dateFormatted.replace('dd', ('0' + value.getDate()).slice(-2));
     dateFormatted = dateFormatted.replace('mm', ('0' + (value.getMonth() + 1)).slice(-2));
-    dateFormatted = dateFormatted.replace('yyyy', formatYear(value.getFullYear()));
+    dateFormatted = dateFormatted.replace('yyyy', PoUtils.formatYear(value.getFullYear()));
 
     return dateFormatted;
   }
@@ -292,45 +485,149 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
     }
   }
 
-  // Função implementada do ControlValueAccessor
-  writeValue(value: any) {
-    if (this.inputEl && value) {
-      if (value instanceof Date) {
-        const dateString = value.toString();
-        this.hour =
-          'T' + dateString.substring(16, 24) + dateString.substring(28, 31) + ':' + dateString.substring(31, 33);
-        this.date = value;
-        this.inputEl.nativeElement.value = this.formatToDate(value);
-      } else if (this.isValidDateIso(value) || this.isValidExtendedIso(value)) {
-        if (this.isValidExtendedIso(value)) {
-          this.hour = value.substring(10, 25);
-        }
-
-        if (this.isoFormat === undefined) {
-          this.isExtendedISO = this.isValidExtendedIso(value);
-        }
-
-        const day = parseInt(value.substring(8, 10), 10);
-        const month = parseInt(value.substring(5, 7), 10) - 1;
-        const year = parseInt(value.substring(0, 4), 10);
-
-        const dateTemp = new Date(year, month, day);
-
-        setYearFrom0To100(dateTemp, year);
-
-        this.date = dateTemp;
-        this.inputEl.nativeElement.value = this.formatToDate(dateTemp);
-      } else {
-        this.inputEl.nativeElement.value = '';
-        this.date = undefined;
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * // Exemplo com p-label e p-helper
+   * <po-datepicker
+   *  #datepicker
+   *  ...
+   *  p-label="Label do datepicker"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, datepicker)"
+   * ></po-datepicker>
+   * ```
+   * ```
+   * ...
+   * onKeyDown(event: KeyboardEvent, inp: PoDatepickerComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  showAdditionalHelp(): boolean {
+    this.displayAdditionalHelp = !this.displayAdditionalHelp;
+    const helper = this.poHelperComponent();
+    const isHelpEvt = this.isAdditionalHelpEventTriggered();
+    if (!this.label && (helper || this.additionalHelpTooltip || isHelpEvt)) {
+      if (isHelpEvt) {
+        this.additionalHelp.emit();
       }
-      this.controlModel(this.date);
-    } else if (this.inputEl) {
-      this.inputEl.nativeElement.value = '';
-      this.date = undefined;
+      if (typeof helper !== 'string' && typeof helper?.eventOnClick === 'function') {
+        helper.eventOnClick();
+        return;
+      }
+      if (this.helperEl?.helperIsVisible()) {
+        this.helperEl?.closeHelperPopover();
+        return;
+      }
+      this.helperEl?.openHelperPopover();
+      return;
+    }
+    return this.displayAdditionalHelp;
+  }
+
+  private handleSpecialModes(value: any): boolean {
+    if (this.mode === 'month-year') {
+      this.writeMonthYearValue(value);
+      return true;
     }
 
+    if (this.mode === 'year') {
+      this.writeYearValue(value);
+      return true;
+    }
+
+    return false;
+  }
+
+  private processValue(value: any) {
+    if (value instanceof Date) {
+      this.handleDateInstance(value);
+      return;
+    }
+
+    if (this.isValidDateIso(value) || this.isValidExtendedIso(value)) {
+      this.handleIsoString(value);
+      return;
+    }
+
+    this.clearValue();
+  }
+
+  private handleDateInstance(value: Date) {
+    const dateString = value.toString();
+
+    this.hour = 'T' + dateString.substring(16, 24) + dateString.substring(28, 31) + ':' + dateString.substring(31, 33);
+
+    this.date = value;
+    this.inputEl.nativeElement.value = this.formatToDate(value);
+  }
+
+  private handleIsoString(value: string) {
+    if (this.isValidExtendedIso(value)) {
+      this.hour = value.substring(10, 25);
+    }
+
+    if (this.isoFormat === undefined) {
+      this.isExtendedISO = this.isValidExtendedIso(value);
+    }
+
+    const day = parseInt(value.substring(8, 10), 10);
+    const month = parseInt(value.substring(5, 7), 10) - 1;
+    const year = parseInt(value.substring(0, 4), 10);
+
+    const dateTemp = new Date(year, month, day);
+
+    PoUtils.setYearFrom0To100(dateTemp, year);
+
+    this.date = dateTemp;
+    this.inputEl.nativeElement.value = this.formatToDate(dateTemp);
+  }
+
+  private clearValue() {
+    this.inputEl.nativeElement.value = '';
+    this.date = undefined;
+  }
+
+  private resetInput() {
+    this.inputEl.nativeElement.value = '';
+    this.date = undefined;
+    this.callOnChange(this.date, false);
+  }
+
+  private finalizeWrite() {
+    this.controlModel(this.date);
+
+    const dateModelFormatted = this.formatToDate(this.date);
+    this.verifyErrorAsync(dateModelFormatted);
+
     this.valueBeforeChange = this.formatToDate(this.date);
+  }
+
+  // Função implementada do ControlValueAccessor
+  writeValue(value: any) {
+    if (!this.inputEl) {
+      return;
+    }
+
+    if (!value) {
+      this.resetInput();
+      this.valueBeforeChange = this.formatToDate(this.date);
+      return;
+    }
+
+    if (this.handleSpecialModes(value)) {
+      return;
+    }
+
+    this.processValue(value);
+    this.finalizeWrite();
   }
 
   isValidDateIso(value: string) {
@@ -342,7 +639,36 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
   }
 
   hasOverlayClass(element: any) {
-    return element.classList.contains('po-calendar-overlay');
+    return element.classList.contains('po-datepicker-calendar-overlay');
+  }
+
+  verifyErrorAsync(value) {
+    if (this.errorPattern !== '' && this.errorAsync) {
+      const errorAsync = this.errorAsync(value);
+      if (isObservable(errorAsync)) {
+        this.subscriptionValidator?.unsubscribe();
+        this.subscriptionValidator = errorAsync
+          .pipe(
+            switchMap(error => {
+              const element = this.el.nativeElement;
+              if (error) {
+                element.classList.add('ng-invalid');
+                element.classList.add('ng-dirty');
+                this.cd.detectChanges();
+              } else if (
+                element.classList.contains('ng-invalid') &&
+                element.classList.contains('ng-dirty') &&
+                !this.isInvalid
+              ) {
+                element.classList.remove('ng-invalid');
+                this.cd.detectChanges();
+              }
+              return of('');
+            })
+          )
+          .subscribe();
+      }
+    }
   }
 
   /* istanbul ignore next */
@@ -350,13 +676,151 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
     return isMobile();
   }
 
-  private closeCalendar() {
-    this.calendar.close();
-    this.removeListeners();
-    this.setDialogPickerStyleDisplay('none');
+  private handleMonthYearKeyup(): void {
+    if (!(this.objMask?.valueToModel || this.objMask?.valueToModel === '')) {
+      return;
+    }
+    const value = this.inputEl.nativeElement.value;
+    if (value.length < 7) {
+      this.callOnChange('');
+      return;
+    }
+    this.applyMonthYearValue(value);
+  }
+
+  private handleYearKeyup(): void {
+    if (!(this.objMask?.valueToModel || this.objMask?.valueToModel === '')) {
+      return;
+    }
+    const value = this.inputEl.nativeElement.value;
+    if (value.length < 4) {
+      this.callOnChange('');
+      return;
+    }
+    this.applyYearValue(value);
+  }
+
+  private handleMonthYearBlur(): void {
+    const value = this.inputEl.nativeElement.value;
+    if (!value) {
+      this.callOnChange('');
+      return;
+    }
+    this.applyMonthYearValue(value);
+  }
+
+  private handleYearBlur(): void {
+    const value = this.inputEl.nativeElement.value;
+    if (!value) {
+      this.callOnChange('');
+      return;
+    }
+    this.applyYearValue(value, true);
+  }
+
+  private applyMonthYearValue(value: string): void {
+    const separator = this.languageService.getDateSeparator(this.locale);
+    const parsed = this.parseMonthYearInput(value, separator);
+    if (parsed) {
+      this.syncCalendarMonthYear(parsed);
+      this.callOnChange(parsed);
+    } else {
+      this.callOnChange('Data inválida');
+    }
+  }
+
+  private applyYearValue(value: string, requireFullLength: boolean = false): void {
+    const year = parseInt(value, 10);
+    if (!isNaN(year) && year > 0 && (!requireFullLength || value.length === 4)) {
+      this.syncCalendarYear(year);
+      this.callOnChange(`${year}`);
+    } else {
+      this.callOnChange('Data inválida');
+    }
+  }
+
+  private parseMonthYearInput(value: string, separator: string): string | null {
+    const parts = value.split(separator);
+    if (parts.length !== 2) {
+      return null;
+    }
+    const month = parseInt(parts[0], 10);
+    const year = parseInt(parts[1], 10);
+    if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year <= 0) {
+      return null;
+    }
+    return ('0' + month).slice(-2) + '/' + year;
+  }
+
+  private syncCalendarMonthYear(modelValue: string): void {
+    const parts = modelValue.split('/');
+    if (parts.length === 2) {
+      const month = parseInt(parts[0], 10);
+      const year = parseInt(parts[1], 10);
+      this.date = new Date(year, month - 1, 1);
+    }
+  }
+
+  private syncCalendarYear(year: number): void {
+    this.date = new Date(year, 0, 1);
+  }
+
+  private writeMonthYearValue(value: any): void {
+    const separator = this.languageService.getDateSeparator(this.locale);
+
+    let month: number;
+    let year: number;
+
+    if (value instanceof Date) {
+      month = value.getMonth() + 1;
+      year = value.getFullYear();
+    } else if (typeof value === 'string') {
+      const normalizedValue = value.replace('-', '/');
+      const parts = normalizedValue.split('/');
+      if (parts.length === 2) {
+        month = parseInt(parts[0], 10);
+        year = parseInt(parts[1], 10);
+      }
+    }
+
+    if (!isNaN(month) && !isNaN(year) && month >= 1 && month <= 12 && year > 0) {
+      const displayValue = ('0' + month).slice(-2) + separator + year;
+      this.inputEl.nativeElement.value = displayValue;
+      const modelValue = ('0' + month).slice(-2) + '/' + year;
+      this.syncCalendarMonthYear(modelValue);
+      this.callOnChange(modelValue, false);
+    } else {
+      this.inputEl.nativeElement.value = '';
+    }
+    this.valueBeforeChange = this.inputEl.nativeElement.value;
+  }
+
+  private writeYearValue(value: any): void {
+    const year = typeof value === 'string' ? Number.parseInt(value, 10) : value;
+    if (!Number.isNaN(year) && year > 0) {
+      this.inputEl.nativeElement.value = `${year}`;
+      this.syncCalendarYear(year);
+      this.callOnChange(`${year}`, false);
+    } else {
+      this.inputEl.nativeElement.value = '';
+    }
+    this.valueBeforeChange = this.inputEl.nativeElement.value;
   }
 
   private controlChangeEmitter() {
+    if (this.mode === 'month-year' || this.mode === 'year') {
+      const currentInputValue = this.inputEl?.nativeElement?.value || '';
+      if (currentInputValue !== this.valueBeforeChange && this.isValidInputForMode(currentInputValue)) {
+        this.valueBeforeChange = currentInputValue;
+
+        clearTimeout(this.timeoutChange);
+        this.timeoutChange = setTimeout(() => {
+          this.onchange.emit(currentInputValue);
+        }, 200);
+      }
+      return;
+    }
+
     const dateModelFormatted = this.formatToDate(this.date);
 
     if (dateModelFormatted !== this.valueBeforeChange) {
@@ -365,8 +829,33 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
       clearTimeout(this.timeoutChange);
       this.timeoutChange = setTimeout(() => {
         this.onchange.emit(dateModelFormatted);
+        this.verifyErrorAsync(dateModelFormatted);
       }, 200);
     }
+  }
+
+  private isValidInputForMode(value: string): boolean {
+    if (!value) {
+      return true;
+    }
+
+    if (this.mode === 'month-year') {
+      const separator = this.languageService.getDateSeparator(this.locale);
+      const parts = value.split(separator);
+      if (parts.length !== 2) {
+        return false;
+      }
+      const month = parseInt(parts[0], 10);
+      const year = parseInt(parts[1], 10);
+      return !isNaN(month) && !isNaN(year) && month >= 1 && month <= 12 && year > 0;
+    }
+
+    if (this.mode === 'year') {
+      const year = parseInt(value, 10);
+      return !isNaN(year) && year > 0 && value.length === 4;
+    }
+
+    return true;
   }
 
   private hasAttrCalendar(element: any) {
@@ -390,7 +879,24 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
     window.addEventListener('scroll', this.onScroll, true);
   }
 
-  private onScroll = (): void => {
+  private isAdditionalHelpEventTriggered(): boolean {
+    return (
+      this.additionalHelpEventTrigger === 'event' ||
+      (this.additionalHelpEventTrigger === undefined && this.additionalHelp.observed)
+    );
+  }
+
+  private isFocusOnFirstCombo(): boolean {
+    const first = this.dialogPicker.nativeElement.querySelector('.po-combo-first .po-combo-input');
+    return first === document.activeElement;
+  }
+
+  private isFocusOnLastCombo(): boolean {
+    const last = this.dialogPicker.nativeElement.querySelector('.po-combo-last .po-combo-input');
+    return last === document.activeElement;
+  }
+
+  private readonly onScroll = (): void => {
     this.controlPosition.adjustPosition(poCalendarPositionDefault);
   };
 
@@ -406,22 +912,119 @@ export class PoDatepickerComponent extends PoDatepickerBaseComponent implements 
     window.removeEventListener('scroll', this.onScroll, true);
   }
 
-  private setDialogPickerStyleDisplay(value) {
-    this.dialogPicker.nativeElement.style.display = value;
+  private setDialogPickerStyleDisplay(value: string): void {
+    if (this.dialogPicker && this.dialogPicker.nativeElement) {
+      this.dialogPicker.nativeElement.style.display = value;
+    }
   }
 
-  private setCalendarPosition() {
+  private setCalendarPosition(): void {
     this.setDialogPickerStyleDisplay('block');
+    this.adjustCalendarPosition();
+  }
 
-    this.controlPosition.setElements(
-      this.dialogPicker.nativeElement,
-      poCalendarContentOffset,
-      this.inputEl,
-      ['top-left', 'bottom-left'],
-      false,
-      true
+  protected adjustCalendarPosition(): void {
+    if (this?.dialogPicker.nativeElement && this.visible) {
+      requestAnimationFrame(() => {
+        const scrollHeight =
+          this.dialogPicker.nativeElement.querySelector('.po-calendar')?.scrollHeight ??
+          this.dialogPicker.nativeElement.scrollHeight;
+        const scrollWidth =
+          this.dialogPicker.nativeElement.querySelector('.po-calendar')?.scrollWidth ??
+          this.dialogPicker.nativeElement.scrollWidth;
+
+        this.dialogPicker.nativeElement.style.height = scrollHeight + 'px';
+        this.dialogPicker.nativeElement.style.width = scrollWidth + 'px';
+        this.dialogPicker.nativeElement.style.setProperty('--po-calendar-width', scrollWidth + 'px');
+
+        this.controlPosition.setElements(
+          this.dialogPicker.nativeElement,
+          poCalendarContentOffset,
+          this.inputEl,
+          ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+          false,
+          true
+        );
+        this.controlPosition.adjustPosition(poCalendarPositionDefault);
+      });
+    }
+  }
+
+  handleCleanKeyboardTab(event: KeyboardEvent) {
+    if (this.shouldHandleTab(event)) {
+      this.focusCalendar(event);
+    }
+  }
+
+  // Determina se o tab deve abrir o listbox.
+  private shouldHandleTab(event: KeyboardEvent): boolean {
+    return this.visible && !event.shiftKey;
+  }
+
+  private focusCalendar(event: KeyboardEvent): void {
+    if (!this.dialogPicker?.nativeElement) {
+      return;
+    }
+
+    const firstCombo = this.dialogPicker.nativeElement.querySelector('.po-combo-first .po-combo-input');
+    const monthOption = this.dialogPicker.nativeElement.querySelector('.po-calendar-months .po-button');
+    const monthOptionSelected = this.dialogPicker.nativeElement.querySelector(
+      '.po-calendar-months .po-button-selected .po-button'
+    );
+    const yearOptionSelected = this.dialogPicker.nativeElement.querySelector(
+      '.po-calendar-years .po-button-selected .po-button'
+    );
+    const yearOptionEnabled = this.dialogPicker.nativeElement.querySelector(
+      '.po-calendar-years .po-button:not([disabled])'
     );
 
-    this.controlPosition.adjustPosition(poCalendarPositionDefault);
+    if (firstCombo) {
+      event.preventDefault();
+      firstCombo.focus();
+    } else if (monthOptionSelected) {
+      event.preventDefault();
+      monthOptionSelected.focus();
+    } else if (monthOption) {
+      event.preventDefault();
+      monthOption.focus();
+    } else if (yearOptionSelected) {
+      event.preventDefault();
+      yearOptionSelected.focus();
+    } else if (yearOptionEnabled) {
+      event.preventDefault();
+      yearOptionEnabled.focus();
+    } else {
+      this.togglePicker(false);
+    }
+  }
+
+  onCalendarKeyDown(event: KeyboardEvent): void {
+    if (!this.visible) return;
+
+    if (event.key === 'Escape' || (event.key === 'Tab' && event.shiftKey && this.isFocusOnFirstCombo())) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      this.iconDatepicker.buttonElement?.nativeElement.focus();
+      this.closeCalendar(false);
+    }
+
+    if (event.key === 'Tab' && event.shiftKey && this.isFocusOnLastCombo()) {
+      const firstCombo = this.dialogPicker.nativeElement.querySelector('.po-combo-first .po-combo-input');
+      firstCombo.focus();
+
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.isAdditionalHelpEventTriggered() ? this.additionalHelp : undefined
+    );
   }
 }

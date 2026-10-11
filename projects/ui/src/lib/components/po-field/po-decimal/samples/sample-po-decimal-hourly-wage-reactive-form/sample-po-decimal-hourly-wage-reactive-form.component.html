@@ -1,7 +1,7 @@
 <form [formGroup]="formCalculateHourlyWage">
   <div class="po-font-title">Calculate hourly wage</div>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-number class="po-md-6" formControlName="weekHours" p-label="Week Hours"> </po-number>
@@ -16,7 +16,7 @@
       class="po-md-6"
       formControlName="salary"
       p-decimals-length="2"
-      p-icon="po-icon-finance"
+      p-icon="an an-currency-circle-dollar"
       p-label="Salary"
       p-thousand-maxlength="13"
       (p-change)="calculate()"
@@ -30,7 +30,7 @@
       formControlName="hourlyWage"
       p-decimals-length="2"
       p-disabled
-      p-icon="po-icon-finance-secure"
+      p-icon="an an-currency-dollar-simple"
       p-label="Hourly Wage"
       p-thousand-maxlength="13"
     >
@@ -43,7 +43,7 @@
     <po-button
       class="po-md-3"
       p-label="Recalculate"
-      p-type="primary"
+      p-kind="primary"
       [p-disabled]="formCalculateHourlyWage.invalid"
       (p-click)="calculate()"
     >

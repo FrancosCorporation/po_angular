@@ -1,19 +1,22 @@
-import { Component } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Component, provideNgReflectAttributes } from '@angular/core';
+import { ComponentFixture, fakeAsync, flush, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 
 import { Observable } from 'rxjs';
 
-import { configureTestSuite } from './../../util-test/util-expect.spec';
+import { PoIconModule } from '../po-icon/po-icon.module';
+import { PoTooltipModule } from '../../directives/po-tooltip/index';
 
 import { PoTagBaseComponent } from './po-tag-base.component';
 import { PoTagComponent } from './po-tag.component';
 import { PoTagIcon } from './enums/po-tag-icon.enum';
 import { PoTagOrientation } from './enums/po-tag-orientation.enum';
 import { PoTagType } from './enums/po-tag-type.enum';
+import { PoTagLiterals } from './po-tag.literals';
 
 @Component({
-  template: ` <po-tag p-label="Mock" (p-click)="onClick()"></po-tag> `
+  template: ` <po-tag p-label="Mock" (p-click)="onClick()"></po-tag> `,
+  standalone: false
 })
 class PoTagClickableComponent {
   onClick() {}
@@ -29,13 +32,13 @@ describe('PoTagComponent:', () => {
 
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      declarations: [PoTagComponent, PoTagClickableComponent]
-    });
-  });
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [PoTagComponent, PoTagClickableComponent],
+      imports: [PoIconModule, PoTooltipModule],
+      providers: [provideNgReflectAttributes()]
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoTagComponent);
     component = fixture.componentInstance;
 
@@ -80,56 +83,6 @@ describe('PoTagComponent:', () => {
       expect(component.iconFromType).toBe(PoTagIcon.Warning);
     });
 
-    it('iconTypeString: should return `true` if is string value.', () => {
-      component.icon = 'po-icon-news';
-      expect(component.iconTypeString).toBe(true);
-    });
-
-    it('iconTypeString: should return `false` if isn`t string value.', () => {
-      component.icon = false;
-      expect(component.iconTypeString).toBe(false);
-    });
-
-    it('tagColor: should return tag type without `inverse`.', () => {
-      component.type = PoTagType.Danger;
-      component.inverse = false;
-      expect(component.tagColor).toBe('po-tag-danger');
-    });
-
-    it('tagColor: should return tag type with `inverse`.', () => {
-      component.type = PoTagType.Danger;
-      component.inverse = true;
-      expect(component.tagColor).toBe('po-tag-danger-inverse');
-    });
-
-    it('tagColor: should return tag color without `text`.', () => {
-      component.color = 'color-07';
-      component.type = undefined;
-      component.inverse = false;
-      expect(component.tagColor).toBe('po-color-07');
-    });
-
-    it('tagColor: should return tag color with `text`.', () => {
-      component.color = 'color-07';
-      component.type = undefined;
-      component.inverse = true;
-      expect(component.tagColor).toBe('po-text-color-07');
-    });
-
-    it('tagColor: should return tag type default without `inverse`.', () => {
-      component.color = undefined;
-      component.type = undefined;
-      component.inverse = false;
-      expect(component.tagColor).toBe('po-tag-info');
-    });
-
-    it('tagColor: should return tag type default with `inverse`.', () => {
-      component.color = undefined;
-      component.type = undefined;
-      component.inverse = true;
-      expect(component.tagColor).toBe('po-tag-info-inverse');
-    });
-
     it('tagOrientation: should return true if orientation is horizontal.', () => {
       component.orientation = PoTagOrientation.Horizontal;
       expect(component.tagOrientation).toBe(true);
@@ -148,13 +101,17 @@ describe('PoTagComponent:', () => {
 
       component.onClick();
 
-      expect(component.click.emit).toHaveBeenCalledWith({ 'value': component.value, 'type': component.type });
+      expect(component.click.emit).toHaveBeenCalledWith({
+        'value': component.value,
+        'type': component.type,
+        'event': 'click'
+      });
     });
 
     it('onKeyPressed: should call `onClick` if the event `keydown` is used with `enter` key.', () => {
       fixture.detectChanges();
 
-      const tagElement = fixture.debugElement.query(By.css('.po-tag'));
+      const tagElement = fixture.debugElement.query(By.css('.po-tag-wrapper'));
       const spyOnClick = spyOn(component, 'onClick');
 
       tagElement.triggerEventHandler('keydown.enter', fakeEvent);
@@ -176,7 +133,7 @@ describe('PoTagComponent:', () => {
     it('onKeyPressed: should call `onClick` if the event `keyup` is used with `space` key.', () => {
       fixture.detectChanges();
 
-      const tagElement = fixture.debugElement.query(By.css('.po-tag'));
+      const tagElement = fixture.debugElement.query(By.css('.po-tag-wrapper'));
       const spyOnClick = spyOn(component, 'onClick');
 
       tagElement.triggerEventHandler('keyup.space', fakeEvent);
@@ -194,6 +151,46 @@ describe('PoTagComponent:', () => {
 
       expect(spyOnClick).not.toHaveBeenCalled();
     });
+
+    it('onClose: Should have been called onClose', () => {
+      spyOn(component, <any>'onRemove');
+      spyOn(component.remove, 'emit');
+
+      component.onClose();
+
+      expect(component['onRemove']).toHaveBeenCalled();
+      expect(component.remove.emit).toHaveBeenCalledWith('click');
+    });
+
+    it('onRemove: Should remove the element if not disabled', () => {
+      const mockElementRef = {
+        nativeElement: {
+          remove: jasmine.createSpy('remove')
+        }
+      };
+      Object.defineProperty(component, 'el', { value: mockElementRef, configurable: true });
+      component.disabled = false;
+
+      component['onRemove']();
+
+      expect(mockElementRef.nativeElement.remove).toHaveBeenCalled();
+    });
+
+    it('should set aria-label', () => {
+      component.literals = {
+        ...PoTagLiterals['pt']
+      };
+      component.label = 'Label';
+      expect(component.setAriaLabel()).toContain('Label Remove');
+    });
+
+    it('should set aria-label', () => {
+      component.literals = {
+        ...PoTagLiterals['pt']
+      };
+      component.value = 'Label';
+      expect(component.setAriaLabel()).toContain('Label Remove');
+    });
   });
 
   describe('Templates:', () => {
@@ -207,7 +204,7 @@ describe('PoTagComponent:', () => {
       expect(nativeElement.querySelector('.po-tag')).toBeTruthy();
       expect(nativeElement.querySelector('.po-tag-value').innerHTML).toContain(value);
 
-      expect(nativeElement.querySelector('.po-icon')).toBeFalsy();
+      expect(nativeElement.querySelector('.po-tag-icon')).toBeFalsy();
       expect(nativeElement.querySelector('.po-tag-title')).toBeFalsy();
       expect(nativeElement.querySelector('.po-tag-label')).toBeFalsy();
     });
@@ -258,6 +255,15 @@ describe('PoTagComponent:', () => {
       expect(nativeElement.querySelector('.po-tag-label').innerHTML).not.toContain(':');
     });
 
+    it('should add caption-tag class when color is caption-tag-XX.', () => {
+      component.color = 'caption-tag-15';
+      component.type = undefined;
+
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('.po-caption-tag-15')).toBeTruthy();
+    });
+
     it('should add `po-tag-info` as default.', () => {
       fixture.detectChanges();
 
@@ -296,13 +302,21 @@ describe('PoTagComponent:', () => {
       expect(nativeElement.querySelector('.po-tag-warning')).toBeTruthy();
     });
 
+    it('should add `po-tag-neutral` if type is `PoTagType.Neutral`.', () => {
+      component.type = PoTagType.Neutral;
+
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('.po-tag-neutral')).toBeTruthy();
+    });
+
     it('should add `PoTagIcon.Danger` if type is `PoTagType.Danger and `icon` is true`.', () => {
       component.type = PoTagType.Danger;
       component.icon = true;
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector(`.${PoTagIcon.Danger}`)).toBeTruthy();
+      expect(nativeElement.querySelector(`[ng-reflect-icon="${PoTagIcon.Danger}"]`)).toBeTruthy();
     });
 
     it('should add `PoTagIcon.Info` if type is `PoTagType.Info and `icon` is true`.', () => {
@@ -311,7 +325,7 @@ describe('PoTagComponent:', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector(`.${PoTagIcon.Info}`)).toBeTruthy();
+      expect(nativeElement.querySelector(`[ng-reflect-icon="${PoTagIcon.Info}"]`)).toBeTruthy();
     });
 
     it('should add `PoTagIcon.Success` if type is `PoTagType.Success and `icon` is true`.', () => {
@@ -320,7 +334,7 @@ describe('PoTagComponent:', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector(`.${PoTagIcon.Success}`)).toBeTruthy();
+      expect(nativeElement.querySelector(`[ng-reflect-icon="${PoTagIcon.Success}"]`)).toBeTruthy();
     });
 
     it('should add `PoTagIcon.Warning` if type is `PoTagType.Warning and `icon` is true`.', () => {
@@ -329,7 +343,7 @@ describe('PoTagComponent:', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector(`.${PoTagIcon.Warning}`)).toBeTruthy();
+      expect(nativeElement.querySelector(`[ng-reflect-icon="${PoTagIcon.Warning}"]`)).toBeTruthy();
     });
 
     it('should add `po-clickable` if `p-click` @Output is wire up`.', () => {
@@ -344,19 +358,118 @@ describe('PoTagComponent:', () => {
       fixture.detectChanges();
       expect(nativeElement.querySelector('.po-clickable')).toBeFalsy();
     });
+  });
 
-    it('should add `po-tag-inverse` if `inverse` is true.', () => {
-      component.inverse = true;
+  describe('applyTextColorByContrast:', () => {
+    const darkColor = 'rgb(26, 26, 26)';
+    const lightColor = 'rgb(255, 255, 255)';
+    let originalClassName: string;
 
-      fixture.detectChanges();
-      expect(nativeElement.querySelector('.po-tag-inverse')).toBeTruthy();
+    beforeEach(() => {
+      originalClassName = document.documentElement.className;
+      document.documentElement.className = originalClassName.replace(/-dark-/g, '');
+      spyOn(window, 'requestAnimationFrame').and.callFake((cb: FrameRequestCallback) => 0);
     });
 
-    it('shouldn`t add `po-tag-inverse` if `inverse` is false.', () => {
-      component.inverse = false;
+    afterEach(() => {
+      document.documentElement.className = originalClassName;
+    });
 
+    function mockGetComputedStyle(backgroundColor: string) {
+      spyOn(window, 'getComputedStyle').and.returnValue({
+        backgroundColor: backgroundColor,
+        getPropertyValue: (token: string) => {
+          const tokens = {
+            '--color-neutral-light-00': lightColor,
+            '--color-neutral-dark-95': darkColor,
+            '--color-caption-tag-text-01': '#1d2426',
+            '--color-caption-tag-text-05': '#ffffff'
+          };
+          return tokens[token] || '';
+        }
+      } as CSSStyleDeclaration);
+    }
+
+    it('should set text color to dark for light backgrounds', () => {
+      mockGetComputedStyle('rgb(255, 255, 255)');
+      component.removable = false;
+      component.textColor = undefined;
+      component.color = 'color-01';
       fixture.detectChanges();
-      expect(nativeElement.querySelector('.po-tag-inverse')).toBeFalsy();
+
+      component['applyTextColorByContrast']();
+
+      expect(component.poTag.nativeElement.style.color).toBe(darkColor);
+    });
+
+    it('should apply text color from CSS token for light caption-tag colors', () => {
+      mockGetComputedStyle('rgb(255, 229, 231)');
+      component.removable = false;
+      component.textColor = undefined;
+      component.color = 'caption-tag-01';
+      fixture.detectChanges();
+
+      component['applyTextColorByContrast']();
+
+      expect(component.poTag.nativeElement.style.color).toBe('var(--color-caption-tag-text-01)');
+    });
+
+    it('should apply text color from CSS token for dark caption-tag colors', () => {
+      mockGetComputedStyle('rgb(51, 0, 3)');
+      component.removable = false;
+      component.textColor = undefined;
+      component.color = 'caption-tag-05';
+      fixture.detectChanges();
+
+      component['applyTextColorByContrast']();
+
+      expect(component.poTag.nativeElement.style.color).toBe('var(--color-caption-tag-text-05)');
+    });
+
+    it('should reset text color when caption-tag token is not defined', () => {
+      mockGetComputedStyle('rgb(200, 200, 200)');
+      component.removable = false;
+      component.textColor = undefined;
+      component.color = 'caption-tag-99';
+      fixture.detectChanges();
+
+      component['applyTextColorByContrast']();
+
+      expect(component.poTag.nativeElement.style.color).toBe('');
+    });
+
+    it('should set text color to light for dark backgrounds', () => {
+      mockGetComputedStyle('rgb(255, 0, 0)');
+      component.removable = false;
+      component.textColor = undefined;
+      component.customColor = 'rgb(255, 0, 0)';
+      fixture.detectChanges();
+
+      component['applyTextColorByContrast']();
+
+      expect(component.poTag.nativeElement.style.color).toBe(lightColor);
+    });
+
+    it('should reset text color if tag is removable', () => {
+      mockGetComputedStyle('rgb(255, 0, 0)');
+      component.removable = true;
+      component.poTag.nativeElement.style.color = 'red';
+      fixture.detectChanges();
+
+      component['applyTextColorByContrast']();
+
+      expect(component.poTag.nativeElement.style.color).toBe('');
+    });
+
+    it('should not set text color if textColor is already defined', () => {
+      mockGetComputedStyle('rgb(255, 0, 0)');
+      component.textColor = 'yellow';
+      component.poTag.nativeElement.style.color = 'red';
+      fixture.detectChanges();
+
+      component['applyTextColorByContrast']();
+
+      expect(component.poTag.nativeElement.style.color).toBe('');
     });
   });
 });

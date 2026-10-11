@@ -1,38 +1,43 @@
-import { AbstractControl, ControlValueAccessor, Validator } from '@angular/forms';
-import { EventEmitter, Input, OnInit, Output, Directive } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Directive,
+  EventEmitter,
+  HostBinding,
+  HostListener,
+  input,
+  Input,
+  OnInit,
+  Output,
+  TemplateRef
+} from '@angular/core';
+import { AbstractControl, ControlValueAccessor, Validator, Validators } from '@angular/forms';
 
-import { convertToBoolean, isTypeof, validValue } from '../../../utils/util';
-import { PoLanguageService } from '../../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
-import { InputBoolean } from '../../../decorators';
-import { requiredFailed } from '../validators';
-
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import {
+  convertToBoolean,
+  getDefaultSizeFn,
+  isTypeof,
+  mapInputSizeToLoadingIcon,
+  validateSizeFn,
+  validValue
+} from '../../../utils/util';
+import { PoValidators } from './../validators';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import { PoComboFilterMode } from './enums/po-combo-filter-mode.enum';
 import { PoComboFilter } from './interfaces/po-combo-filter.interface';
-import { PoComboFilterMode } from './po-combo-filter-mode.enum';
-import { PoComboFilterService } from './po-combo-filter.service';
 import { PoComboGroup } from './interfaces/po-combo-group.interface';
+import { poComboLiteralsDefault } from './interfaces/po-combo-literals-default.interface';
 import { PoComboLiterals } from './interfaces/po-combo-literals.interface';
-import { PoComboOption } from './interfaces/po-combo-option.interface';
 import { PoComboOptionGroup } from './interfaces/po-combo-option-group.interface';
+import { PoComboOption } from './interfaces/po-combo-option.interface';
+import { PoComboFilterService } from './po-combo-filter.service';
+import { PoHelperOptions } from '../../po-helper';
 
 const PO_COMBO_DEBOUNCE_TIME_DEFAULT = 400;
 const PO_COMBO_FIELD_LABEL_DEFAULT = 'label';
 const PO_COMBO_FIELD_VALUE_DEFAULT = 'value';
-
-export const poComboLiteralsDefault = {
-  en: <PoComboLiterals>{
-    noData: 'No data found'
-  },
-  es: <PoComboLiterals>{
-    noData: 'Datos no encontrados'
-  },
-  pt: <PoComboLiterals>{
-    noData: 'Nenhum dado encontrado'
-  },
-  ru: <PoComboLiterals>{
-    noData: 'Данные не найдены'
-  }
-};
+const poMultiselectContainerPositionDefault = 'bottom';
 
 /**
  * @description
@@ -50,47 +55,74 @@ export const poComboLiteralsDefault = {
  *
  * O `po-combo` guarda o último valor caso o usuário desista de uma busca, deixando o campo ou pressionando *Esc*. Caso seja digitado no
  * campo de busca a descrição completa de um item, então a seleção será automaticamente efetuada ao deixar o campo ou pressionando *Enter*.
+ *
+ * Utilizando po-combo com serviço, é possivel digitar um valor no campo de entrada e pressionar a tecla 'tab' para que o componente
+ * faça uma requisição à URL informada passando o valor digitado no campo. Se encontrado o valor, então o mesmo será selecionado, caso
+ * não seja encontrado, então a lista de itens voltará para o estado inicial.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                      |
+ * |----------------------------------------|-------------------------------------------------------|---------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                   |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                        |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                        |
+ * | `--text-color`                         | Cor do texto                                          | `var(--color-neutral-dark-90)`                    |
+ * | `--text-color-placeholder`             | Cor do texto no placeholder                           | `var(--color-neutral-light-30)`                   |
+ * | `--color`                              | Cor principal do Combo                                | `var(--color-neutral-dark-70)`                    |
+ * | `--background`                         | Cor de background                                     | `var(--color-neutral-light-05)`                   |
+ * | `--border-radius`                      | Contém o valor do raio dos cantos do elemento&nbsp;   | `var(--border-width-lg)`                          |
+ * | `--min-width`                          | Largura mínima do combo                               | `150px`                                           |
+ * | `--field-container-title-justify`      | Alinhamento horizontal do título (`justify-content`)  | `space-between`                                   |
+ * | `--field-container-title-flex`         | Flex do título (`flex`)                               | `1 auto`                                          |
+ * | **Hover**                              |                                                       |                                                   |
+ * | `--color-hover`                        | Cor principal no estado hover                         | `var(--color-action-hover)`                       |
+ * | `--background-hover`                   | Cor de background no estado hover                     | `var(--color-brand-01-lightest)`                  |
+ * | **Focused**                            |                                                       |                                                   |
+ * | `--color-focused`                      | Cor principal no estado de focus                      | `var(--color-action-default)`                     |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                       |
+ * | **Error**                              |                                                       |                                                   |
+ * | `--color-error`                        | Cor principal no estado de erro                       | `var(--color-feedback-negative-base)`             |
+ * | **Disabled**                           |                                                       |                                                   |
+ * | `--color-disabled`                     | Cor principal no estado disabled                      | `var(--color-neutral-light-30)`                   |
+ * | `--background-disabled`                | Cor de background no estado disabled                  | `var(--color-neutral-light-20)`                   |
+ * | **Suggestion**                         |                                                       |                                                   |
+ * | `--text-color-suggestion`              | Cor do texto no estado suggestion                     | `var(--color-neutral-mid-60)`                     |
+ * | `--background-suggestion`              | Cor do background no estado suggestion                | `var(--color-brand-01-lightest)`                  |
+ *
  */
 @Directive()
 export abstract class PoComboBaseComponent implements ControlValueAccessor, OnInit, Validator {
-  private _changeOnEnter?: boolean = false;
-  private _debounceTime?: number = 400;
-  private _disabled?: boolean = false;
-  private _disabledInitFilter?: boolean = false;
-  private _fieldLabel?: string = 'label';
-  private _fieldValue?: string = 'value';
-  private _filterMinlength?: number = 0;
-  private _filterMode?: PoComboFilterMode = PoComboFilterMode.startsWith;
-  private _filterParams?: any;
-  private _literals?: PoComboLiterals;
-  private _options: Array<PoComboOption | PoComboOptionGroup> = [];
-  private _required?: boolean = false;
-  private _sort?: boolean = false;
-  private language: string;
+  // Propriedade interna que define se o ícone de ajuda adicional terá cursor clicável (evento) ou padrão (tooltip).
+  @Input() additionalHelpEventTrigger: string | undefined;
 
-  // utilizado para fazer o controle de atualizar o model.
-  // não deve forçar a atualização se o gatilho for o writeValue para não deixar o campo dirty.
-  private fromWriteValue: boolean = false;
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de ajuda adicional, com o texto desta propriedade sendo passado para o popover do componente `po-helper`.
+   * **Como boa prática, indica-se utilizar um texto com até 140 caracteres.**
+   * > Requer um recuo mínimo de 8px se o componente estiver próximo à lateral da tela.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Input('p-additional-help-tooltip') additionalHelpTooltip?: string;
 
-  protected cacheStaticOptions: Array<PoComboOption | PoComboGroup> = [];
-  protected comboOptionsList: Array<PoComboOption | PoComboGroup> = [];
-
-  cacheOptions: Array<PoComboOption | PoComboGroup> = [];
-  defaultService: PoComboFilterService;
-  firstInWriteValue: boolean = true;
-  isFirstFilter: boolean = true;
-  isFiltering: boolean = false;
-  keyupSubscribe: any;
-  onModelChange: any;
-  onModelTouched: any;
-  previousSearchValue: string = '';
-  selectedOption: PoComboOption | PoComboGroup;
-  selectedValue: any;
-  selectedView: any;
-  service: PoComboFilterService;
-  visibleOptions: Array<PoComboOption | PoComboGroup> = [];
-
-  private validatorChange: any;
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao sair do campo.
+   */
+  @Output('p-blur') blur: EventEmitter<any> = new EventEmitter();
 
   /**
    * @optional
@@ -103,16 +135,51 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
    *
    * @default `false`
    */
-  @Input('p-auto-focus') @InputBoolean() autoFocus: boolean = false;
+  @Input({ alias: 'p-auto-focus', transform: convertToBoolean }) autoFocus: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   * Define se o título do campo será exibido de forma compacta.
+   *
+   * Quando habilitado (`true`), o modo compacto afeta o conjunto composto por:
+   * - `po-label`
+   * - `p-requirement (showRequired)`
+   * - `po-helper`
+   *
+   * Ou seja, todos os elementos relacionados ao título do campo
+   * (rótulo, indicador de obrigatoriedade e componente auxiliar) passam
+   * a seguir o comportamento de layout compacto.
+   *
+   * Também é possível definir esse comportamento de forma global,
+   * uma única vez, na folha de estilo geral da aplicação, por meio
+   * da customização dos tokens CSS:
+   *
+   * - `--field-container-title-justify`
+   * - `--field-container-title-flex`
+   *
+   * Exemplo:
+   *
+   * ```
+   * :root {
+   *   --field-container-title-justify: flex-start;
+   *   --field-container-title-flex: 0 1 auto;
+   * }
+   * ```
+   *
+   * Dessa forma, o layout compacto passa a ser o padrão da aplicação,
+   * sem a necessidade de definir a propriedade individualmente em cada campo.
+   *
+   * @default `false`
+   */
+  compactLabel = input<boolean, unknown>(false, { alias: 'p-compact-label', transform: convertToBoolean });
 
   /** Label no componente. */
   @Input('p-label') label?: string;
 
   /** Texto de apoio para o campo. */
   @Input('p-help') help?: string;
-
-  /** Mensagem apresentada enquanto o campo estiver vazio. */
-  @Input('p-placeholder') placeholder?: string = '';
 
   /** Nome do componente. */
   @Input('name') name: string;
@@ -146,6 +213,342 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
    * @optional
    *
    * @description
+   *
+   * Se verdadeiro ativa a funcionalidade de scroll infinito para o combo, Ao chegar ao fim da tabela executará nova busca dos dados conforme paginação.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-infinite-scroll', transform: convertToBoolean }) set infiniteScroll(value: boolean) {
+    this._infiniteScroll = value;
+  }
+
+  get infiniteScroll() {
+    return this._infiniteScroll;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o percentual necessário para disparar o evento `show-more`, que é responsável por carregar mais dados no combo. Caso o valor seja maior que 100 ou menor que 0, o valor padrão será 100%.
+   *
+   * **Exemplos**
+   * - p-infinite-scroll-distance = 80: Quando atingir 80% do scroll do combo, o `show-more` será disparado.
+   */
+  @Input('p-infinite-scroll-distance') set infiniteScrollDistance(value: number) {
+    this._infiniteScrollDistance = value > 100 || value < 0 ? 100 : value;
+  }
+
+  get infiniteScrollDistance() {
+    return this._infiniteScrollDistance;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o ícone que será exibido no início do campo.
+   *
+   * É possível usar qualquer um dos ícones da [Biblioteca de ícones](https://po-ui.io/icons). conforme exemplo abaixo:
+   * ```
+   * <po-combo p-icon="an an-user" p-label="PO combo"></po-combo>
+   * ```
+   * Também é possível utilizar outras fontes de ícones, por exemplo a biblioteca *Font Awesome*, da seguinte forma:
+   * ```
+   * <po-combo p-icon="fa fa-podcast" p-label="PO combo"></po-combo>
+   * ```
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * ```
+   * <po-combo [p-icon]="template" p-label="combo template ionic"></po-combo>
+   *
+   * <ng-template #template>
+   *  <ion-icon style="font-size: inherit" name="heart"></ion-icon>
+   * </ng-template>
+   * ```
+   * > Para o ícone enquadrar corretamente, deve-se utilizar `font-size: inherit` caso o ícone utilizado não aplique-o.
+   */
+  @Input('p-icon') icon?: string | TemplateRef<void>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define se a indicação de campo opcional será exibida.
+   *
+   * > Não será exibida a indicação se:
+   * - O campo conter `p-required`;
+   * - Não possuir `p-help` e/ou `p-label`.
+   *
+   * @default `false`
+   */
+  @Input('p-optional') optional: boolean;
+
+  /** Se verdadeiro, o campo receberá um botão para ser limpo. */
+  @Input({ alias: 'p-clean', transform: convertToBoolean }) clean?: boolean;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Se verdadeiro, o evento `p-change` receberá como argumento o `PoComboOption` referente à opção selecionada.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-emit-object-value', transform: convertToBoolean }) emitObjectValue: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Se verdadeiro, desabilitará a busca de um item via TAB.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-disabled-tab-filter', transform: convertToBoolean }) disabledTabFilter: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define se o filtro inicial será removido no primeiro clique do campo.
+   *
+   * Quando habilitado e o combo possui um valor padrão, o primeiro clique
+   * exibirá todos os itens da lista ao invés de apenas o item inicializado.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-remove-initial-filter', transform: convertToBoolean })
+  set removeInitialFilter(value: boolean) {
+    this._removeInitialFilter = value;
+    if (value) {
+      this.isRemoveInitialFilterSetByInput = true;
+    }
+  }
+  get removeInitialFilter() {
+    return this._removeInitialFilter;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Exibe a mensagem setada se o campo estiver vazio e for requerido.
+   *
+   * > Necessário que a propriedade `p-required` esteja habilitada.
+   *
+   */
+  @Input('p-field-error-message') fieldErrorMessage: string;
+
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Evento disparado ao clicar no ícone de ajuda adicional.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Output('p-additional-help') additionalHelp = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Limita a exibição da mensagem de erro a duas linhas e exibe um tooltip com o texto completo.
+   *
+   * > Caso essa propriedade seja definida como `true`, a mensagem de erro será limitada a duas linhas
+   * e um tooltip será exibido ao passar o mouse sobre a mensagem para mostrar o conteúdo completo.
+   *
+   * @default `false`
+   */
+  @Input('p-error-limit') errorLimit: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Deve ser informada uma função que será disparada quando houver alterações no ngModel. A função receberá como argumento o model modificado.
+   *
+   * > Pode-se optar pelo recebimento do objeto selecionado ao invés do model através da propriedade `p-emit-object-value`.
+   */
+  @Output('p-change') change: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado sempre que o valor do model é alterado, seja por interação do usuário
+   * ou por atualização programática (ex: `setValue`, `patchValue`, carregamento assíncrono).
+   *
+   * Diferentemente do `p-change`, que é disparado apenas por interação do usuário,
+   * o `p-change-model` cobre todos os cenários de alteração de valor.
+   *
+   * Não emite quando o novo valor é idêntico ao anterior (deduplicação automática).
+   */
+  @Output('p-change-model') changeModel: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado quando uma tecla é pressionada enquanto o foco está no componente.
+   * Retorna um objeto `KeyboardEvent` com informações sobre a tecla.
+   */
+  @Output('p-keydown') keydown: EventEmitter<KeyboardEvent> = new EventEmitter<KeyboardEvent>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Função para atualizar o ngModel do componente, necessário quando não for utilizado dentro da tag form.
+   *
+   * Na versão 12.2.0 do Angular a verificação `strictTemplates` vem true como default. Portanto, para utilizar
+   * two-way binding no componente deve se utilizar da seguinte forma:
+   *
+   * ```
+   * <po-combo ... [ngModel]="comboModel" (ngModelChange)="comboModel = $event"> </po-combo>
+   * ```
+   *
+   */
+  @Output('ngModelChange') ngModelChange: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Deve ser informada uma função que será disparada quando houver alterações no Search input. A função receberá como argumento o input modificado.
+   *
+   */
+  @Output('p-input-change') inputChange: EventEmitter<string> = new EventEmitter<string>();
+
+  /**
+   * @docsPrivate
+   *
+   * Determinar se o valor do compo deve retorna objeto do tipo {value: any, label: any}
+   */
+  @Input({ alias: 'p-control-value-with-label', transform: convertToBoolean }) controlValueWithLabel?: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a direção preferida para exibição do `listbox` em relação ao campo (`top` ou `bottom`).
+   * Útil em casos onde o posicionamento automático não se comporta como esperado, como quando o componente está próximo
+   * ao final do formulário ou do container visível. Na maioria dos casos, essa direção será respeitada; no entanto,
+   * pode ser ajustada automaticamente conforme o espaço disponível na tela.
+   *
+   * @default `bottom`
+   */
+  @Input('p-listbox-control-position') listboxControlPosition: 'top' | 'bottom' = poMultiselectContainerPositionDefault;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as opções do componente de ajuda (po-helper) que será exibido ao lado do label quando a propriedade `p-label` for definida, ou, ao lado do componente na ausência da propriedade `p-label`.
+   * > Para mais informações acesse: https://po-ui.io/documentation/po-helper.
+   *
+   * > Ao configurar esta propriedade, o antigo ícone de ajuda adicional (`p-additional-help-tooltip` e `p-additional-help`) será ignorado.
+   */
+  poHelperComponent = input<PoHelperOptions | string>(undefined, { alias: 'p-helper' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita a quebra automática do texto da propriedade `p-label`. Quando `p-label-text-wrap` for verdadeiro, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
+   *
+   * @default `false`
+   */
+  labelTextWrap = input<boolean>(false, { alias: 'p-label-text-wrap' });
+
+  cacheOptions: Array<any> = [];
+  defaultService: PoComboFilterService;
+  firstInWriteValue: boolean = true;
+  isFirstFilter: boolean = true;
+  isFiltering: boolean = false;
+  keyupSubscribe: any;
+  modelLastUpdate: any;
+  onModelChange: any;
+  previousSearchValue: string = '';
+  selectedOption: any;
+  selectedValue: any;
+  selectedView: any;
+  service: PoComboFilterService;
+  visibleOptions: Array<any> = [];
+  page: number = 1;
+  pageSize: number = 10;
+  displayAdditionalHelp: boolean = false;
+  dynamicLabel: string = 'label';
+  dynamicValue: string = 'value';
+  shouldApplyFocus: boolean = false;
+
+  protected hasValidatorRequired = false;
+  protected cacheStaticOptions: Array<any> = [];
+  protected comboOptionsList: Array<any> = [];
+  protected onModelTouched: any = null;
+
+  private _changeOnEnter?: boolean = false;
+  private _debounceTime?: number = 400;
+  private _disabled?: boolean = false;
+  private _disabledInitFilter?: boolean = false;
+  private _fieldLabel?: string = 'label';
+  private _fieldValue?: string = 'value';
+  private _filterMinlength?: number = 0;
+  private _filterMode?: PoComboFilterMode = PoComboFilterMode.startsWith;
+  private _filterParams?: any;
+  private _literals?: PoComboLiterals;
+  private _loading: boolean = false;
+  private _options: Array<PoComboOption | PoComboOptionGroup | any> = [];
+  private _placeholder: string = '';
+  private _required?: boolean = false;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+  private _sort?: boolean = false;
+  private readonly language: string;
+  private _infiniteScrollDistance?: number = 100;
+  private _infiniteScroll?: boolean = false;
+  private _removeInitialFilter: boolean = false;
+  private isRemoveInitialFilterSetByInput: boolean = false;
+
+  // utilizado para fazer o controle de atualizar o model.
+  // não deve forçar a atualização se o gatilho for o writeValue para não deixar o campo dirty.
+  private fromWriteValue: boolean = false;
+
+  private validatorChange: any;
+
+  /** Mensagem apresentada enquanto o campo estiver vazio. */
+  @Input('p-placeholder') set placeholder(value: string) {
+    this._placeholder = value || this.literals.chooseOption;
+  }
+
+  get placeholder() {
+    return this._placeholder;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
    * Esta propriedade define em quanto tempo (em milissegundos), aguarda para acionar o evento de filtro após cada pressionamento de tecla.
    * Será utilizada apenas quando houver serviço (`p-filter-service`).
    *
@@ -170,8 +573,8 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
    * @default `false`
    *
    */
-  @Input('p-disabled-init-filter') set disabledInitFilter(value: boolean) {
-    this._disabledInitFilter = convertToBoolean(value);
+  @Input({ alias: 'p-disabled-init-filter', transform: convertToBoolean }) set disabledInitFilter(value: boolean) {
+    this._disabledInitFilter = value;
   }
 
   get disabledInitFilter(): boolean {
@@ -191,6 +594,10 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
    * @default `value`
    */
   @Input('p-field-value') set fieldValue(value: string) {
+    if (!this.service && !this.filterService) {
+      this.dynamicValue = value;
+    }
+
     this._fieldValue = value || PO_COMBO_FIELD_VALUE_DEFAULT;
 
     if (isTypeof(this.filterService, 'string') && this.service) {
@@ -215,6 +622,10 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
    * @default `label`
    */
   @Input('p-field-label') set fieldLabel(value: string) {
+    if (!this.service && !this.filterService) {
+      this.dynamicLabel = value;
+    }
+
     this._fieldLabel = value || PO_COMBO_FIELD_LABEL_DEFAULT;
 
     if (isTypeof(this.filterService, 'string') && this.service) {
@@ -248,18 +659,51 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
    * @optional
    *
    * @description
-   * Indica que o campo será obrigatório.
+   * Define que o campo será obrigatório.
    *
    * @default `false`
    */
-  @Input('p-required') set required(required: boolean) {
-    this._required = convertToBoolean(required);
+  @Input({ alias: 'p-required', transform: convertToBoolean }) set required(required: boolean) {
+    this._required = required;
 
     this.validateModel(this.selectedValue);
   }
 
   get required() {
     return this._required;
+  }
+
+  /**
+   * Define se a indicação de campo obrigatório será exibida.
+   *
+   * > Não será exibida a indicação se:
+   * - Não possuir `p-help` e/ou `p-label`.
+   */
+  @Input('p-show-required') showRequired: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho do componente:
+   * - `small`: altura do input como 32px (disponível apenas para acessibilidade AA).
+   * - `medium`: altura do input como 44px.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
   }
 
   /**
@@ -270,8 +714,8 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
    *
    * @default `false`
    */
-  @Input('p-change-on-enter') set changeOnEnter(changeOnEnter: boolean) {
-    this._changeOnEnter = convertToBoolean(changeOnEnter);
+  @Input({ alias: 'p-change-on-enter', transform: convertToBoolean }) set changeOnEnter(changeOnEnter: boolean) {
+    this._changeOnEnter = changeOnEnter;
   }
 
   get changeOnEnter() {
@@ -286,8 +730,8 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
    *
    * @default `false`
    */
-  @Input('p-disabled') set disabled(disabled: boolean) {
-    this._disabled = convertToBoolean(disabled);
+  @Input({ alias: 'p-disabled', transform: convertToBoolean }) set disabled(disabled: boolean) {
+    this._disabled = disabled;
 
     this.validateModel(this.selectedValue);
   }
@@ -300,16 +744,28 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
    * @optional
    *
    * @description
+   * Exibe um ícone de carregamento no lado direito do campo para sinalizar que uma operação está em andamento.
    *
-   * Define o ícone que será exibido no início do campo.
-   *
-   * > Veja a disponibilidade de ícones em [biblioteca de ícones](guides/icons).
+   * @default `false`
    */
-  @Input('p-icon') icon?: string;
+  @HostBinding('attr.p-loading')
+  @Input({ alias: 'p-loading', transform: convertToBoolean })
+  set loading(value: boolean) {
+    this._loading = value;
+    this.changeDetector?.markForCheck();
+  }
+
+  get loading(): boolean {
+    return this._loading;
+  }
+
+  get isDisabled(): boolean {
+    return this._disabled || this._loading;
+  }
 
   /** Indica que a lista definida na propriedade p-options será ordenada pela descrição. */
-  @Input('p-sort') set sort(sort: boolean) {
-    this._sort = convertToBoolean(sort);
+  @Input({ alias: 'p-sort', transform: convertToBoolean }) set sort(sort: boolean) {
+    this._sort = sort;
     this.comboListDefinitions();
   }
 
@@ -320,39 +776,27 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
   /**
    * Nesta propriedade define a lista de opções do `po-combo`.
    *
-   * > A lista pode ser definida em dois formatos, simples ou com agrupamentos.
-   * - Utilize `PoComboOption` para lista de opções simples.
-   * - Utilize `PoComboOptionGroup` para lista de opções com agrupamento.
+   * > A lista pode ser definida utilizando um array com o valor representando o `value` e o `label` das seguintes formas:
    *
-   * **Importante:**
-   * - A lista deve seguir as definições descritas nas respectivas interfaces, caso contrário não exibirá a(as) opção(ões) fora dos padrões.
-   * - O componente interpretará o formato da lista de acordo com a interface utilizada e só exibirá as opções correspondentes à ela.
-   * - Um agrupamento só será exibido se houver pelo menos uma opção válida.
+   * ```
+   * <po-combo name="combo" p-label="PO Combo" [p-options]="[{value: 1, label: 'One'}, {value: 2, label: 'two'}]"> </po-combo>
+   * ```
+   *
+   * ```
+   * <po-combo name="combo" p-label="PO Combo" [p-options]="[{name: 'Roger', age: 28}, {name: 'Anne', age: 35}]" p-field-label="name" p-field-value="age"> </po-combo>
+   * ```
+   *
+   * - Aconselha-se utilizar valores distintos no `label` e `value` dos itens.
    */
-  @Input('p-options') set options(options: Array<PoComboOption | PoComboOptionGroup>) {
+  @Input('p-options') set options(options: Array<PoComboOption | PoComboOptionGroup | any>) {
     this._options = Array.isArray(options) ? options : [];
 
     this.comboListDefinitions();
   }
 
-  get options() {
+  get options(): Array<PoComboOption | PoComboOptionGroup | any> {
     return this._options;
   }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Define se a indicação de campo opcional será exibida.
-   *
-   * > Não será exibida a indicação se:
-   * - O campo conter `p-required`;
-   * - Não possuir `p-help` e/ou `p-label`.
-   *
-   * @default `false`
-   */
-  @Input('p-optional') optional: boolean;
 
   /**
    * @optional
@@ -443,60 +887,55 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     return this._literals || poComboLiteralsDefault[this.language];
   }
 
-  /** Se verdadeiro, o campo receberá um botão para ser limpo. */
-  @Input('p-clean') @InputBoolean() clean?: boolean;
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define se o componente irá guardar o valor do model para evitar requisições repetidas.
+   *
+   * > Caso o valor seja `false`, o componente fará uma nova requisição mesmo que o valor procurado seja o mesmo do model.
+   *
+   * @default `true`
+   */
+  @Input({ alias: 'p-cache', transform: convertToBoolean }) cache: boolean = true;
 
   /**
    * @optional
    *
    * @description
    *
-   * Se verdadeiro, o evento `p-change` receberá como argumento o `PoComboOption` referente à opção selecionada.
+   * Define que o `listbox` e/ou popover (`p-helper` e/ou `p-error-limit`) serão incluídos no body da
+   * página e não dentro do componente. Essa opção pode ser necessária em cenários com containers que possuem scroll ou
+   * overflow escondido,garantindo o posicionamento correto de ambos próximo ao elemento.
+   *
+   * > Quando utilizado com `p-helper`, leitores de tela como o NVDA podem não ler o conteúdo do popover.
    *
    * @default `false`
    */
-  @Input('p-emit-object-value') @InputBoolean() emitObjectValue?: boolean = false;
+  @Input({ alias: 'p-append-in-body', transform: convertToBoolean }) appendBox?: boolean = false;
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Deve ser informada uma função que será disparada quando houver alterações no ngModel. A função receberá como argumento o model modificado.
-   *
-   * > Pode-se optar pelo recebimento do objeto selecionado ao invés do model através da propriedade `p-emit-object-value`.
-   */
-  @Output('p-change') change: EventEmitter<any> = new EventEmitter<any>();
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Função para atualizar o ngModel do componente, necessário quando não for utilizado dentro da tag form.
-   */
-  @Output('ngModelChange') ngModelChange: EventEmitter<any> = new EventEmitter<any>();
-
-  constructor(languageService: PoLanguageService) {
+  constructor(
+    languageService: PoLanguageService,
+    protected changeDetector: ChangeDetectorRef
+  ) {
     this.language = languageService.getShortLanguage();
   }
-
-  abstract setInputValue(value: any): void;
-
-  abstract applyFilter(value: string): void;
-
-  abstract getObjectByValue(value: string): void;
-
-  abstract getInputValue(): string;
-
-  abstract initInputObservable(): void;
 
   get isOptionGroupList(): boolean {
     return this._options.length && this._options[0].hasOwnProperty('options');
   }
 
   ngOnInit() {
+    this.dynamicValue = this.checkIfService('value');
+    this.dynamicLabel = this.checkIfService('label');
+
     this.updateComboList();
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
   }
 
   onInitService() {
@@ -528,37 +967,37 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     }
   }
 
-  startsWith(search: string, option: PoComboOption | PoComboGroup) {
-    return option.label.toLowerCase().startsWith(search.toLowerCase());
+  startsWith(search: string, option: any) {
+    return option[this.dynamicLabel].toLowerCase().startsWith(search.toLowerCase());
   }
 
-  contains(search: string, option: PoComboOption | PoComboGroup) {
-    return option.label.toLowerCase().indexOf(search.toLowerCase()) > -1;
+  contains(search: string, option: any) {
+    return option[this.dynamicLabel].toLowerCase().indexOf(search.toLowerCase()) > -1;
   }
 
-  endsWith(search: string, option: PoComboOption | PoComboGroup) {
-    return option.label.toLowerCase().endsWith(search.toLowerCase());
+  endsWith(search: string, option: any) {
+    return option[this.dynamicLabel].toLowerCase().endsWith(search.toLowerCase());
   }
 
   getOptionFromValue(value: any, options: any) {
-    return options ? options.find((option: any) => this.isEqual(option.value, value)) : null;
+    return options ? options.find((option: any) => this.isEqual(option[this.dynamicValue], value)) : null;
   }
 
   getOptionFromLabel(label: any, options: any) {
     if (options) {
-      return options.find((option: any) => {
-        return option.label.toString().toLowerCase() === label.toString().toLowerCase();
-      });
+      return options.find(
+        (option: any) => option[this.dynamicLabel].toString().toLowerCase() === label.toString().toLowerCase()
+      );
     } else {
       return null;
     }
   }
 
-  updateSelectedValue(option: PoComboOption | PoComboGroup, isUpdateModel: boolean = true) {
-    const optionLabel = (option && option.label) || '';
-
+  updateSelectedValue(option: any, isUpdateModel: boolean = true) {
+    const optionLabel = (option && option[this.dynamicLabel]) || '';
+    const optionValue = option?.[this.dynamicValue] !== undefined ? option[this.dynamicValue] : undefined;
     this.updateInternalVariables(option);
-
+    this.updateOptionsSelectedState(option, optionValue);
     // atualiza o valor do input quando for changeOnEnter apenas se for para atualizar o model.
     if (this.changeOnEnter && isUpdateModel) {
       this.setInputValue(optionLabel);
@@ -567,15 +1006,38 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     }
 
     if (isUpdateModel) {
-      const optionValue = (option && option.value) || undefined;
-
       this.updateModel(optionValue);
     }
+  }
+
+  private isGroupTitle(option: any): boolean {
+    return option?.options === true;
+  }
+
+  private updateOptionsSelectedState(selectedOption: any, value: any): void {
+    this.comboOptionsList.forEach((option: any) => {
+      const isSelectedGroup =
+        this.isGroupTitle(option) &&
+        this.isGroupTitle(selectedOption) &&
+        option[this.dynamicLabel] === selectedOption[this.dynamicLabel];
+
+      const isSelectedOption =
+        !this.isGroupTitle(option) && validValue(value) && this.isEqual(option[this.dynamicValue], value);
+
+      option.selected = isSelectedGroup || isSelectedOption;
+    });
   }
 
   callModelChange(value: any) {
     // Caso o componente estiver dentro de um form, terá acesso ao método onModelChange.
     return this.onModelChange ? this.onModelChange(value) : this.ngModelChange.emit(value);
+  }
+
+  controlChangeModelEmitter(value: any) {
+    if (this.modelLastUpdate !== value) {
+      this.changeModel.emit(value);
+      this.modelLastUpdate = value;
+    }
   }
 
   isEqual(value: any, inputValue: any): boolean {
@@ -590,9 +1052,14 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     return value === inputValue;
   }
 
-  searchForLabel(search: string, options: Array<PoComboOption | PoComboGroup>, filterMode: PoComboFilterMode) {
+  //Transforma o tamanho do input para o tamanho do ícone de loading correspondente
+  mapSizeToIcon(size: string): string {
+    return mapInputSizeToLoadingIcon(size);
+  }
+
+  searchForLabel(search: string, options: Array<any>, filterMode: PoComboFilterMode) {
     if (search && options && options.length) {
-      const newOptions: Array<PoComboOption | PoComboGroup> = [];
+      const newOptions: Array<any> = [];
       let addedOptionsGroupTitle: boolean = false;
       let optionsGroupTitle: PoComboGroup;
 
@@ -602,7 +1069,7 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
           return (optionsGroupTitle = option);
         }
 
-        if (option.label && (this.compareMethod(search, option, filterMode) || this.service)) {
+        if (option[this.dynamicLabel] && (this.compareMethod(search, option, filterMode) || this.service)) {
           if (this.isOptionGroupList && !addedOptionsGroupTitle) {
             newOptions.push(optionsGroupTitle);
             addedOptionsGroupTitle = true;
@@ -619,31 +1086,36 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     }
   }
 
-  updateComboList(options?: Array<PoComboOption | PoComboGroup>) {
+  updateComboList(options?: Array<any>) {
     const copyOptions = options || [...this.comboOptionsList];
 
-    const newOptions = !options && this.selectedValue ? [{ ...this.selectedOption }] : copyOptions;
+    let newOptions;
+    if (this.removeInitialFilter) {
+      newOptions = copyOptions;
+    } else {
+      newOptions = !options && !this.infiniteScroll && this.selectedValue ? [{ ...this.selectedOption }] : copyOptions;
+    }
 
     this.visibleOptions = newOptions;
 
     if (!this.selectedView && this.visibleOptions.length) {
-      this.selectedView = copyOptions.find(option => option.value !== undefined);
+      this.selectedView = copyOptions.find(option => option[this.dynamicValue] !== undefined);
     }
   }
 
-  getNextOption(value: any, options: Array<PoComboOption | PoComboGroup>, reverse: boolean = false) {
+  getNextOption(value: any, options: Array<any>, reverse: boolean = false) {
     const optionsList = reverse ? options.slice(0).reverse() : options.slice(0);
     let optionFound = null;
     let found = false;
 
     for (const option of optionsList) {
-      if (option.value && !optionFound) {
+      if (option[this.dynamicValue] && !optionFound) {
         optionFound = option;
       }
-      if (option.value && found) {
+      if (option[this.dynamicValue] && found) {
         return option;
       }
-      if (this.isEqual(option.value, value)) {
+      if (this.isEqual(option[this.dynamicValue], value)) {
         found = true;
       }
     }
@@ -669,18 +1141,23 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
 
     const optionFound = this.getOptionFromLabel(inputValue, this.comboOptionsList);
 
-    if (optionFound && optionFound.value !== this.selectedValue) {
+    if (!this.service) {
+      this.updateComboList([...this.cacheStaticOptions]);
+    }
+
+    if (optionFound && optionFound[this.dynamicValue] !== this.selectedValue) {
       this.updateSelectedValue(optionFound);
 
-      this.previousSearchValue = optionFound.label;
-      return;
-    } else if (this.selectedValue && this.selectedOption && this.selectedOption.label !== inputValue) {
+      this.previousSearchValue = optionFound[this.dynamicLabel];
+    } else if (this.selectedValue && this.selectedOption && this.selectedOption[this.dynamicLabel] !== inputValue) {
       this.updateSelectedValueWithOldOption();
 
-      this.previousSearchValue = this.selectedOption.label;
+      this.previousSearchValue = this.selectedOption[this.dynamicLabel];
       return;
     } else if (inputValue && !optionFound) {
-      const isInputValueDiffSelectedLabel = !!(this.selectedOption && this.selectedOption.label !== inputValue);
+      const isInputValueDiffSelectedLabel = !!(
+        this.selectedOption && this.selectedOption[this.dynamicLabel] !== inputValue
+      );
 
       this.updateSelectedValue(null, isInputValueDiffSelectedLabel || this.changeOnEnter);
 
@@ -691,12 +1168,18 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
 
   // Recebe as alterações do model
   writeValue(value: any) {
+    const originalValue = value;
+    value = this.getValueWrite(value);
     this.fromWriteValue = true;
 
     if (validValue(value) && !this.service && this.comboOptionsList && this.comboOptionsList.length) {
       const option = this.getOptionFromValue(value, this.comboOptionsList);
       this.updateSelectedValue(option);
+      this.normalizeModelIfNeeded(originalValue, option);
       this.updateComboList();
+      if (!this.isRemoveInitialFilterSetByInput) {
+        this.removeInitialFilter = false;
+      }
       return;
     }
 
@@ -706,6 +1189,7 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     } else {
       this.updateSelectedValue(null);
       this.updateComboList();
+      this.updateHasNext();
     }
   }
 
@@ -713,6 +1197,7 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
   // Usada para interceptar os estados de habilitado via forms api
   setDisabledState(isDisabled: boolean) {
     this.disabled = isDisabled;
+    this.changeDetector.markForCheck();
   }
 
   registerOnChange(fn: any): void {
@@ -728,12 +1213,32 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
   }
 
   validate(abstractControl: AbstractControl): { [key: string]: any } {
-    if (requiredFailed(this.required, this.disabled, abstractControl.value)) {
-      return {
-        required: {
-          valid: false
-        }
-      };
+    if (!this.hasValidatorRequired && this.fieldErrorMessage && abstractControl.hasValidator(Validators.required)) {
+      this.hasValidatorRequired = true;
+    }
+
+    let valueToValidate = abstractControl.value;
+
+    if (this.controlValueWithLabel && valueToValidate && typeof valueToValidate === 'object') {
+      valueToValidate = valueToValidate.value;
+    }
+
+    if (PoValidators.requiredFailed(this.required || this.hasValidatorRequired, this.disabled, valueToValidate)) {
+      this.changeDetector.markForCheck();
+      return { required: { valid: false } };
+    }
+
+    return {};
+  }
+
+  clear(value) {
+    this.callModelChange(value);
+    this.updateSelectedValue(null);
+    this.updateComboList();
+    this.initInputObservable();
+    this.updateHasNext();
+    if (this.service || this.filterService) {
+      this.keyupSubscribe.unsubscribe();
     }
   }
 
@@ -757,12 +1262,6 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     }
   }
 
-  clear(value) {
-    this.callModelChange(value);
-    this.updateSelectedValue(null);
-    this.updateComboList();
-  }
-
   protected validateModel(model: any) {
     if (this.validatorChange) {
       this.validatorChange(model);
@@ -776,25 +1275,76 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     this.updateComboList();
   }
 
-  private compareOptions(optionA: any, optionB: any) {
-    const labelA = optionA.label.toString().toLowerCase();
-    const labelB = optionB.label.toString().toLowerCase();
+  private checkIfService(dynamicValue: string) {
+    if ((this.service || this.filterService) && dynamicValue === 'label') {
+      return PO_COMBO_FIELD_LABEL_DEFAULT;
+    }
+    if ((this.service || this.filterService) && dynamicValue === 'value') {
+      return PO_COMBO_FIELD_VALUE_DEFAULT;
+    }
 
-    return labelA < labelB ? -1 : labelA > labelB ? 1 : 0;
+    if (!this.service && dynamicValue === 'label') {
+      return this.fieldLabel;
+    }
+
+    if (!this.service && dynamicValue === 'value') {
+      return this.fieldValue;
+    }
   }
 
-  private hasDuplicatedOption(
-    options: Array<PoComboOption | PoComboGroup>,
-    currentOption: string,
-    accumulatedGroupOptions?: Array<PoComboGroup>
-  ) {
-    return (
-      options.some(option => option.label === currentOption) ||
-      (accumulatedGroupOptions && accumulatedGroupOptions.some(option => option.label === currentOption))
-    );
+  private compareOptions(dynamicLabel: string) {
+    return function (optionA: any, optionB: any) {
+      const labelA = optionA[dynamicLabel].toString().toLowerCase();
+      const labelB = optionB[dynamicLabel].toString().toLowerCase();
+
+      return labelA < labelB ? -1 : labelA > labelB ? 1 : 0;
+    };
   }
 
-  private listingComboOptions(comboOptions: Array<PoComboOption | PoComboOptionGroup>) {
+  private getValueUpdate(data: any, selectedOption: any) {
+    const { [this.dynamicValue]: value, [this.dynamicLabel]: label } = selectedOption || {};
+
+    if (this.controlValueWithLabel && value !== null && value !== undefined) {
+      return { value, label };
+    }
+    return data;
+  }
+
+  private getValueWrite(data: any) {
+    if (this.controlValueWithLabel && data?.value !== null && data?.value !== undefined) {
+      return data?.value;
+    }
+    return data;
+  }
+
+  private normalizeModelIfNeeded(originalValue: any, option: any): void {
+    if (!this.controlValueWithLabel) {
+      return;
+    }
+    const isPrimitive = typeof originalValue === 'number' || typeof originalValue === 'string';
+    if (!isPrimitive || !option) {
+      return;
+    }
+
+    const value = option[this.dynamicValue];
+    const label = option[this.dynamicLabel];
+
+    if (value === null) {
+      return;
+    }
+
+    this.callModelChange({ value, label });
+  }
+
+  private hasDuplicatedOption(options: Array<any>, currentOption: string, accumulatedGroupOptions?: Array<any>) {
+    if (accumulatedGroupOptions) {
+      return accumulatedGroupOptions.some(option => option[this.dynamicLabel] === currentOption);
+    } else {
+      return options.some(option => option[this.dynamicValue] === currentOption);
+    }
+  }
+
+  private listingComboOptions(comboOptions: Array<any>) {
     const comboOptionsList = comboOptions.concat();
     const verifiedComboOptionsList = this.verifyComboOptions(comboOptionsList);
 
@@ -807,33 +1357,38 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     return verifiedComboOptionsList;
   }
 
-  private sortOptions(comboOptionsList: Array<PoComboGroup>) {
+  private sortOptions(comboOptionsList: Array<any>) {
     if (comboOptionsList.length > 0 && this.sort) {
-      return comboOptionsList.sort(this.compareOptions);
+      return comboOptionsList.sort(this.compareOptions(this.dynamicLabel));
     }
   }
 
-  private validateValue(currentOption: PoComboGroup, verifyingOptionsGroup: boolean = false) {
-    const { label, options, value } = currentOption;
+  private validateValue(currentOption: any, verifyingOptionsGroup: boolean = false) {
+    const { options } = currentOption;
 
     if (this.isOptionGroupList) {
       return (
-        (validValue(label) && options && options.length > 0) || (verifyingOptionsGroup === true && validValue(value))
+        (validValue(currentOption[this.dynamicLabel]) && options && options.length > 0) ||
+        (verifyingOptionsGroup === true && validValue(currentOption[this.dynamicValue]))
       );
     }
 
-    return validValue(value) && !options;
+    return validValue(currentOption[this.dynamicValue]) && !options;
   }
 
   private verifyComboOptions(
-    comboOptions: Array<PoComboOption | PoComboOptionGroup>,
+    comboOptions: Array<any>,
     verifyingOptionsGroup: boolean = false,
-    accumulatedGroupOptions?: Array<PoComboGroup>
+    accumulatedGroupOptions?: Array<any>
   ) {
     return comboOptions.reduce((accumulatedOptions, currentOption) => {
       if (
         !this.verifyIfHasLabel(currentOption) ||
-        this.hasDuplicatedOption(accumulatedOptions, currentOption.label, accumulatedGroupOptions) ||
+        this.hasDuplicatedOption(
+          accumulatedOptions,
+          currentOption[this.dynamicValue] || currentOption[this.dynamicLabel],
+          accumulatedGroupOptions
+        ) ||
         !this.validateValue(currentOption, verifyingOptionsGroup)
       ) {
         return accumulatedOptions;
@@ -844,15 +1399,18 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
     }, []);
   }
 
-  private verifyComboOptionsGroup(comboOptionsList: Array<PoComboOptionGroup>) {
+  private verifyComboOptionsGroup(comboOptionsList: Array<any>) {
     return comboOptionsList.reduce((accumulatedGroupOptions, currentOption) => {
-      const { options, label } = currentOption;
+      const { options } = currentOption;
       const verifiedComboOptionsGroupList = this.verifyComboOptions(options, true, accumulatedGroupOptions);
 
       if (verifiedComboOptionsGroupList.length > 0) {
         this.sortOptions(verifiedComboOptionsGroupList);
 
-        accumulatedGroupOptions.push({ label: label, options: true }, ...verifiedComboOptionsGroupList);
+        accumulatedGroupOptions.push(
+          { label: currentOption[this.dynamicLabel], options: true },
+          ...verifiedComboOptionsGroupList
+        );
       }
 
       return accumulatedGroupOptions;
@@ -860,21 +1418,25 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
   }
 
   private verifyIfHasLabel(currentOption: PoComboGroup = {}) {
-    const { label, options, value } = currentOption;
+    const { options } = currentOption;
 
-    if ((this.isOptionGroupList && options && !label) || (!label && !value) || (!this.isOptionGroupList && options)) {
+    if (
+      (this.isOptionGroupList && options && !currentOption[this.dynamicLabel]) ||
+      (!currentOption[this.dynamicLabel] && !currentOption[this.dynamicValue]) ||
+      (!this.isOptionGroupList && options)
+    ) {
       return false;
     }
 
-    if (!currentOption.label) {
-      currentOption.label = currentOption.value.toString();
+    if (!currentOption[this.dynamicLabel]) {
+      currentOption[this.dynamicLabel] = currentOption[this.dynamicValue].toString();
       return true;
     }
 
     return true;
   }
 
-  private updateInternalVariables(option: PoComboOption | PoComboGroup) {
+  private updateInternalVariables(option: any) {
     if (option) {
       this.selectedView = option;
       this.selectedOption = option;
@@ -885,23 +1447,42 @@ export abstract class PoComboBaseComponent implements ControlValueAccessor, OnIn
   }
 
   private updateModel(value: any): void {
-    if (value !== this.selectedValue) {
-      if (!this.fromWriteValue) {
-        this.callModelChange(value);
-      }
-
+    if (value !== this.selectedValue && !this.fromWriteValue) {
+      this.callModelChange(this.getValueUpdate(value, this.selectedOption));
       this.change.emit(this.emitObjectValue ? this.selectedOption : value);
     }
 
     this.selectedValue = value;
     this.fromWriteValue = false;
+    this.controlChangeModelEmitter(value);
   }
 
   private updateSelectedValueWithOldOption() {
     const oldOption = this.getOptionFromValue(this.selectedValue, this.comboOptionsList);
 
-    if (oldOption && oldOption.label) {
+    if (oldOption && oldOption[this.dynamicLabel]) {
       return this.updateSelectedValue(oldOption);
     }
   }
+
+  private updateHasNext() {
+    if (this.service && this.infiniteScroll) {
+      this.defaultService.hasNext = true;
+    }
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
+  }
+
+  abstract setInputValue(value: any): void;
+
+  abstract applyFilter(value: string): void;
+
+  abstract getObjectByValue(value: string): void;
+
+  abstract getInputValue(): string;
+
+  abstract initInputObservable(): void;
 }

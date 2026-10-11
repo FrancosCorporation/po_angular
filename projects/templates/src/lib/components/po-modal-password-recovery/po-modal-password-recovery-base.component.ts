@@ -1,9 +1,10 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { Directive, EventEmitter, HostBinding, HostListener, Input, Output } from '@angular/core';
 
 import { PoLanguageService, poLocaleDefault } from '@po-ui/ng-components';
 
-import { poModalPasswordRecoveryLiterals } from './literals/i18n/po-modal-password-recovery-literals';
+import { getDefaultSizeFn, validateSizeFn } from '../../utils/util';
 import { PoModalPasswordRecoveryType } from './enums/po-modal-password-recovery-type.enum';
+import { poModalPasswordRecoveryLiterals } from './literals/i18n/po-modal-password-recovery-literals';
 
 const PoModalPasswordRecoveryDefaultMaxLength = 15;
 const PoModalPasswordRecoveryDefaultMinLength = 15;
@@ -60,65 +61,6 @@ const PoModalPasswordRecoveryTypeDefault: PoModalPasswordRecoveryType = PoModalP
  */
 @Directive()
 export abstract class PoModalPasswordRecoveryBaseComponent {
-  private _contactEmail: string;
-  private _phoneMask = PoModalPasswordRecoveryDefaultPhone;
-  private _type: PoModalPasswordRecoveryType = PoModalPasswordRecoveryTypeDefault;
-
-  email: string;
-  maxLength = PoModalPasswordRecoveryDefaultMaxLength;
-  minLength = PoModalPasswordRecoveryDefaultMinLength;
-  modalPasswordRecoveryTypeAll: boolean;
-  phone: string;
-  smsCode: string;
-  smsCodeErrorMessage: string;
-
-  literals: {
-    cancelButton: string;
-    closeButton: string;
-    continueButton: string;
-    email: string;
-    emailErrorMessagePhrase: string;
-    emailSentConfirmationPhrase: string;
-    emailSentTitle: string;
-    forgotPasswordTitle: string;
-    insertCode: string;
-    insertEmail: string;
-    insertPhone: string;
-    phoneErrorMessagePhrase: string;
-    prepositionIn: string;
-    prepositionOr: string;
-    recoveryPasswordPhrase: string;
-    resendEmailButton: string;
-    resendSmsCodePhrase: string;
-    sendAgain: string;
-    sendAgainPhrase: string;
-    sendButton: string;
-    sms: string;
-    smsCode: string;
-    smsCodeErrorMessagePhrase: string;
-    sentSmsCodePhrase: string;
-    supportContact: string;
-    telephone: string;
-    typeCodeTitle: string;
-  } = poModalPasswordRecoveryLiterals[poLocaleDefault];
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Definição do e-mail que é exibido na mensagem para contato de suporte.
-   */
-  @Input('p-contact-email') set contactEmail(value: string) {
-    this._contactEmail = value;
-
-    this.smsCodeErrorMessage = this.concatenateSMSErrorMessage(value);
-  }
-
-  get contactEmail() {
-    return this._contactEmail;
-  }
-
   /**
    * @optional
    *
@@ -127,44 +69,6 @@ export abstract class PoModalPasswordRecoveryBaseComponent {
    * Definição de mensagem de erro customizada para quando o usuário passar um código SMS inválido ou errado.
    */
   @Input('p-code-error') codeError: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Definição da mascara do campo de telefone.
-   *
-   * @default `(99) 99999-9999`
-   */
-  @Input('p-phone-mask') set phoneMask(value: string) {
-    this._phoneMask = value || PoModalPasswordRecoveryDefaultPhone;
-    this.minLength = this.maxLength = this._phoneMask.length;
-  }
-
-  get phoneMask() {
-    return this._phoneMask;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Define o tipo de recuperação de senha que será exibido.
-   *
-   * @default `PoModalPasswordRecoveryType.Email`
-   *
-   */
-  @Input('p-type') set type(value: PoModalPasswordRecoveryType) {
-    this._type = (<any>Object).values(PoModalPasswordRecoveryType).includes(value)
-      ? value
-      : PoModalPasswordRecoveryTypeDefault;
-  }
-
-  get type() {
-    return this._type;
-  }
 
   /**
    * @optional
@@ -296,11 +200,152 @@ export abstract class PoModalPasswordRecoveryBaseComponent {
    */
   @Output('p-submit') submit = new EventEmitter<any>();
 
+  email: string;
+  maxLength = PoModalPasswordRecoveryDefaultMaxLength;
+  minLength = PoModalPasswordRecoveryDefaultMinLength;
+  modalPasswordRecoveryTypeAll: boolean;
+  phone: string;
+  smsCode: string;
+  smsCodeErrorMessage: string;
+
+  literals: {
+    cancelButton: string;
+    closeButton: string;
+    continueButton: string;
+    email: string;
+    emailErrorMessagePhrase: string;
+    emailSentConfirmationPhrase: string;
+    emailSentTitle: string;
+    forgotPasswordTitle: string;
+    insertCode: string;
+    insertEmail: string;
+    insertPhone: string;
+    phoneErrorMessagePhrase: string;
+    prepositionIn: string;
+    prepositionOr: string;
+    recoveryPasswordPhrase: string;
+    resendEmailButton: string;
+    resendSmsCodePhrase: string;
+    sendAgain: string;
+    sendAgainPhrase: string;
+    sendButton: string;
+    sms: string;
+    smsCode: string;
+    smsCodeErrorMessagePhrase: string;
+    sentSmsCodePhrase: string;
+    supportContact: string;
+    telephone: string;
+    typeCodeTitle: string;
+  } = poModalPasswordRecoveryLiterals[poLocaleDefault];
+
+  private _componentsSize?: string;
+  private _initialComponentsSize?: string;
+  private _contactEmail: string;
+  private _phoneMask = PoModalPasswordRecoveryDefaultPhone;
+  private _type: PoModalPasswordRecoveryType = PoModalPasswordRecoveryTypeDefault;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no modal:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Definição do e-mail que é exibido na mensagem para contato de suporte.
+   */
+  @Input('p-contact-email') set contactEmail(value: string) {
+    this._contactEmail = value;
+
+    this.smsCodeErrorMessage = this.concatenateSMSErrorMessage(value);
+  }
+
+  get contactEmail() {
+    return this._contactEmail;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Definição da mascara do campo de telefone.
+   *
+   * @default `(99) 99999-9999`
+   */
+  @Input('p-phone-mask') set phoneMask(value: string) {
+    this._phoneMask = value || PoModalPasswordRecoveryDefaultPhone;
+    this.minLength = this.maxLength = this._phoneMask.length;
+  }
+
+  get phoneMask() {
+    return this._phoneMask;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tipo de recuperação de senha que será exibido.
+   *
+   * @default `PoModalPasswordRecoveryType.Email`
+   *
+   */
+  @Input('p-type') set type(value: PoModalPasswordRecoveryType) {
+    this._type = (<any>Object).values(PoModalPasswordRecoveryType).includes(value)
+      ? value
+      : PoModalPasswordRecoveryTypeDefault;
+  }
+
+  get type() {
+    return this._type;
+  }
+
   constructor(languageService: PoLanguageService) {
     this.literals = {
       ...this.literals,
       ...poModalPasswordRecoveryLiterals[languageService.getShortLanguage()]
     };
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
+  }
+
+  private concatenateSMSErrorMessage(value: string) {
+    const literalCodeErrorMessage = this.literals.smsCodeErrorMessagePhrase;
+
+    return value && value !== ''
+      ? `${literalCodeErrorMessage} ${this.literals.prepositionIn} ${value}.`
+      : literalCodeErrorMessage;
   }
 
   /**
@@ -325,12 +370,4 @@ export abstract class PoModalPasswordRecoveryBaseComponent {
    * Abre a modal de preenchimento do código SMS enviado ao usuário.
    */
   abstract openSmsCode(): void;
-
-  private concatenateSMSErrorMessage(value: string) {
-    const literalCodeErrorMessage = this.literals.smsCodeErrorMessagePhrase;
-
-    return value && value !== ''
-      ? `${literalCodeErrorMessage} ${this.literals.prepositionIn} ${value}.`
-      : literalCodeErrorMessage;
-  }
 }

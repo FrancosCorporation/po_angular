@@ -1,7 +1,7 @@
 <form #f="ngForm">
   <h3>Collective vacations</h3>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-datepicker class="po-md-6" name="initialPeriod" [(ngModel)]="initialPeriod" p-label="Initial period" p-required>
@@ -59,14 +59,14 @@
 
 <po-modal #modalEmployeesVacation p-title="Collective Vacation">
   <div class="po-row">
-    <po-info class="po-md-5" p-label="Initial period" [p-value]="initialPeriod | date: 'longDate':'+0000'"> </po-info>
+    <po-info class="po-md-5" p-label="Initial period" [p-value]="initialPeriod | date: 'longDate' : '+0000'"> </po-info>
 
-    <po-info class="po-md-5" p-label="Final period" [p-value]="finalPeriod | date: 'longDate':'+0000'"> </po-info>
+    <po-info class="po-md-5" p-label="Final period" [p-value]="finalPeriod | date: 'longDate' : '+0000'"> </po-info>
 
     <po-info class="po-md-2" p-label="Days" [p-value]="days"> </po-info>
   </div>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-info class="po-lg-12" p-label="Employees" [p-value]="nameEmployeesVacations"> </po-info>

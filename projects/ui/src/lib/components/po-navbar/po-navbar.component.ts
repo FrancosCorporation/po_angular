@@ -4,13 +4,21 @@ import {
   Component,
   ElementRef,
   OnDestroy,
+  OnInit,
   Renderer2,
-  ViewChild
+  ViewChild,
+  inject
 } from '@angular/core';
 import { animate, AnimationBuilder, AnimationFactory, AnimationPlayer, keyframes, style } from '@angular/animations';
 
+import { delay, filter, finalize } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
+
+import { uuid } from '../../utils/util';
 import { PoLanguageService } from '../../services/po-language/po-language.service';
-import { PoMenuItem } from '../po-menu';
+import { PoMenuGlobalService } from '../po-menu/services/po-menu-global.service';
+import { PoMenuItem } from '../po-menu/po-menu-item.interface';
+import { PoMenuComponent } from '../po-menu/po-menu.component';
 
 import { PoNavbarBaseComponent } from './po-navbar-base.component';
 import { PoNavbarItem } from './interfaces/po-navbar-item.interface';
@@ -22,22 +30,44 @@ const poNavbarMatchMedia = `(max-width: ${poNavbarMenuMedia}px)`;
 const poNavbarTiming = '250ms ease';
 
 /**
+ * @deprecated v23.x.x use `po-header`
+ *
  * @docsExtends PoNavbarBaseComponent
  */
 @Component({
   selector: 'po-navbar',
-  templateUrl: './po-navbar.component.html'
+  templateUrl: './po-navbar.component.html',
+  standalone: false
 })
-export class PoNavbarComponent extends PoNavbarBaseComponent implements AfterViewInit, OnDestroy {
+export class PoNavbarComponent extends PoNavbarBaseComponent implements AfterViewInit, OnDestroy, OnInit {
+  private readonly renderer = inject(Renderer2);
+  private readonly builder = inject(AnimationBuilder);
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly menuGlobalService = inject(PoMenuGlobalService);
+
+  @ViewChild(PoNavbarItemsComponent, { read: ElementRef, static: true }) navbarItemsElement: ElementRef;
+
+  @ViewChild(PoNavbarItemsComponent, { static: true }) navbarItems: PoNavbarItemsComponent;
+
   disableRight: boolean;
   showItemsNavigation: boolean = false;
 
+  protected windowResizeListener: () => void;
+
+  private _menuComponent;
+
+  private isNavbarUpdateMenu: boolean = false;
+  private readonly id = uuid();
   private mediaQuery: any;
   private offset: number = 0;
   private player: AnimationPlayer;
-  private menuItems: Array<PoMenuItem>;
+  private readonly menuItems: Array<PoMenuItem>;
+  private previousMenuComponentId;
+  private previousMenusItems = [];
 
-  protected windowResizeListener: () => void;
+  private applicationMenuSubscription: Subscription;
+  private menusSubscription: Subscription;
+  private removedMenuSubscription: Subscription;
 
   get navbarItemNavigationDisableLeft() {
     return this.offset === 0;
@@ -47,38 +77,97 @@ export class PoNavbarComponent extends PoNavbarBaseComponent implements AfterVie
     return this.disableRight && this.offset !== 0;
   }
 
-  @ViewChild(PoNavbarItemsComponent, { read: ElementRef, static: true }) navbarItemsElement: ElementRef;
+  @ViewChild(PoMenuComponent) set menuComponent(menu: PoMenuComponent) {
+    this._menuComponent = menu;
 
-  @ViewChild(PoNavbarItemsComponent, { static: true }) navbarItems: PoNavbarItemsComponent;
+    this.previousMenuComponentId = menu?.id || this.previousMenuComponentId;
+  }
 
-  constructor(
-    poLanguageService: PoLanguageService,
-    private renderer: Renderer2,
-    private builder: AnimationBuilder,
-    private changeDetector: ChangeDetectorRef
-  ) {
+  private get isCollapsedMedia() {
+    return window.innerWidth < poNavbarMenuMedia;
+  }
+
+  constructor() {
+    const poLanguageService = inject(PoLanguageService);
+
     super(poLanguageService);
     this.windowResizeListener = this.renderer.listen(window, 'resize', this.displayItemsNavigation.bind(this));
   }
 
+  ngOnInit() {
+    // necessário para quando o menu da aplicação carregar os itens lazy e navbar estiver colapsado,
+    // quando isso acontece, o navbar inclui 1 item de menu "Navbar links", portanto é removido quando
+    // os novos itens de menu é carregado, a partir disso este tratamento é necessario para incluir
+    // o navbar links apos a adição dos itens de menu da aplicação.
+    this.menusSubscription = this.menuGlobalService.receiveMenus$.subscribe(newMenus => {
+      const previousMenusiIsNavbarLinks =
+        this.previousMenusItems?.length === 1 && this.previousMenusItems[0].id === this.id;
+
+      if (this.applicationMenu && this.isCollapsedMedia && this.isNavbarUpdateMenu && previousMenusiIsNavbarLinks) {
+        this.isNavbarUpdateMenu = false;
+
+        this.applicationMenu.menus = [
+          { label: this.literals.navbarLinks, subItems: this.items, id: this.id },
+          ...newMenus
+        ];
+      }
+
+      this.isNavbarUpdateMenu = false;
+      this.previousMenusItems = newMenus;
+    });
+
+    this.removedMenuSubscription = this.menuGlobalService.receiveRemovedApplicationMenu$.subscribe(removedMenuId => {
+      // verifica se o menu removido foi o presente no navbar, caso sim, ele mantem o applictionMenu.
+      // é preciso para tratar a sequencia do ngDestroy, quando o menu do navbar era removido do DOM
+      // disparava esse evento, sendo necessario tratar, para não tornar indefinido o applicationMenu
+      this.applicationMenu =
+        this.applicationMenu && this.previousMenuComponentId === removedMenuId ? this.applicationMenu : undefined;
+
+      this.changeDetector.detectChanges();
+
+      if (!this.applicationMenu && this.mediaQuery) {
+        this.mediaQuery.removeListener(this.onMediaQueryChange);
+      }
+    });
+
+    this.applicationMenuSubscription = this.menuGlobalService.receiveApplicationMenu$
+      .pipe(delay(100))
+      .subscribe(newMenu => {
+        this.applicationMenu = this.previousMenuComponentId === newMenu.id ? undefined : newMenu;
+
+        this.changeDetector.detectChanges();
+
+        if (this.applicationMenu) {
+          this.initNavbarMenu();
+        }
+      });
+  }
+
   ngAfterViewInit() {
     this.displayItemsNavigation();
-
-    if (this.menu) {
-      this.initNavbarMenu();
-    }
   }
 
   ngOnDestroy() {
     if (this.mediaQuery) {
       this.mediaQuery.removeListener(this.onMediaQueryChange);
     }
+
+    this.removedMenuSubscription?.unsubscribe();
+    this.applicationMenuSubscription?.unsubscribe();
+    this.menusSubscription?.unsubscribe();
   }
 
   navigateItems(orientation: string) {
     orientation === 'left' ? this.navigateLeft() : this.navigateRight();
 
     this.animate(this.offset);
+  }
+
+  protected validateMenuLogo() {
+    if (this.applicationMenu.logo && this.logo) {
+      this.applicationMenu.logo = undefined;
+      this.changeDetector.detectChanges();
+    }
   }
 
   private allNavbarItemsWidth() {
@@ -99,18 +188,16 @@ export class PoNavbarComponent extends PoNavbarBaseComponent implements AfterVie
     return this.builder.build([animate(poNavbarTiming, keyframes([style({ transform: `translateX(${-offset}px)` })]))]);
   }
 
-  private changeNavbarMenuItems(
-    isCollapsedMedia: any,
-    menuItems: Array<PoMenuItem>,
-    navbarItems: Array<PoNavbarItem>,
-    label: string
-  ) {
+  private changeNavbarMenuItems(isCollapsedMedia: any, navbarItems: Array<PoNavbarItem>, label: string) {
     if (isCollapsedMedia) {
-      const subItems = [{ label, subItems: navbarItems }];
-      this.menu.menus = [...subItems, ...menuItems];
+      this.applicationMenu.menus = [{ label, subItems: navbarItems, id: this.id }, ...this.applicationMenu.menus];
     } else {
-      this.menu.menus = menuItems;
+      this.applicationMenu.menus = this.applicationMenu.menus.filter(m => m.id !== this.id);
     }
+
+    this.isNavbarUpdateMenu = true;
+
+    this.changeDetector.detectChanges();
   }
 
   private calculateLeftNavigation() {
@@ -156,10 +243,9 @@ export class PoNavbarComponent extends PoNavbarBaseComponent implements AfterVie
 
   private initNavbarMenu() {
     this.mediaQuery = window.matchMedia(poNavbarMatchMedia);
-    this.menuItems = this.menu.menus;
 
-    if (window.innerWidth < poNavbarMenuMedia) {
-      this.changeNavbarMenuItems(true, this.menuItems, this.items, this.literals.navbarLinks);
+    if (this.isCollapsedMedia) {
+      this.changeNavbarMenuItems(true, this.items, this.literals.navbarLinks);
     }
 
     this.validateMenuLogo();
@@ -190,8 +276,8 @@ export class PoNavbarComponent extends PoNavbarBaseComponent implements AfterVie
     this.validateMaxOffset(maxAllowedOffset);
   }
 
-  private onMediaQueryChange = changed => {
-    this.changeNavbarMenuItems(changed.matches, this.menuItems, this.items, this.literals.navbarLinks);
+  private readonly onMediaQueryChange = changed => {
+    this.changeNavbarMenuItems(changed.matches, this.items, this.literals.navbarLinks);
   };
 
   private setOffsetToZero() {
@@ -202,13 +288,6 @@ export class PoNavbarComponent extends PoNavbarBaseComponent implements AfterVie
     if (this.offset >= maxAllowedOffset) {
       this.offset = maxAllowedOffset;
       this.disableRight = true;
-    }
-  }
-
-  protected validateMenuLogo() {
-    if (this.menu.logo && this.logo) {
-      this.menu.logo = undefined;
-      this.menu.changeDetector.detectChanges();
     }
   }
 }

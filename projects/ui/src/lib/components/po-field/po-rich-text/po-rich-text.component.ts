@@ -1,22 +1,39 @@
-import { AfterViewInit, Component, ElementRef, forwardRef, OnDestroy, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  forwardRef,
+  OnChanges,
+  OnDestroy,
+  OnInit,
+  SimpleChanges,
+  ViewChild,
+  inject,
+  ChangeDetectorRef
+} from '@angular/core';
 
 import { NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
+import { PoRichTextToolbarActions } from './enum/po-rich-text-toolbar-actions.enum';
 import { PoRichTextBaseComponent } from './po-rich-text-base.component';
 import { PoRichTextBodyComponent } from './po-rich-text-body/po-rich-text-body.component';
+import { PoRichTextToolbarComponent } from './po-rich-text-toolbar/po-rich-text-toolbar.component';
 import { PoRichTextService } from './po-rich-text.service';
+import { setHelperSettings } from '../../../utils/util';
+import { PoHelperComponent } from '../../po-helper';
 
 /* istanbul ignore next */
 const providers = [
   {
     provide: NG_VALUE_ACCESSOR,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoRichTextComponent),
     multi: true
   },
   {
     provide: NG_VALIDATORS,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoRichTextComponent),
     multi: true
   },
@@ -49,26 +66,55 @@ const providers = [
 @Component({
   selector: 'po-rich-text',
   templateUrl: './po-rich-text.component.html',
-  providers
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  providers,
+  standalone: false
 })
-export class PoRichTextComponent extends PoRichTextBaseComponent implements AfterViewInit, OnDestroy {
-  private listener = this.validateClassesForRequired.bind(this);
-  private modelLastUpdate: any;
+export class PoRichTextComponent
+  extends PoRichTextBaseComponent
+  implements AfterViewInit, OnDestroy, OnInit, OnChanges
+{
+  private readonly element = inject(ElementRef);
 
   @ViewChild(PoRichTextBodyComponent, { static: true }) bodyElement: PoRichTextBodyComponent;
+  @ViewChild(PoRichTextToolbarComponent, { static: false }) richTextToolbar: PoRichTextToolbarComponent;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
+
+  private readonly listener = this.validateClassesForRequired.bind(this);
+  private modelLastUpdate: any;
+  toolbarActions: Array<PoRichTextToolbarActions> = [];
 
   get errorMsg() {
     return this.errorMessage !== '' && !this.value && this.required && this.invalid ? this.errorMessage : '';
   }
 
-  constructor(private element: ElementRef, richTextService: PoRichTextService) {
-    super(richTextService);
+  constructor() {
+    const richTextService = inject(PoRichTextService);
+    const cd = inject(ChangeDetectorRef);
+
+    super(richTextService, cd);
+  }
+
+  ngOnInit(): void {
+    this.toolbarActions = [...this.hideToolbarActions];
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.hideToolbarActions || changes.disabledTextAlign) {
+      this.toolbarActions = [...this.hideToolbarActions];
+      this.updateAlignOnHideToolbarActionsList();
+    }
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
   }
 
   ngAfterViewInit() {
     // Se não tem ngModel ou reactive form adiciona validação com classes css
     this.addKeyListeners();
     this.verifyAutoFocus();
+
+    this.updateAlignOnHideToolbarActionsList();
   }
 
   ngOnDestroy() {
@@ -101,8 +147,63 @@ export class PoRichTextComponent extends PoRichTextBaseComponent implements Afte
     this.bodyElement.focus();
   }
 
+  onBlur() {
+    this.onTouched?.();
+  }
+
   onChangeValue(value: any) {
     this.change.emit(value);
+  }
+
+  onKeyDown(event: KeyboardEvent): void {
+    this.keydown.emit(event);
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * // Exemplo com p-label e p-helper
+   * <po-rich-text
+   *  #richtext
+   *  ...
+   *  p-label="Label do richtext"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, richtext)"
+   * ></po-rich-text>
+   * ```
+   * ```
+   * ...
+   * onKeyDown(event: KeyboardEvent, inp: PoRichTextComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  showAdditionalHelp(): boolean {
+    this.displayAdditionalHelp = !this.displayAdditionalHelp;
+    const helper = this.poHelperComponent();
+    const isHelpEvt = this.additionalHelp.observed;
+    if (!this.label && (helper || this.additionalHelpTooltip || isHelpEvt)) {
+      if (isHelpEvt) {
+        this.additionalHelp.emit();
+      }
+      if (typeof helper !== 'string' && typeof helper?.eventOnClick === 'function') {
+        helper.eventOnClick();
+        return;
+      }
+      if (this.helperEl?.helperIsVisible()) {
+        this.helperEl?.closeHelperPopover();
+        return;
+      }
+      this.helperEl?.openHelperPopover();
+      return;
+    }
+    return this.displayAdditionalHelp;
   }
 
   updateValue(value: string) {
@@ -146,5 +247,25 @@ export class PoRichTextComponent extends PoRichTextBaseComponent implements Afte
         element.classList.remove('ng-invalid');
       }
     });
+  }
+
+  isAllActionsHidden(): boolean {
+    return Object.values(PoRichTextToolbarActions).every(action => this.toolbarActions.includes(action));
+  }
+
+  updateAlignOnHideToolbarActionsList() {
+    if (this.disabledTextAlign && !this.toolbarActions.includes(PoRichTextToolbarActions.Align)) {
+      this.toolbarActions.push(PoRichTextToolbarActions.Align);
+    }
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.additionalHelp.observed ? this.additionalHelp : undefined
+    );
   }
 }

@@ -2,15 +2,9 @@ import { Component } from '@angular/core';
 
 @Component({
   selector: 'sample-po-avatar-business-card',
-  styles: [
-    `
-      .sample-center-image {
-        display: block;
-        margin: 0 auto;
-      }
-    `
-  ],
-  templateUrl: './sample-po-avatar-business-card.component.html'
+  styleUrls: ['./sample-po-avatar-business-card.component.css'],
+  templateUrl: './sample-po-avatar-business-card.component.html',
+  standalone: false
 })
 export class SamplePoAvatarBusinessCardComponent {
   avatar = 'http://lorempixel.com/300/300/cats/';

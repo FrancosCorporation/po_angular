@@ -1,4 +1,4 @@
-import { ComponentRef, NO_ERRORS_SCHEMA } from '@angular/core';
+import { ComponentRef, EventEmitter, NO_ERRORS_SCHEMA } from '@angular/core';
 import { RouterTestingModule } from '@angular/router/testing';
 import { Routes } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
@@ -10,6 +10,8 @@ import { PoControlPositionService } from './../../../../services/po-control-posi
 import { PoFieldModule } from '../../../../components/po-field/po-field.module';
 import { PoLookupFilter } from '../../../../components/po-field/po-lookup/interfaces/po-lookup-filter.interface';
 import { PoLookupModalService } from '../../../../components/po-field/po-lookup/services/po-lookup-modal.service';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 class LookupFilterService implements PoLookupFilter {
   getObjectByValue(id: string): Observable<any> {
@@ -38,14 +40,33 @@ describe('PoLookupModalService:', () => {
     columns: [],
     filterParams: undefined,
     title: 'Teste',
-    literals: undefined
+    literals: undefined,
+    hideColumnsManager: false,
+    infiniteScroll: false,
+    multiple: false,
+    selectedItems: null,
+    fieldValue: 'value',
+    fieldLabel: 'label',
+    size: 'medium',
+    spacing: 'medium',
+    textWrap: false,
+    virtualScroll: true,
+    changeVisibleColumns: new EventEmitter(),
+    columnRestoreManager: new EventEmitter()
   };
 
   beforeEach(() => {
     TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
       imports: [RouterTestingModule.withRoutes(routes), PoFieldModule],
-      providers: [LookupFilterService, PoComponentInjectorService, PoControlPositionService, PoLookupModalService],
-      schemas: [NO_ERRORS_SCHEMA]
+      providers: [
+        LookupFilterService,
+        PoComponentInjectorService,
+        PoControlPositionService,
+        PoLookupModalService,
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting()
+      ]
     });
 
     poLookupModalService = TestBed.inject(PoLookupModalService);
@@ -95,5 +116,26 @@ describe('PoLookupModalService:', () => {
     poLookupModalService['componentRef'].instance['primaryAction'].action();
 
     expect(poLookupModalService.selectValue).toHaveBeenCalled();
+  });
+
+  it('should call a setChangeColumns function', () => {
+    const columns = [{ label: 'apelido', property: 'nickname' }];
+
+    spyOn(poLookupModalService, 'setChangeColumns');
+
+    poLookupModalService.setChangeColumns(columns);
+
+    expect(poLookupModalService.setChangeColumns).toHaveBeenCalled();
+  });
+
+  it('should change the columns when componentRef is not null', () => {
+    const columns = [{ 'label': 'apelido', 'property': 'nickname' }];
+    params.service = lookupFilterService;
+
+    poLookupModalService.openModal(params);
+    poLookupModalService.setChangeColumns(columns);
+    poLookupModalService['componentRef'].changeDetectorRef.detectChanges();
+
+    expect(poLookupModalService['componentRef'].instance.columns).toEqual(columns);
   });
 });

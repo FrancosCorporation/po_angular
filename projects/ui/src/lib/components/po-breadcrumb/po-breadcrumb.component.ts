@@ -6,11 +6,29 @@ import {
   IterableDiffers,
   OnDestroy,
   Renderer2,
-  ViewChild
+  ViewChild,
+  inject
 } from '@angular/core';
 
 import { PoBreadcrumbBaseComponent } from './po-breadcrumb-base.component';
 import { PoBreadcrumbItem } from './po-breadcrumb-item.interface';
+import { PoPopupComponent } from '../po-popup/po-popup.component';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
+
+export const poBreadcrumbLiterals: object = {
+  en: <any>{
+    literalButtonPopup: 'Menu pop up collapsed'
+  },
+  es: <any>{
+    literalButtonPopup: 'Menú pop up colapsado'
+  },
+  pt: <any>{
+    literalButtonPopup: 'Menu pop up colapsado'
+  },
+  ru: <any>{
+    literalButtonPopup: 'меню свернуто'
+  }
+};
 
 /**
  * @docsExtends PoBreadcrumbBaseComponent
@@ -29,26 +47,44 @@ import { PoBreadcrumbItem } from './po-breadcrumb-item.interface';
  */
 @Component({
   selector: 'po-breadcrumb',
-  templateUrl: './po-breadcrumb.component.html'
+  templateUrl: './po-breadcrumb.component.html',
+  standalone: false
 })
 export class PoBreadcrumbComponent extends PoBreadcrumbBaseComponent implements AfterViewInit, DoCheck, OnDestroy {
+  private readonly element = inject(ElementRef);
+  renderer = inject(Renderer2);
+  languageService = inject(PoLanguageService);
+
+  @ViewChild('breadcrumb', { read: ElementRef, static: true }) breadcrumbElement: ElementRef;
+  @ViewChild('dropdownIcon', { read: ElementRef }) dropdownIcon: ElementRef;
+  @ViewChild('target', { read: ElementRef }) svgTarget: ElementRef;
+  @ViewChild('popup') popupContainer: PoPopupComponent;
+
   showDropdown: boolean = false;
   showDropdownToggle: boolean = false;
   dropdownItems: Array<PoBreadcrumbItem>;
+  literals;
+  hiddenLiteralFavorite = false;
 
   private _breadcrumbItemsLenght: number = 0;
   private calculatedElement = false;
-  private differ;
+  private readonly differ;
   private hiddenWithoutResize = false;
   private initialized = false;
   private timeoutResize;
 
-  @ViewChild('breadcrumb', { read: ElementRef, static: true }) breadcrumbElement: ElementRef;
-  @ViewChild('dropdownIcon', { read: ElementRef }) dropdownIcon: ElementRef;
+  constructor() {
+    const differs = inject(IterableDiffers);
 
-  constructor(differs: IterableDiffers, private element: ElementRef, public renderer: Renderer2) {
     super();
+    const languageService = this.languageService;
+
     this.differ = differs.find([]).create(null);
+    const language = languageService.getShortLanguage();
+
+    this.literals = {
+      ...poBreadcrumbLiterals[language]
+    };
   }
 
   ngAfterViewInit() {
@@ -75,26 +111,23 @@ export class PoBreadcrumbComponent extends PoBreadcrumbBaseComponent implements 
   }
 
   ngOnDestroy() {
-    this.removeClickoutListener();
     this.removeResizeListener();
   }
 
-  toggleDropdown() {
-    this.showDropdown = !this.showDropdown;
-    this.initializeClickoutListener();
+  emitAction(item: PoBreadcrumbItem) {
+    if (item.action) {
+      item.action();
+    }
   }
 
-  private wasClickedonDropdown = (event: MouseEvent) => {
-    const clickedOutIconDropdown = this.checkClickOutElement(event, this.dropdownIcon);
-
-    if (clickedOutIconDropdown) {
-      this.showDropdown = false;
-      this.removeClickoutListener();
+  openPopup(event) {
+    if (event.code === 'Enter' || event.code === 'Space') {
+      this.popupContainer.open();
     }
-  };
+  }
 
-  private checkClickOutElement(event, element) {
-    return element && !element.nativeElement.contains(event.target);
+  closePopUp() {
+    this.svgTarget.nativeElement.focus();
   }
 
   private checkChangeOnItems() {
@@ -109,12 +142,19 @@ export class PoBreadcrumbComponent extends PoBreadcrumbBaseComponent implements 
 
   private calcBreadcrumb() {
     const breadcrumbFavorite = this.getBreadcrumbFavoriteWidth();
-    const breadcrumb = this.getBreadcrumbWidth(breadcrumbFavorite);
-
+    const existLabel = this.existsFavoritelabel();
+    const breadcrumb = this.getBreadcrumbWidth(breadcrumbFavorite, existLabel);
+    const breadcrumbTooltip = this.getBreadcrumbTooltipWidth();
     if (breadcrumb <= this._breadcrumbItemsLenght) {
       this.enableBreadcrumbResponsive();
     } else {
       this.disableBreadcrumbResponsive();
+    }
+
+    if (breadcrumbTooltip && breadcrumb <= breadcrumbTooltip) {
+      this.hiddenLiteralFavorite = true;
+    } else {
+      this.hiddenLiteralFavorite = false;
     }
   }
 
@@ -124,14 +164,21 @@ export class PoBreadcrumbComponent extends PoBreadcrumbBaseComponent implements 
       : 0;
   }
 
-  private getBreadcrumbWidth(breadcrumbFavorite) {
-    return this.element.nativeElement.querySelector('.po-breadcrumb').offsetWidth - breadcrumbFavorite;
+  private getBreadcrumbTooltipWidth() {
+    return this.favoriteService ? this.element.nativeElement.querySelector('.po-breadcrumb-tooltip')?.offsetWidth : 0;
+  }
+
+  private existsFavoritelabel() {
+    return !!this.element.nativeElement.querySelector('.po-breadcrumb-favorite-label');
+  }
+
+  private getBreadcrumbWidth(breadcrumbFavorite, existLabel) {
+    const widthSpan = !existLabel ? 95 : 0;
+    return this.element.nativeElement.querySelector('.po-breadcrumb').offsetWidth - (breadcrumbFavorite + widthSpan);
   }
 
   private calcBreadcrumbItemsWidth() {
-    const breadcrumbItem = this.element.nativeElement.querySelectorAll(
-      '.po-breadcrumb-item, .po-breadcrumb-item-unclickable'
-    );
+    const breadcrumbItem = this.element.nativeElement.querySelectorAll('.po-breadcrumb-item');
 
     this._breadcrumbItemsLenght = Array.from(breadcrumbItem)
       .map(breadcrumb => breadcrumb['offsetWidth'])
@@ -140,8 +187,6 @@ export class PoBreadcrumbComponent extends PoBreadcrumbBaseComponent implements 
 
   private enableBreadcrumbResponsive() {
     this.showDropdownToggle = true;
-    this.itemsView = this.items.slice(-2);
-    this.dropdownItems = this.items.slice(0, -2).reverse();
   }
 
   private disableBreadcrumbResponsive() {
@@ -171,20 +216,10 @@ export class PoBreadcrumbComponent extends PoBreadcrumbBaseComponent implements 
     this.calculatedElement = true;
   }
 
-  private initializeClickoutListener() {
-    this.clickoutListener = this.renderer.listen('document', 'click', this.wasClickedonDropdown);
-  }
-
   private initializeResizeListener() {
     this.resizeListener = this.renderer.listen('window', 'resize', (event: MouseEvent) => {
       this.debounceResize();
     });
-  }
-
-  private removeClickoutListener() {
-    if (this.clickoutListener) {
-      this.clickoutListener();
-    }
   }
 
   private removeResizeListener() {

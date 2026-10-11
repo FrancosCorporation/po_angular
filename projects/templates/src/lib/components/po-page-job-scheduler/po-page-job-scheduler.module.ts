@@ -9,6 +9,7 @@ import {
   PoDividerModule,
   PoDynamicModule,
   PoFieldModule,
+  PoIconModule,
   PoInfoModule,
   PoPageModule,
   PoStepperModule,
@@ -21,15 +22,23 @@ import { PoPageJobSchedulerLookupService } from './po-page-job-scheduler-lookup.
 import { PoPageJobSchedulerParametersComponent } from './po-page-job-scheduler-parameters/po-page-job-scheduler-parameters.component';
 import { PoPageJobSchedulerService } from './po-page-job-scheduler.service';
 import { PoPageJobSchedulerSummaryComponent } from './po-page-job-scheduler-summary/po-page-job-scheduler-summary.component';
+import { PoJobSchedulerParametersTemplateDirective } from './po-page-job-scheduler-parameters';
+import { PoJobSchedulerSummaryTemplateDirective } from './po-page-job-scheduler-summary/po-job-scheduler-summary-template';
 
 @NgModule({
   declarations: [
     PoPageJobSchedulerComponent,
     PoPageJobSchedulerExecutionComponent,
     PoPageJobSchedulerParametersComponent,
-    PoPageJobSchedulerSummaryComponent
+    PoPageJobSchedulerSummaryComponent,
+    PoJobSchedulerParametersTemplateDirective,
+    PoJobSchedulerSummaryTemplateDirective
   ],
-  exports: [PoPageJobSchedulerComponent],
+  exports: [
+    PoPageJobSchedulerComponent,
+    PoJobSchedulerParametersTemplateDirective,
+    PoJobSchedulerSummaryTemplateDirective
+  ],
   imports: [
     CommonModule,
     FormsModule,
@@ -39,6 +48,7 @@ import { PoPageJobSchedulerSummaryComponent } from './po-page-job-scheduler-summ
     PoDividerModule,
     PoDynamicModule,
     PoFieldModule,
+    PoIconModule,
     PoInfoModule,
     PoPageModule,
     PoStepperModule,

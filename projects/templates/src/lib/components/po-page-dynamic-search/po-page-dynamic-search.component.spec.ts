@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterTestingModule } from '@angular/router/testing';
 import { Routes } from '@angular/router';
 import { TitleCasePipe } from '@angular/common';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { NO_ERRORS_SCHEMA, SimpleChanges } from '@angular/core';
 
 import { PoDynamicFieldType, PoDynamicModule } from '@po-ui/ng-components';
 
@@ -11,6 +11,8 @@ import { PoPageDynamicSearchComponent } from './po-page-dynamic-search.component
 import { PoAdvancedFilterComponent } from './po-advanced-filter/po-advanced-filter.component';
 import { PoPageCustomizationModule } from '../../services/po-page-customization/po-page-customization.module';
 import { expectBrowserLanguageMethod } from './../../util-test/util-expect.spec';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 export const routes: Routes = [];
 
@@ -18,16 +20,14 @@ describe('PoPageDynamicSearchComponent:', () => {
   let component: PoPageDynamicSearchComponent;
   let fixture: ComponentFixture<PoPageDynamicSearchComponent>;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [FormsModule, RouterTestingModule.withRoutes(routes), PoPageCustomizationModule, PoDynamicModule],
-        declarations: [PoPageDynamicSearchComponent, PoAdvancedFilterComponent],
-        providers: [TitleCasePipe],
-        schemas: [NO_ERRORS_SCHEMA]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoPageDynamicSearchComponent, PoAdvancedFilterComponent],
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [FormsModule, RouterTestingModule.withRoutes(routes), PoPageCustomizationModule, PoDynamicModule],
+      providers: [TitleCasePipe, provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoPageDynamicSearchComponent);
@@ -50,11 +50,43 @@ describe('PoPageDynamicSearchComponent:', () => {
       expect(typeof component.filterSettings.advancedAction).toBe('function');
     });
 
+    it('get filterSettings: should return `filterSettings` with `advancedAction` equal to `onAdvancedAction` if at least one filter is visible', () => {
+      const filters: Array<any> = [
+        { property: 'name', visible: true },
+        { property: 'birthdate', visible: false },
+        { property: 'genre', visible: false }
+      ];
+      component.filters = filters;
+      expect(typeof component.filterSettings.advancedAction).toBe('function');
+    });
+
+    it('get filterSettings: should return `filterSettings` with `advancedAction` equal to `undefined` if filters are not visible', () => {
+      const filters: Array<any> = [
+        { property: 'name', visible: false },
+        { property: 'birthdate', visible: false },
+        { property: 'genre', visible: false }
+      ];
+      component.filters = filters;
+      expect(typeof component.filterSettings.advancedAction).toBe('undefined');
+    });
+
     it('get filterSettings: should apply `quickSearchWidth` value to `filterSettings.width`', () => {
       const filterWidth = 3;
       component.quickSearchWidth = filterWidth;
 
       expect(component.filterSettings.width).toBe(filterWidth);
+    });
+
+    it('get disclaimerGroup: should apply `hideRemoveAll` value to false by default', () => {
+      const disclaimerGroup = component.disclaimerGroup;
+
+      expect(disclaimerGroup.hideRemoveAll).toBeFalse();
+    });
+    it('get disclaimerGroup: should apply `hideRemoveAll` value to true when property `hideRemoveAllDisclaimer` is true', () => {
+      component.hideRemoveAllDisclaimer = true;
+      const disclaimerGroup = component.disclaimerGroup;
+
+      expect(disclaimerGroup.hideRemoveAll).toBeTrue();
     });
 
     describe('onAction:', () => {
@@ -74,7 +106,8 @@ describe('PoPageDynamicSearchComponent:', () => {
           },
           literals: {
             quickSearchLabel: 'Pesquisa rápida:'
-          }
+          },
+          hideCloseDisclaimers: []
         };
       });
 
@@ -96,9 +129,35 @@ describe('PoPageDynamicSearchComponent:', () => {
         expect(fakethis.quickSearch.emit).not.toHaveBeenCalled();
       });
 
-      it('should set `_dislaimerGroup.disclaimers` with property, label and value', () => {
-        const result = [{ property: 'search', label: 'Pesquisa rápida: quickFilter', value: 'quickFilter' }];
+      it('should set `_dislaimerGroup.disclaimers` with property, label, value and hideClose', () => {
+        const result = [
+          { property: 'search', label: 'Pesquisa rápida: quickFilter', value: 'quickFilter', hideClose: false }
+        ];
 
+        component.onAction.call(fakethis, 'quickFilter');
+
+        expect(fakethis._disclaimerGroup.disclaimers).toEqual(result);
+      });
+
+      it(`should set '_dislaimerGroup.disclaimers' with 'hideClose: true' when property is
+      included on the 'hideCloseDisclaimers'`, () => {
+        const result = [
+          { property: 'search', label: 'Pesquisa rápida: quickFilter', value: 'quickFilter', hideClose: true }
+        ];
+
+        fakethis['hideCloseDisclaimers'] = ['search'];
+        component.onAction.call(fakethis, 'quickFilter');
+
+        expect(fakethis._disclaimerGroup.disclaimers).toEqual(result);
+      });
+
+      it(`should set '_dislaimerGroup.disclaimers' with 'hideClose: false' when property is not
+      included on the 'hideCloseDisclaimers'`, () => {
+        const result = [
+          { property: 'search', label: 'Pesquisa rápida: quickFilter', value: 'quickFilter', hideClose: false }
+        ];
+
+        fakethis['hideCloseDisclaimers'] = ['name'];
         component.onAction.call(fakethis, 'quickFilter');
 
         expect(fakethis._disclaimerGroup.disclaimers).toEqual(result);
@@ -155,19 +214,55 @@ describe('PoPageDynamicSearchComponent:', () => {
       expect(component.poAdvancedFilter.open).toHaveBeenCalled();
     });
 
-    it(`onAdvancedSearch: should call 'setDisclaimers', 'setFilters' and 'advancedSearch.emit'`, () => {
+    it(`onAdvancedSearch: should call 'setDisclaimers', 'setFilters', 'addComplexFilter' and 'advancedSearch.emit'`, () => {
       const filter = { property: 'value1' };
       const optionsService = undefined;
 
+      const visibleFilters =
+        component.visibleFixedFilters === false
+          ? component.filters.filter(filter => !('fixed' in filter) || !filter.fixed)
+          : component.filters;
+
       spyOn(component, <any>'setDisclaimers');
+      spyOn(component, <any>'addComplexFilter').and.returnValue(filter);
       spyOn(component.advancedSearch, 'emit');
       spyOn(component, <any>'setFilters');
 
       component.onAdvancedSearch({ filter, optionsService });
 
-      expect(component['setDisclaimers']).toHaveBeenCalledWith(filter, optionsService);
+      expect(component['setDisclaimers']).toHaveBeenCalledWith(filter, optionsService, visibleFilters);
       expect(component['setFilters']).toHaveBeenCalledBefore(component.advancedSearch.emit);
+      expect(component['addComplexFilter']).toHaveBeenCalledWith(filter);
       expect(component.advancedSearch.emit).toHaveBeenCalledWith(filter);
+    });
+
+    it('onAdvancedSearch: should correctly filter out fixed filters when visibleFixedFilters is false', () => {
+      component.visibleFixedFilters = false;
+      component.filters = [
+        { property: 'city', fixed: true, initValue: 'Toronto' },
+        { property: 'name', fixed: false, initValue: 'John Doe' },
+        { property: 'country', initValue: 'Canada' }
+      ];
+
+      const filteredItems = { filter: { city: 'Toronto' }, optionsService: undefined };
+
+      const setDisclaimersSpy = spyOn(component as any, 'setDisclaimers').and.callThrough();
+      spyOn(component, <any>'setFilters').and.callThrough();
+      spyOn(component.advancedSearch, 'emit');
+
+      component.onAdvancedSearch(filteredItems);
+
+      const actualVisibleFilters = setDisclaimersSpy.calls.mostRecent().args[2] as Array<any>;
+
+      expect(actualVisibleFilters.length).toBe(2);
+      expect(actualVisibleFilters).toEqual(
+        jasmine.arrayContaining([
+          jasmine.objectContaining({ property: 'name', fixed: false }),
+          jasmine.objectContaining({ property: 'country' })
+        ])
+      );
+      expect(component['setFilters']).toHaveBeenCalledWith(filteredItems.filter);
+      expect(component.advancedSearch.emit).toHaveBeenCalledWith(filteredItems.filter);
     });
 
     it(`setFilters: should call 'convertToFilters'`, () => {
@@ -178,6 +273,31 @@ describe('PoPageDynamicSearchComponent:', () => {
       component['setFilters'](filters);
 
       expect(component['convertToFilters']).toHaveBeenCalledWith(filters);
+    });
+
+    it(`onAdvancedSearch: should call 'clearInputSearch' if isAdvancedSearch is true`, () => {
+      const fakeThis = {
+        setDisclaimers: () => ['test'],
+        _disclaimerGroup: {
+          disclaimers: ['test']
+        },
+        setFilters: () => {},
+        advancedSearch: {
+          emit: () => {}
+        },
+        poPageList: {
+          clearInputSearch: () => {}
+        },
+        addComplexFilter: () => ({})
+      };
+      const filteredItems = { filter: 'fakeFilter', optionsService: 'fakeOptionsService' };
+      const isAdvancedSearch = true;
+
+      spyOn(fakeThis.poPageList, 'clearInputSearch');
+
+      component.onAdvancedSearch.call(fakeThis, filteredItems, isAdvancedSearch);
+
+      expect(fakeThis.poPageList.clearInputSearch).toHaveBeenCalled();
     });
 
     it(`setFilters: should update filters value if the objects are compatible`, () => {
@@ -257,9 +377,103 @@ describe('PoPageDynamicSearchComponent:', () => {
       expect(component.changeDisclaimers.emit).toHaveBeenCalledWith(currentDisclaimers);
     });
 
-    it(`onRemoveAllDisclaimers: should call 'changeDisclaimers.emit' if all disclaimers are removed`, () => {
+    it(`onRemoveDisclaimer: should include fixed filters from 'this.filters' into currentDisclaimers`, () => {
+      component.filters = [
+        { property: 'status', fixed: true, initValue: 'Active', label: 'Status' },
+        { property: 'category', fixed: true, initValue: 'Finance', label: 'Category' },
+        { property: 'name', fixed: false, initValue: 'Test', label: 'Name' }
+      ];
+      const currentDisclaimers = [{ property: 'name', label: 'Name: Test', value: 'Test', hideClose: false }];
+      const removedDisclaimer = { property: 'name', label: 'Name: Test', value: 'Test', hideClose: false };
+
+      const expectedDisclaimers = [
+        { property: 'name', label: 'Name: Test', value: 'Test', hideClose: false },
+        { property: 'status', label: 'Status: Active', value: 'Active', hideClose: true },
+        { property: 'category', label: 'Category: Finance', value: 'Finance', hideClose: true }
+      ];
+
       spyOn(component.changeDisclaimers, 'emit');
 
+      component['onRemoveDisclaimer']({ removedDisclaimer, currentDisclaimers });
+
+      expect(component.changeDisclaimers.emit).toHaveBeenCalledWith(expectedDisclaimers);
+    });
+
+    it(`onRemoveDisclaimer: should not duplicate fixed filters already present in currentDisclaimers`, () => {
+      component.filters = [
+        { property: 'status', fixed: true, initValue: 'Active', label: 'Status' },
+        { property: 'category', fixed: true, initValue: 'Finance', label: 'Category' }
+      ];
+      const currentDisclaimers = [{ property: 'status', label: 'Status: Active', value: 'Active', hideClose: true }];
+      const removedDisclaimer = { property: 'category', label: 'Category: Finance', value: 'Finance', hideClose: true };
+
+      const expectedDisclaimers = [
+        { property: 'status', label: 'Status: Active', value: 'Active', hideClose: true },
+        { property: 'category', label: 'Category: Finance', value: 'Finance', hideClose: true }
+      ];
+
+      spyOn(component.changeDisclaimers, 'emit');
+
+      component['onRemoveDisclaimer']({ removedDisclaimer, currentDisclaimers });
+
+      expect(component.changeDisclaimers.emit).toHaveBeenCalledWith(expectedDisclaimers);
+    });
+
+    it(`onRemoveDisclaimer: should not include fixed filters without 'initValue'`, () => {
+      component.filters = [
+        { property: 'status', fixed: true, label: 'Status' },
+        { property: 'category', fixed: true, initValue: 'Finance', label: 'Category' }
+      ];
+      const currentDisclaimers = [
+        { property: 'category', label: 'Category: Finance', value: 'Finance', hideClose: true }
+      ];
+      const removedDisclaimer = { property: 'category', label: 'Category: Finance', value: 'Finance', hideClose: true };
+
+      const expectedDisclaimers = [
+        { property: 'category', label: 'Category: Finance', value: 'Finance', hideClose: true }
+      ];
+
+      spyOn(component.changeDisclaimers, 'emit');
+
+      component['onRemoveDisclaimer']({ removedDisclaimer, currentDisclaimers });
+
+      expect(component.changeDisclaimers.emit).toHaveBeenCalledWith(expectedDisclaimers);
+    });
+
+    it(`onRemoveAllDisclaimers: should call 'changeDisclaimers.emit' with disclaimers that need to be kept`, () => {
+      component.filters = [
+        { property: 'status', fixed: true, initValue: 'Ativo', label: 'Status' },
+        { property: 'category', fixed: true, initValue: 'Financeiro', label: 'Categoria' },
+        { property: 'name', fixed: false }
+      ];
+      const expectedDisclaimersToKeep = [
+        {
+          property: 'status',
+          value: 'Ativo',
+          label: 'Status: Ativo',
+          hideClose: true
+        },
+        {
+          property: 'category',
+          value: 'Financeiro',
+          label: 'Categoria: Financeiro',
+          hideClose: true
+        }
+      ];
+
+      spyOn(component.changeDisclaimers, 'emit');
+      component['onRemoveAllDisclaimers']();
+
+      expect(component.changeDisclaimers.emit).toHaveBeenCalledWith(expectedDisclaimersToKeep);
+    });
+
+    it(`onRemoveAllDisclaimers: should call 'changeDisclaimers.emit' with an empty array if there are no fixed filters`, () => {
+      component.filters = [
+        { property: 'name', fixed: false, initValue: 'John Doe' },
+        { property: 'age', fixed: false, initValue: 30 }
+      ];
+
+      spyOn(component.changeDisclaimers, 'emit');
       component['onRemoveAllDisclaimers']();
 
       expect(component.changeDisclaimers.emit).toHaveBeenCalledWith([]);
@@ -276,9 +490,9 @@ describe('PoPageDynamicSearchComponent:', () => {
       const filters = { name: 'Roger', birthdate: '2018-12-12T00:00:01-00:00', genre: 'male' };
 
       const result = [
-        { label: 'Name: Roger', property: 'name', value: 'Roger' },
-        { label: 'Birthdate: 12/12/2018', property: 'birthdate', value: '2018-12-12T00:00:01-00:00' },
-        { label: 'Genre: male', property: 'genre', value: 'male' }
+        { label: 'Name: Roger', property: 'name', value: 'Roger', hideClose: false },
+        { label: 'Birthdate: 12/12/2018', property: 'birthdate', value: '2018-12-12T00:00:01-00:00', hideClose: false },
+        { label: 'Genre: male', property: 'genre', value: 'male', hideClose: false }
       ];
 
       spyOn(component, <any>'getFieldByProperty').and.callThrough();
@@ -299,8 +513,8 @@ describe('PoPageDynamicSearchComponent:', () => {
       const filters = { name: 'Name1', genre: 'male' };
 
       const result = [
-        { label: 'Name: Name1', property: 'name', value: 'Name1' },
-        { label: 'Genre: male', property: 'genre', value: 'male' }
+        { label: 'Name: Name1', property: 'name', value: 'Name1', hideClose: false },
+        { label: 'Genre: male', property: 'genre', value: 'male', hideClose: false }
       ];
 
       spyOn(component, <any>'getFieldByProperty').and.callThrough();
@@ -318,8 +532,8 @@ describe('PoPageDynamicSearchComponent:', () => {
       const filters = { name: 'Name1', genre: 'male' };
 
       const result = [
-        { label: 'Name: Name1', property: 'name', value: 'Name1' },
-        { label: 'Genre: male', property: 'genre', value: 'male' }
+        { label: 'Name: Name1', property: 'name', value: 'Name1', hideClose: false },
+        { label: 'Genre: male', property: 'genre', value: 'male', hideClose: false }
       ];
 
       expect(component['setDisclaimers'](filters)).toEqual(result);
@@ -334,9 +548,127 @@ describe('PoPageDynamicSearchComponent:', () => {
 
       const filters = { name: 'Name1', genre: 'male' };
 
-      const result = [{ label: 'Name: Name1', property: 'name', value: 'Name1' }];
+      const result = [{ label: 'Name: Name1', property: 'name', value: 'Name1', hideClose: false }];
 
       expect(component['setDisclaimers'](filters)).toEqual(result);
+    });
+
+    it(`setDisclaimers: should return disclaimers based on the 'filters' with the 'hideClose: true' to filters included on the 'hideCloseDisclaimers'`, () => {
+      component.filters = [
+        { property: 'name', label: 'Name' },
+        { property: 'birthdate', label: 'Birthdate', type: 'date' },
+        { property: 'genre', label: 'Genre' }
+      ];
+
+      component.hideCloseDisclaimers = ['name', 'birthdate'];
+
+      const filters = { name: 'Roger', birthdate: '2018-12-12T00:00:01-00:00', genre: 'male' };
+
+      const result = [
+        { label: 'Name: Roger', property: 'name', value: 'Roger', hideClose: true },
+        { label: 'Birthdate: 12/12/2018', property: 'birthdate', value: '2018-12-12T00:00:01-00:00', hideClose: true },
+        { label: 'Genre: male', property: 'genre', value: 'male', hideClose: false }
+      ];
+
+      expect(component['setDisclaimers'](filters)).toEqual(result);
+    });
+
+    it(`setDisclaimers: should return disclaimers based on the 'filters' with the 'hideClose: false' to filters not included on the 'hideCloseDisclaimers'`, () => {
+      component.filters = [
+        { property: 'name', label: 'Name' },
+        { property: 'birthdate', label: 'Birthdate', type: 'date' },
+        { property: 'genre', label: 'Genre' }
+      ];
+
+      component.hideCloseDisclaimers = ['test'];
+
+      const filters = { name: 'Roger', birthdate: '2018-12-12T00:00:01-00:00', genre: 'male' };
+
+      const result = [
+        { label: 'Name: Roger', property: 'name', value: 'Roger', hideClose: false },
+        { label: 'Birthdate: 12/12/2018', property: 'birthdate', value: '2018-12-12T00:00:01-00:00', hideClose: false },
+        { label: 'Genre: male', property: 'genre', value: 'male', hideClose: false }
+      ];
+
+      expect(component['setDisclaimers'](filters)).toEqual(result);
+    });
+
+    it(`addComplexFilter: should return {}`, () => {
+      component.filters = [{ property: 'name' }, { property: 'genre' }, { property: 'birthdate' }];
+
+      const filters = {};
+
+      const result = {};
+
+      expect(component['addComplexFilter'](filters)).toEqual(result);
+    });
+
+    it(`addComplexFilter: should return filter without attribute 'range'`, () => {
+      component.filters = [{ property: 'name' }, { property: 'genre' }, { property: 'birthdate' }];
+
+      const filters = { name: 'Name1', genre: 'male', birthdate: '2020-01-15' };
+
+      const result = { name: 'Name1', genre: 'male', birthdate: '2020-01-15' };
+
+      expect(component['addComplexFilter'](filters)).toEqual(result);
+    });
+
+    it(`addComplexFilter: should return filter with attribute 'range'`, () => {
+      component.filters = [{ property: 'name' }, { property: 'genre' }, { property: 'birthdate', range: true }];
+
+      const filters = { name: 'Name1', genre: 'male', birthdate: { start: '2020-01-01', end: '2020-01-31' } };
+
+      const result = {
+        name: 'Name1',
+        genre: 'male',
+        $filter: `birthdate ge '2020-01-01' and birthdate le '2020-01-31'`
+      };
+
+      expect(component['addComplexFilter'](filters)).toEqual(result);
+    });
+
+    it(`addComplexFilter: should return filter with attribute 'range' and final date 'undefined'`, () => {
+      component.filters = [{ property: 'name' }, { property: 'genre' }, { property: 'birthdate', range: true }];
+
+      const filters = { name: 'Name1', genre: 'male', birthdate: { start: '2020-01-01', end: undefined } };
+
+      const result = { name: 'Name1', genre: 'male', birthdate: { start: '2020-01-01', end: undefined } };
+
+      expect(component['addComplexFilter'](filters)).toEqual(result);
+    });
+
+    it(`addComplexFilter: should return filter with attribute 'range' and initial date 'undefined'`, () => {
+      component.filters = [{ property: 'name' }, { property: 'genre' }, { property: 'birthdate', range: true }];
+
+      const filters = { name: 'Name1', genre: 'male', birthdate: { start: undefined, end: '2020-01-31' } };
+
+      const result = { name: 'Name1', genre: 'male', birthdate: { start: undefined, end: '2020-01-31' } };
+
+      expect(component['addComplexFilter'](filters)).toEqual(result);
+    });
+
+    it(`addComplexFilter: should return filter with two attribute 'range'`, () => {
+      component.filters = [
+        { property: 'name' },
+        { property: 'genre' },
+        { property: 'birthdate', range: true },
+        { property: 'deathdate', range: true }
+      ];
+
+      const filters = {
+        name: 'Name1',
+        genre: 'male',
+        birthdate: { start: '2020-01-01', end: '2020-01-31' },
+        deathdate: { start: '2021-01-01', end: '2021-01-31' }
+      };
+
+      const result = {
+        name: 'Name1',
+        genre: 'male',
+        $filter: `birthdate ge '2020-01-01' and birthdate le '2020-01-31' and deathdate ge '2021-01-01' and deathdate le '2021-01-31'`
+      };
+
+      expect(component['addComplexFilter'](filters)).toEqual(result);
     });
 
     it('getFilterValueToDisclaimer: should return formated date if field type is PoDynamicFieldType.Date', () => {
@@ -348,6 +680,37 @@ describe('PoPageDynamicSearchComponent:', () => {
       const result = component['getFilterValueToDisclaimer'](field, value);
 
       expect(result).toBe('12/08/2020');
+    });
+
+    it('getFilterValueToDisclaimer: should return formated currency in locale default if field type is PoDynamicFieldType.Currency', () => {
+      component['languageService'].setLanguage('pt');
+      const field = { type: PoDynamicFieldType.Currency, property: '1', label: 'currency' };
+      const value = 322;
+
+      const result = component['getFilterValueToDisclaimer'](field, value);
+      expect(result).toBe('322,00');
+    });
+
+    it("getFilterValueToDisclaimer: should return formated currency in locale 'En' if field type is PoDynamicFieldType.Currency and locale is 'en'", () => {
+      const field = { type: PoDynamicFieldType.Currency, property: '1', label: 'currency', locale: 'en' };
+      const value = 322;
+
+      const result = component['getFilterValueToDisclaimer'](field, value);
+      expect(result).toBe('322.00');
+    });
+
+    it('getFilterValueToDisclaimer: should return formated date if field type is PoDynamicFieldType.Date with range', () => {
+      const field = { type: PoDynamicFieldType.Date, property: '1', label: 'date', range: true };
+      const originalValue = { start: '2020-08-12', end: '2020-08-12' };
+      const formatedDateStart = '12/08/2020';
+      const formatedDateEnd = '15/08/2021';
+      const formatedDateRange = '12/08/2020 - 15/08/2021';
+
+      spyOn(component, <any>'formatDate').and.returnValues(formatedDateStart, formatedDateEnd);
+
+      const result = component['getFilterValueToDisclaimer'](field, originalValue);
+
+      expect(result).toBe(formatedDateRange);
     });
 
     it('getFilterValueToDisclaimer: should return label of option if options and label are defined', () => {
@@ -517,6 +880,285 @@ describe('PoPageDynamicSearchComponent:', () => {
       expect(result).toBe(123);
     });
 
+    it('getFilterValueToDisclaimer: should return `booleanTrue` value when field type is `boolean` and value is `true`', () => {
+      const field = {
+        property: 'active',
+        type: PoDynamicFieldType.Boolean,
+        booleanTrue: 'Ativo',
+        booleanFalse: 'Inativo'
+      };
+
+      const result = component['getFilterValueToDisclaimer'](field, true);
+
+      expect(result).toBe('Ativo');
+    });
+
+    it('getFilterValueToDisclaimer: should return `booleanFalse` value when field type is `boolean` and value is `false`', () => {
+      const field = {
+        property: 'active',
+        type: PoDynamicFieldType.Boolean,
+        booleanTrue: 'Ativo',
+        booleanFalse: 'Inativo'
+      };
+
+      const result = component['getFilterValueToDisclaimer'](field, false);
+
+      expect(result).toBe('Inativo');
+    });
+
+    it('getFilterValueToDisclaimer: should return literal `disclaimerBooleanTrue` when value is `true` and `booleanTrue` is undefined', () => {
+      component['languageService'].setLanguage('pt');
+      const field = { property: 'active', type: PoDynamicFieldType.Boolean };
+
+      const result = component['getFilterValueToDisclaimer'](field, true);
+
+      expect(result).toBe('Sim');
+    });
+
+    it('getFilterValueToDisclaimer: should return literal `disclaimerBooleanFalse` when value is `false` and `booleanFalse` is undefined', () => {
+      component['languageService'].setLanguage('pt');
+      const field = { property: 'active', type: PoDynamicFieldType.Boolean };
+
+      const result = component['getFilterValueToDisclaimer'](field, false);
+
+      expect(result).toBe('Não');
+    });
+
+    it('getFilterValueToDisclaimer: should fall back to literals in english when language is `en`', () => {
+      component['languageService'].setLanguage('en');
+      const field = { property: 'active', type: PoDynamicFieldType.Boolean };
+
+      expect(component['getFilterValueToDisclaimer'](field, true)).toBe('Yes');
+      expect(component['getFilterValueToDisclaimer'](field, false)).toBe('No');
+    });
+
+    it('getFilterValueToDisclaimer: should fall back to literals in spanish when language is `es`', () => {
+      component['languageService'].setLanguage('es');
+      const field = { property: 'active', type: PoDynamicFieldType.Boolean };
+
+      expect(component['getFilterValueToDisclaimer'](field, true)).toBe('Sí');
+      expect(component['getFilterValueToDisclaimer'](field, false)).toBe('No');
+    });
+
+    it('getFilterValueToDisclaimer: should fall back to literals in russian when language is `ru`', () => {
+      component['languageService'].setLanguage('ru');
+      const field = { property: 'active', type: PoDynamicFieldType.Boolean };
+
+      expect(component['getFilterValueToDisclaimer'](field, true)).toBe('Да');
+      expect(component['getFilterValueToDisclaimer'](field, false)).toBe('Нет');
+    });
+
+    it('getFilterValueToDisclaimer: should fall back to default locale when current language is unsupported', () => {
+      spyOn(component['languageService'], 'getShortLanguage').and.returnValue('xx');
+      const field = { property: 'active', type: PoDynamicFieldType.Boolean };
+
+      expect(component['getFilterValueToDisclaimer'](field, true)).toBe('Sim');
+      expect(component['getFilterValueToDisclaimer'](field, false)).toBe('Não');
+    });
+
+    it('getFilterValueToDisclaimer: should ignore boolean handling when value is not a boolean primitive', () => {
+      const field = {
+        property: 'active',
+        type: PoDynamicFieldType.Boolean,
+        booleanTrue: 'Ativo',
+        booleanFalse: 'Inativo'
+      };
+
+      expect(component['getFilterValueToDisclaimer'](field, 'true')).toBe('true');
+      expect(component['getFilterValueToDisclaimer'](field, null)).toBeNull();
+      expect(component['getFilterValueToDisclaimer'](field, undefined)).toBeUndefined();
+    });
+
+    it('getFilterValueToDisclaimer: should prefer custom `booleanTrue/booleanFalse` over literals when both exist', () => {
+      component['languageService'].setLanguage('pt');
+      const field = {
+        property: 'active',
+        type: PoDynamicFieldType.Boolean,
+        booleanTrue: 'Ativo',
+        booleanFalse: 'Inativo'
+      };
+
+      expect(component['getFilterValueToDisclaimer'](field, true)).toBe('Ativo');
+      expect(component['getFilterValueToDisclaimer'](field, false)).toBe('Inativo');
+    });
+
+    it('formatValueToBoolean: should return `booleanTrue` value when value is `true` and `booleanTrue` is defined', () => {
+      const field = { property: 'active', booleanTrue: 'Ativo', booleanFalse: 'Inativo' };
+
+      expect(component['formatValueToBoolean'](field, true)).toBe('Ativo');
+    });
+
+    it('formatValueToBoolean: should return `booleanFalse` value when value is `false` and `booleanFalse` is defined', () => {
+      const field = { property: 'active', booleanTrue: 'Ativo', booleanFalse: 'Inativo' };
+
+      expect(component['formatValueToBoolean'](field, false)).toBe('Inativo');
+    });
+
+    it('formatValueToBoolean: should return literal `disclaimerBooleanTrue` when `booleanTrue` is undefined', () => {
+      component['languageService'].setLanguage('pt');
+      const field = { property: 'active' };
+
+      expect(component['formatValueToBoolean'](field, true)).toBe('Sim');
+    });
+
+    it('formatValueToBoolean: should return literal `disclaimerBooleanFalse` when `booleanFalse` is undefined', () => {
+      component['languageService'].setLanguage('pt');
+      const field = { property: 'active' };
+
+      expect(component['formatValueToBoolean'](field, false)).toBe('Não');
+    });
+
+    it('formatValueToBoolean: should never return raw boolean values as fallback', () => {
+      component['languageService'].setLanguage('en');
+      const field = { property: 'active' };
+
+      const trueResult = component['formatValueToBoolean'](field, true);
+      const falseResult = component['formatValueToBoolean'](field, false);
+
+      expect(typeof trueResult).toBe('string');
+      expect(typeof falseResult).toBe('string');
+      expect(trueResult).not.toBe('true');
+      expect(falseResult).not.toBe('false');
+    });
+
+    it('formatValueToBoolean: should respect `disclaimerBooleanTrue/False` from `p-literals` when defined', () => {
+      component.literals = {
+        disclaimerBooleanTrue: 'Habilitado',
+        disclaimerBooleanFalse: 'Desabilitado'
+      };
+      const field = { property: 'active' };
+
+      expect(component['formatValueToBoolean'](field, true)).toBe('Habilitado');
+      expect(component['formatValueToBoolean'](field, false)).toBe('Desabilitado');
+    });
+
+    it('formatValueToBoolean: should prefer field-level `booleanTrue/False` over `p-literals`', () => {
+      component.literals = {
+        disclaimerBooleanTrue: 'Habilitado',
+        disclaimerBooleanFalse: 'Desabilitado'
+      };
+      const field = { property: 'active', booleanTrue: 'Ativo', booleanFalse: 'Inativo' };
+
+      expect(component['formatValueToBoolean'](field, true)).toBe('Ativo');
+      expect(component['formatValueToBoolean'](field, false)).toBe('Inativo');
+    });
+
+    it('setDisclaimers: should generate disclaimer with custom `booleanTrue/booleanFalse` for boolean filters', () => {
+      component.filters = [
+        {
+          property: 'active',
+          label: 'Situação',
+          type: PoDynamicFieldType.Boolean,
+          booleanTrue: 'Ativo',
+          booleanFalse: 'Inativo'
+        }
+      ];
+
+      const trueDisclaimers = component['setDisclaimers']({ active: true }, undefined, component.filters);
+      const falseDisclaimers = component['setDisclaimers']({ active: false }, undefined, component.filters);
+
+      expect(trueDisclaimers).toEqual([
+        { label: 'Situação: Ativo', property: 'active', value: true, hideClose: false }
+      ]);
+      expect(falseDisclaimers).toEqual([
+        { label: 'Situação: Inativo', property: 'active', value: false, hideClose: false }
+      ]);
+    });
+
+    it('setDisclaimers: should generate disclaimer with i18n fallback when boolean field has no custom labels', () => {
+      component['languageService'].setLanguage('pt');
+      component.filters = [{ property: 'active', label: 'Situação', type: PoDynamicFieldType.Boolean }];
+
+      const trueDisclaimers = component['setDisclaimers']({ active: true }, undefined, component.filters);
+      const falseDisclaimers = component['setDisclaimers']({ active: false }, undefined, component.filters);
+
+      expect(trueDisclaimers).toEqual([{ label: 'Situação: Sim', property: 'active', value: true, hideClose: false }]);
+      expect(falseDisclaimers).toEqual([
+        { label: 'Situação: Não', property: 'active', value: false, hideClose: false }
+      ]);
+    });
+
+    it('should return an array of disclaimers for filters with fixed property, initValue defined, and no duplicates', () => {
+      component.filters = [
+        { property: 'status', fixed: true, initValue: 'Active', label: 'Status' },
+        { property: 'category', fixed: true, initValue: 'Finance', label: 'Category' },
+        { property: 'name', fixed: false, initValue: 'Test', label: 'Name' }
+      ];
+
+      const currentDisclaimers = [
+        { property: 'category', label: 'Category: Finance', value: 'Finance', hideClose: true }
+      ];
+
+      const expectedDisclaimers = [{ property: 'status', label: 'Status: Active', value: 'Active', hideClose: true }];
+
+      const result = component['getFixedFiltersDisclaimers'](currentDisclaimers);
+
+      expect(result).toEqual(expectedDisclaimers);
+    });
+
+    it('should return an empty array if there are no fixed filters', () => {
+      component.filters = [
+        { property: 'name', fixed: false, initValue: 'Test', label: 'Name' },
+        { property: 'age', fixed: false, initValue: 30, label: 'Age' }
+      ];
+
+      const result = component['getFixedFiltersDisclaimers']();
+
+      expect(result).toEqual([]);
+    });
+
+    it('should ignore filters without initValue or with null/undefined initValue', () => {
+      component.filters = [
+        { property: 'status', fixed: true, label: 'Status' },
+        { property: 'category', fixed: true, initValue: null, label: 'Category' },
+        { property: 'name', fixed: true, initValue: undefined, label: 'Name' }
+      ];
+
+      const result = component['getFixedFiltersDisclaimers']();
+
+      expect(result).toEqual([]);
+    });
+
+    it('should not add disclaimers if they are already present in currentDisclaimers', () => {
+      component.filters = [
+        { property: 'status', fixed: true, initValue: 'Active', label: 'Status' },
+        { property: 'category', fixed: true, initValue: 'Finance', label: 'Category' }
+      ];
+
+      const currentDisclaimers = [
+        { property: 'status', label: 'Status: Active', value: 'Active', hideClose: true },
+        { property: 'category', label: 'Category: Finance', value: 'Finance', hideClose: true }
+      ];
+
+      const result = component['getFixedFiltersDisclaimers'](currentDisclaimers);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should correctly handle an empty currentDisclaimers array', () => {
+      component.filters = [
+        { property: 'status', fixed: true, initValue: 'Active', label: 'Status' },
+        { property: 'category', fixed: true, initValue: 'Finance', label: 'Category' }
+      ];
+
+      const expectedDisclaimers = [
+        { property: 'status', label: 'Status: Active', value: 'Active', hideClose: true },
+        { property: 'category', label: 'Category: Finance', value: 'Finance', hideClose: true }
+      ];
+
+      const result = component['getFixedFiltersDisclaimers']([]);
+
+      expect(result).toEqual(expectedDisclaimers);
+    });
+
+    it('should return an empty array if filters array is empty', () => {
+      component.filters = [];
+
+      const result = component['getFixedFiltersDisclaimers']();
+
+      expect(result).toEqual([]);
+    });
+
     describe('ngOnInit:', () => {
       it('should call setAdvancedFilterLiterals with component.literals', () => {
         spyOn(component, <any>'setAdvancedFilterLiterals');
@@ -537,22 +1179,23 @@ describe('PoPageDynamicSearchComponent:', () => {
         component.filters = [{ property: 'filter1' }, { property: 'filter2' }];
         component.title = 'Original Title';
         component.quickSearchWidth = 3;
+        component.hideCloseDisclaimers = ['filter1'];
 
-        component.onLoad = () => {
-          return {
-            title: 'New Title',
-            breadcrumb: {
-              items: [{ label: 'Test' }, { label: 'Test2' }]
-            },
-            actions: [
-              { label: 'Feature 1', url: '/new-feature1' },
-              { label: 'Feature 3', url: '/new-feature3' }
-            ],
-            filters: [{ property: 'filter1' }, { property: 'filter3' }],
-            keepFilters: true,
-            quickSearchWidth: 6
-          };
-        };
+        component.onLoad = () => ({
+          title: 'New Title',
+          breadcrumb: {
+            items: [{ label: 'Test' }, { label: 'Test2' }]
+          },
+          actions: [
+            { label: 'Feature 1', url: '/new-feature1' },
+            { label: 'Feature 3', url: '/new-feature3' }
+          ],
+          filters: [{ property: 'filter1' }, { property: 'filter3' }],
+          keepFilters: true,
+          quickSearchWidth: 6,
+          hideRemoveAllDisclaimer: true,
+          hideCloseDisclaimers: ['filter3']
+        });
 
         component.ngOnInit();
         tick();
@@ -568,7 +1211,113 @@ describe('PoPageDynamicSearchComponent:', () => {
         });
         expect(component.keepFilters).toBeTrue();
         expect(component.quickSearchWidth).toBe(6);
+        expect(component.hideRemoveAllDisclaimer).toBeTrue();
+        expect(component.hideCloseDisclaimers).toEqual(['filter3']);
       }));
+
+      it('should call onAction with `quickSearchValue`', () => {
+        component.quickSearchValue = 'jhon';
+        spyOn(component, <any>'onAction');
+
+        component.ngOnInit();
+
+        expect(component['onAction']).toHaveBeenCalledWith('jhon', true);
+      });
+    });
+
+    describe('ngAfterViewInit:', () => {
+      it('should call `onChangeFilters` and update `previousFilters` if `filters` have changed', () => {
+        const filters = [{ property: 'city', label: 'City' }];
+        component.filters = filters;
+        component.previousFilters = [{ property: 'city', label: 'Previous City' }];
+
+        spyOn(component, 'onChangeFilters');
+        component.ngAfterViewInit();
+
+        expect(component.onChangeFilters).toHaveBeenCalledWith(filters);
+        expect(component.previousFilters).toEqual(filters);
+      });
+
+      it('should not call `onChangeFilters` if `filters` have not changed', () => {
+        const filters = [{ property: 'city', label: 'City' }];
+        component.filters = filters;
+        component.previousFilters = [...filters];
+
+        spyOn(component, 'onChangeFilters');
+
+        component.ngAfterViewInit();
+
+        expect(component.onChangeFilters).not.toHaveBeenCalled();
+        expect(component.previousFilters).toEqual(filters);
+      });
+    });
+  });
+
+  describe('ngOnChanges:', () => {
+    it('should call `onChangeFilters` and update `previousFilters` when `visibleFixedFilters` changes and there are fixed filters', () => {
+      const changes: SimpleChanges = {
+        visibleFixedFilters: {
+          currentValue: true,
+          previousValue: false,
+          firstChange: false,
+          isFirstChange: () => false
+        }
+      };
+
+      spyOn(component, 'onChangeFilters'); // Espiar o método
+
+      component.filters = [
+        { property: 'status', fixed: true, initValue: 'Active' },
+        { property: 'category', fixed: false, initValue: 'Finance' }
+      ];
+
+      component.ngOnChanges(changes);
+
+      expect(component.onChangeFilters).toHaveBeenCalledWith(component.filters);
+      expect(component.previousFilters).toEqual(component.filters);
+    });
+
+    it('should not call `onChangeFilters` if `visibleFixedFilters` did not change', () => {
+      const changes: SimpleChanges = {
+        visibleFixedFilters: {
+          currentValue: true,
+          previousValue: true,
+          firstChange: false,
+          isFirstChange: () => false
+        }
+      };
+
+      spyOn(component, 'onChangeFilters'); // Espiar o método
+
+      component.filters = [
+        { property: 'status', fixed: true, initValue: 'Active' },
+        { property: 'category', fixed: false, initValue: 'Finance' }
+      ];
+
+      component.ngOnChanges(changes);
+
+      expect(component.onChangeFilters).not.toHaveBeenCalled();
+      expect(component.previousFilters).toEqual([]);
+    });
+
+    it('should not throw an error if `filters` is empty', () => {
+      const changes: SimpleChanges = {
+        visibleFixedFilters: {
+          currentValue: true,
+          previousValue: false,
+          firstChange: false,
+          isFirstChange: () => false
+        }
+      };
+
+      spyOn(component, 'onChangeFilters'); // Espiar o método
+
+      component.filters = [];
+
+      component.ngOnChanges(changes);
+
+      expect(component.onChangeFilters).not.toHaveBeenCalled();
+      expect(component.previousFilters).toEqual([]);
     });
   });
 
@@ -584,69 +1333,48 @@ describe('PoPageDynamicSearchComponent:', () => {
       expect(component.changeDisclaimers.emit).not.toHaveBeenCalled();
     });
 
-    it(`should add quickSearch and advanced filter in disclaimers if concat-filters is true and advanced filter is defined`, () => {
+    it(`should remove previous quickSearch disclaimer when adding a new quickSearch`, () => {
       component.concatFilters = true;
-
-      component.filters = [{ property: 'city', initValue: 'Ontario' }];
-
       component.literals.quickSearchLabel = 'Search';
       component.onAction('Chicago');
 
-      const currentDisclaimers = [
-        { label: 'City: Ontario', value: 'Ontario', property: 'city' },
-        { property: 'search', label: `Search Chicago`, value: 'Chicago' }
-      ];
-
-      expect(component.disclaimerGroup.disclaimers).toEqual(currentDisclaimers);
-    });
-
-    it(`should add advanced filter and quickSearch updated in disclaimers if concat-filters is true and advanced filter is defined`, () => {
-      component.concatFilters = true;
-
-      component.filters = [{ property: 'city', initValue: 'Ontario' }];
-
-      component.literals.quickSearchLabel = 'Search';
-      component.onAction('Chicago');
+      expect(component.disclaimerGroup.disclaimers).toEqual([
+        {
+          property: 'search',
+          label: 'Search Chicago',
+          value: 'Chicago',
+          hideClose: false
+        }
+      ]);
 
       component.onAction('Test');
 
-      const currentDisclaimers = [
-        { label: 'City: Ontario', value: 'Ontario', property: 'city' },
-        { property: 'search', label: `Search Test`, value: 'Test' }
-      ];
-
-      expect(component.disclaimerGroup.disclaimers).toEqual(currentDisclaimers);
+      expect(component.disclaimerGroup.disclaimers).toEqual([
+        {
+          property: 'search',
+          label: 'Search Test',
+          value: 'Test',
+          hideClose: false
+        }
+      ]);
     });
 
     it(`should add advanced search and remove quickSearch in disclaimers if concat-filters is false`, () => {
       component.concatFilters = false;
-
       component.literals.quickSearchLabel = 'Search';
       component.onAction('Chicago');
-      const disclaimersWithQuickFilter = [{ property: 'search', label: `Search Chicago`, value: 'Chicago' }];
 
+      const disclaimersWithQuickFilter = [
+        { property: 'search', label: `Search Chicago`, value: 'Chicago', hideClose: false }
+      ];
       expect(component.disclaimerGroup.disclaimers).toEqual(disclaimersWithQuickFilter);
 
-      const disclaimersWithAdvancedSearch = [{ label: 'City: Ontario', value: 'Ontario', property: 'city' }];
-
       component.filters = [{ property: 'city', initValue: 'Ontario' }];
+      component.onAdvancedSearch({ filter: { city: 'Ontario' } });
 
-      expect(component.disclaimerGroup.disclaimers).toEqual(disclaimersWithAdvancedSearch);
-    });
-
-    it(`should add advanced search and remove quickSearch in disclaimers if concat-filters is true`, () => {
-      component.concatFilters = true;
-
-      component.literals.quickSearchLabel = 'Search';
-      component.onAction('Chicago');
-      const disclaimersWithQuickFilter = [{ property: 'search', label: `Search Chicago`, value: 'Chicago' }];
-
-      expect(component.disclaimerGroup.disclaimers).toEqual(disclaimersWithQuickFilter);
-
-      const disclaimersWithAdvancedSearch = [{ label: 'City: Ontario', value: 'Ontario', property: 'city' }];
-
-      component.filters = [{ property: 'city', initValue: 'Ontario' }];
-
+      const disclaimersWithAdvancedSearch = [
+        { label: 'City: Ontario', value: 'Ontario', property: 'city', hideClose: false }
+      ];
       expect(component.disclaimerGroup.disclaimers).toEqual(disclaimersWithAdvancedSearch);
     });
   });

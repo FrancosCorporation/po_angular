@@ -1,3 +1,5 @@
+import { TemplateRef } from '@angular/core';
+
 /**
  * @usedBy PoPageDynamicTableComponent
  *
@@ -40,4 +42,62 @@ export interface PoPageDynamicTableCustomAction {
    * o botão de ação caso nenhum recurso for selecionado.
    */
   selectable?: boolean;
+
+  /**
+   * @description
+   *
+   * Define um ícone que será exibido ao lado esquerdo do rótulo.
+   *
+   * É possível usar qualquer um dos ícones da [Biblioteca de ícones](https://po-ui.io/icons). conforme exemplo abaixo:
+   * ```
+   * <po-component
+   *  [p-property]="[{ label: 'PHOSPHOR ICON', icon: 'an an-newspaper' }]">
+   * </po-component>
+   * ```
+   *
+   * Também é possível utilizar outras fontes de ícones, por exemplo a biblioteca Font Awesome, da seguinte forma:
+   * ```
+   * <po-component
+   *  [p-property]="[{ label: 'FA ICON', icon: 'fa fa-icon-podcast' }]">
+   * </po-component>
+   * ```
+   *
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * component.html:
+   * ```
+   * <ng-template #iconTemplate>
+   *   <ion-icon name="heart"></ion-icon>
+   * </ng-template>
+   *
+   * <po-component [p-property]="myProperty"></po-component>
+   * ```
+   * component.ts:
+   * ```
+   * @ViewChild('iconTemplate', { static: true } ) iconTemplate : TemplateRef<void>;
+   *
+   * myProperty = [
+   *  {
+   *    label: 'FA ICON',
+   *    icon: this.iconTemplate
+   *  }
+   * ];
+   * ```
+   */
+  icon?: string | TemplateRef<void>;
+
+  /**
+   * @description
+   *
+   * Define se a ação será visível.
+   *
+   * > Caso o valor não seja especificado a ação será visível.
+   *
+   * Opções para tornar a ação visível ou não:
+   *
+   *  - Função que deve retornar um booleano.
+   *
+   *  - Informar diretamente um valor booleano.
+   *
+   */
+  visible?: boolean | Function;
 }

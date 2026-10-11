@@ -1,0 +1,20 @@
+<po-table
+  p-service-api="https://po-sample-api.onrender.com/v1/heroes"
+  [p-columns]="columns"
+  [p-hide-table-search]="false"
+>
+  <ng-template p-table-column-template [p-property]="'nickname'" let-value>
+    <po-link [p-label]="value" (p-action)="selectedMyHero(value)" p-open-new-tab="true"></po-link>
+  </ng-template>
+</po-table>
+
+<po-modal p-title="My Heroes" p-size="sm">
+  <p>
+    Know about your hero
+    <po-link
+      [p-label]="heroSelected"
+      [p-url]="'https://www.google.com/search?q=' + heroSelected"
+      p-open-new-tab="true"
+    ></po-link>
+  </p>
+</po-modal>

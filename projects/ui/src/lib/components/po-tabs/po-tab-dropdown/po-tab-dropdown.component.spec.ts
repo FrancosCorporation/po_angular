@@ -1,11 +1,11 @@
-import { By } from '@angular/platform-browser';
+import { ElementRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 
 import { configureTestSuite } from './../../../util-test/util-expect.spec';
 
-import { PoPopoverModule } from '../../po-popover';
-import { PoTabButtonComponent } from '../po-tab-button/po-tab-button.component';
+import { PoButtonComponent } from '../../po-button';
+import { PoPopoverComponent, PoPopoverModule } from '../../po-popover';
 import { PoTabDropdownComponent } from './po-tab-dropdown.component';
 
 describe('PoTabDropdownComponent:', () => {
@@ -20,10 +20,37 @@ describe('PoTabDropdownComponent:', () => {
     { label: 'Tab 4', overflow: true, click: () => {} }
   ];
 
+  const buttonElementRefMock = {
+    nativeElement: {
+      getBoundingClientRect: () => ({
+        right: 200,
+        height: 50
+      }),
+      closest: (selector: string) => {
+        if (selector === '.po-tabs-container') {
+          return {
+            getBoundingClientRect: () => ({
+              bottom: 150,
+              width: 400
+            })
+          };
+        }
+        return null;
+      }
+    }
+  };
+
+  const elementRefMock = {
+    nativeElement: {
+      closest: (selector: string) => null
+    }
+  };
+
   configureTestSuite(() => {
     TestBed.configureTestingModule({
       imports: [PoPopoverModule, RouterTestingModule.withRoutes([])],
-      declarations: [PoTabDropdownComponent, PoTabButtonComponent]
+      declarations: [PoTabDropdownComponent],
+      providers: [{ provide: ElementRef, useValue: buttonElementRefMock }]
     });
   });
 
@@ -31,9 +58,19 @@ describe('PoTabDropdownComponent:', () => {
     fixture = TestBed.createComponent(PoTabDropdownComponent);
     component = fixture.componentInstance;
     nativeElement = fixture.debugElement.nativeElement;
+    Object.defineProperty(window, 'scrollY', { value: 50, writable: true, configurable: true });
 
+    const buttom = TestBed.createComponent(PoButtonComponent);
     component.tabs = tabs;
+    component.button = buttom.componentInstance;
+    component.button.buttonElement = buttonElementRefMock as ElementRef;
+    const popoverStub = {
+      open: jasmine.createSpy('open'),
+      close: jasmine.createSpy('close'),
+      isOpen: false
+    } as any;
 
+    component.popover = popoverStub;
     fixture.detectChanges();
   });
 
@@ -42,97 +79,104 @@ describe('PoTabDropdownComponent:', () => {
   });
 
   describe('Methods:', () => {
-    it(`togglePopover: should call 'popover.open' if 'popover.isHidden' is 'true'.`, () => {
-      const fakeThis = {
-        popover: {
-          isHidden: true,
-          open: () => {},
-          close: () => {}
+    it('closeAndReturnToButtom: should close dropdown and focus on the button', () => {
+      spyOn(component, 'closeDropdown');
+      spyOn(component.button, 'focus');
+
+      component.closeAndReturnToButtom();
+
+      expect(component.closeDropdown).toHaveBeenCalled();
+      expect(component.button.focus).toHaveBeenCalled();
+    });
+
+    it('toggleDropdown: should toggle isDropdownOpen and call setDropdownPosition if isDropdownOpen is true', () => {
+      spyOn(component, 'setDropdownPosition');
+
+      expect(component.isDropdownOpen).toBeFalse();
+
+      component.toggleDropdown();
+      expect(component.isDropdownOpen).toBeTrue();
+      expect(component.setDropdownPosition).toHaveBeenCalled();
+
+      component.toggleDropdown();
+      expect(component.isDropdownOpen).toBeFalse();
+      expect(component.setDropdownPosition).toHaveBeenCalledTimes(1);
+    });
+
+    it('closeDropdown: should set isDropdownOpen to false', () => {
+      component.isDropdownOpen = true;
+      component.closeDropdown();
+
+      expect(component.isDropdownOpen).toBeFalse();
+    });
+
+    it('onClickOutside: should call closeDropdown if click is outside and dropdown is open', () => {
+      spyOn(component, 'closeDropdown');
+
+      component.isDropdownOpen = true;
+
+      const event = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: true
+      });
+
+      document.dispatchEvent(event);
+
+      expect(component.closeDropdown).toHaveBeenCalled();
+    });
+
+    it('setDropdownPosition: should set dropdownStyles with correct values when not inside a PoPage', () => {
+      Object.defineProperty(component, 'elementRef', { value: elementRefMock, configurable: true });
+
+      component.setDropdownPosition();
+
+      const expectedStyles = {
+        top: `${150 + 4 + window.scrollY}px`,
+        maxWidth: '300px',
+        right: `${200}px`
+      };
+
+      expect(component.dropdownStyles).toEqual(expectedStyles);
+    });
+
+    it('setDropdownPosition: should set dropdownStyles with correct values when inside a PoPage', () => {
+      const buttonElementRefMock = {
+        nativeElement: {
+          getBoundingClientRect: () => ({ right: 300, height: 100 }),
+          closest: (selector: string) => {
+            if (selector === '.po-tabs-container') {
+              return { getBoundingClientRect: () => ({ right: 350, height: 120 }) };
+            } else if (selector === '.po-page-content') {
+              return true;
+            }
+            return null;
+          }
         }
       };
-      const spyOnOpen = spyOn(fakeThis.popover, 'open');
-
-      component.togglePopover.call(fakeThis);
-      expect(spyOnOpen).toHaveBeenCalled();
-    });
-
-    it(`togglePopover: should call 'popover.close' if 'popover.isHidden' is 'false'.`, () => {
-      const fakeThis = {
-        popover: {
-          isHidden: false,
-          open: () => {},
-          close: () => {}
+      const elementRefMock = {
+        nativeElement: {
+          closest: (selector: string) => {
+            if (selector === '.po-page-content') {
+              return true;
+            }
+            return null;
+          }
         }
       };
-      const spyOnClose = spyOn(fakeThis.popover, 'close');
 
-      component.togglePopover.call(fakeThis);
-      expect(spyOnClose).toHaveBeenCalled();
-    });
+      component.button.buttonElement = buttonElementRefMock as ElementRef;
+      Object.defineProperty(component, 'elementRef', { value: elementRefMock, configurable: true });
 
-    it('getContainerClass: should return `po-tab-dropdown-container-sm` if `small` is `true`', () => {
-      component.small = true;
+      component.setDropdownPosition();
 
-      expect(component.getContainerClass()).toBe('po-tab-dropdown-container-sm');
-    });
+      const expectedStyles = {
+        top: `${120 + 4 + window.scrollY}px`,
+        maxWidth: '300px',
+        right: '50px'
+      };
 
-    it('getContainerClass: should return `po-tab-dropdown-container` if `small` is `false`', () => {
-      component.small = false;
-
-      expect(component.getContainerClass()).toBe('po-tab-dropdown-container');
-    });
-  });
-
-  describe('Templates:', () => {
-    it('should have label', () => {
-      const label = 'Mais';
-
-      component.label = label;
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-tab-button-label').innerHTML).toContain(label);
-    });
-
-    it('should create a po-tab-button for each tab', () => {
-      expect(nativeElement.querySelectorAll('po-tab-button').length).toBe(tabs.length);
-    });
-
-    it('should add class po-tab-dropdown-button-active if tab is active', () => {
-      component.tabs[0].active = true;
-
-      fixture.detectChanges();
-      expect(nativeElement.querySelector('.po-tab-dropdown-button-active')).toBeTruthy();
-    });
-
-    it('should add class po-tab-dropdown-button-sm if tab is small', () => {
-      component.small = true;
-
-      fixture.detectChanges();
-      expect(nativeElement.querySelector('.po-tab-button-sm')).toBeTruthy();
-    });
-
-    it('should add class `po-tab-dropdown-container` if `small` is `false`', () => {
-      component.small = false;
-
-      fixture.detectChanges();
-      expect(nativeElement.querySelector('.po-tab-dropdown-container')).toBeTruthy();
-    });
-
-    it('should add class `po-tab-dropdown-container-sm` if `small` is `true`', () => {
-      component.small = true;
-
-      fixture.detectChanges();
-      expect(nativeElement.querySelector('.po-tab-dropdown-container-sm')).toBeTruthy();
-    });
-
-    it('should call `togglePopover` if `enter` is pressed in div `tabDrop`.', () => {
-      const eventEnterKey = new KeyboardEvent('keyup', { 'key': 'Enter' });
-      const dropdown = fixture.debugElement.query(By.css('.po-tab-dropdown-content')).nativeElement;
-
-      spyOn(component, 'togglePopover');
-      dropdown.dispatchEvent(eventEnterKey);
-
-      expect(component.togglePopover).toHaveBeenCalled();
+      expect(component.dropdownStyles).toEqual(expectedStyles);
     });
   });
 });

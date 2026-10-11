@@ -1,102 +1,34 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  EventEmitter,
+  HostBinding,
+  Input,
+  Output,
+  ViewChild,
+  inject
+} from '@angular/core';
 
-import { isIE } from '../../../../utils/util';
 import { PoLanguageService } from '../../../../services/po-language/po-language.service';
+import { PoUtils } from '../../../../utils/util';
 
 import { PoButtonGroupItem } from '../../../po-button-group';
-import { poRichTextLiteralsDefault } from '../po-rich-text-literals';
+import { PoRichTextToolbarActions } from '../enum/po-rich-text-toolbar-actions.enum';
 import { PoRichTextToolbarButtonGroupItem } from '../interfaces/po-rich-text-toolbar-button-group-item.interface';
 import { PoRichTextImageModalComponent } from '../po-rich-text-image-modal/po-rich-text-image-modal.component';
 import { PoRichTextLinkModalComponent } from '../po-rich-text-link-modal/po-rich-text-link-modal.component';
+import { poRichTextLiteralsDefault } from '../po-rich-text-literals';
 
 const poRichTextDefaultColor = '#000000';
 
 @Component({
   selector: 'po-rich-text-toolbar',
-  templateUrl: './po-rich-text-toolbar.component.html'
+  templateUrl: './po-rich-text-toolbar.component.html',
+  standalone: false
 })
 export class PoRichTextToolbarComponent implements AfterViewInit {
-  private _readonly: boolean;
-  private selectedLinkElement;
-
-  readonly literals = {
-    ...poRichTextLiteralsDefault[this.languageService.getShortLanguage()]
-  };
-
-  alignButtons: Array<PoRichTextToolbarButtonGroupItem> = [
-    {
-      command: 'justifyleft',
-      icon: 'po-icon-align-left',
-      tooltip: this.literals.left,
-      action: this.emitAlignCommand.bind(this, 'justifyleft'),
-      selected: true
-    },
-    {
-      command: 'justifycenter',
-      icon: 'po-icon-align-center',
-      tooltip: this.literals.center,
-      action: this.emitAlignCommand.bind(this, 'justifycenter')
-    },
-    {
-      command: 'justifyright',
-      icon: 'po-icon-align-right',
-      tooltip: this.literals.right,
-      action: this.emitAlignCommand.bind(this, 'justifyright')
-    },
-    {
-      command: 'justifyfull',
-      icon: 'po-icon-align-justify',
-      tooltip: this.literals.justify,
-      action: this.emitAlignCommand.bind(this, 'justifyfull')
-    }
-  ];
-
-  formatButtons: Array<PoRichTextToolbarButtonGroupItem> = [
-    {
-      command: 'bold',
-      icon: 'po-icon-text-bold',
-      tooltip: this.literals.bold,
-      action: this.emitCommand.bind(this, 'bold')
-    },
-    {
-      command: 'italic',
-      icon: 'po-icon-text-italic',
-      tooltip: this.literals.italic,
-      action: this.emitCommand.bind(this, 'italic')
-    },
-    {
-      command: 'underline',
-      icon: 'po-icon-text-underline',
-      tooltip: this.literals.underline,
-      action: this.emitCommand.bind(this, 'underline')
-    }
-  ];
-
-  listButtons: Array<PoRichTextToolbarButtonGroupItem> = [
-    {
-      command: 'insertUnorderedList',
-      icon: 'po-icon-list',
-      tooltip: this.literals.unorderedList,
-      action: this.emitCommand.bind(this, 'insertUnorderedList')
-    }
-  ];
-
-  linkButtons: Array<PoRichTextToolbarButtonGroupItem> = [
-    {
-      command: 'Createlink',
-      icon: 'po-icon-link',
-      tooltip: `${this.literals.insertLink} (Ctrl + K)`,
-      action: () => this.richTextLinkModal.openModal(this.selectedLinkElement)
-    }
-  ];
-
-  mediaButtons: Array<PoButtonGroupItem> = [
-    {
-      tooltip: this.literals.insertImage,
-      icon: 'po-icon-picture',
-      action: () => this.richTextImageModal.openModal()
-    }
-  ];
+  private readonly languageService = inject(PoLanguageService);
 
   @ViewChild('colorPickerInput', { read: ElementRef }) colorPickerInput: ElementRef;
 
@@ -105,6 +37,67 @@ export class PoRichTextToolbarComponent implements AfterViewInit {
   @ViewChild(PoRichTextImageModalComponent, { static: true }) richTextImageModal: PoRichTextImageModalComponent;
 
   @ViewChild(PoRichTextLinkModalComponent, { static: true }) richTextLinkModal: PoRichTextLinkModalComponent;
+
+  @Output('p-command') command = new EventEmitter<string | { command: string; value: string }>();
+
+  @Output('p-modal') modal = new EventEmitter<any>();
+
+  @Output('p-link-editing') linkEditing = new EventEmitter<any>();
+
+  readonly literals?: any;
+
+  alignButtons: Array<PoRichTextToolbarButtonGroupItem>;
+
+  formatButtons: Array<PoRichTextToolbarButtonGroupItem>;
+
+  listButtons: Array<PoRichTextToolbarButtonGroupItem>;
+
+  linkButtons: Array<PoRichTextToolbarButtonGroupItem>;
+
+  mediaButtons: Array<PoButtonGroupItem>;
+
+  private _readonly: boolean;
+  private selectedLinkElement;
+
+  private _hideToolbarActions: Array<PoRichTextToolbarActions> = [];
+
+  formatToolbarAction = PoRichTextToolbarActions.Format;
+  colorToolbarAction = PoRichTextToolbarActions.Color;
+  alignToolbarAction = PoRichTextToolbarActions.Align;
+  listToolbarAction = PoRichTextToolbarActions.List;
+  linkToolbarAction = PoRichTextToolbarActions.Link;
+  mediaToolbarAction = PoRichTextToolbarActions.Media;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as ações da barra de ferramentas do `PoRichTextComponent` que serão ocultadas.
+   * Aceita um único valor do tipo `PoRichTextToolbarActions` ou uma lista de valores.
+   *
+   * > Esta propriedade sobrepõe a configuração da propriedade `p-disabled-text-align` quando for passada como `false`, caso sejam definidas simultaneamente.
+   *
+   * @default `[]`
+   *
+   * @example
+   * ```
+   * // Oculta apenas o seletor de cores
+   * component.hideToolbarActions = PoRichTextToolbarActions.Color;
+   *
+   * // Oculta as opções de alinhamento e link
+   * component.hideToolbarActions = [PoRichTextToolbarActions.Align, PoRichTextToolbarActions.Link];
+   * ```
+   */
+  @Input('p-hide-toolbar-actions') set hideToolbarActions(
+    actions: Array<PoRichTextToolbarActions> | PoRichTextToolbarActions
+  ) {
+    this._hideToolbarActions = Array.isArray(actions) ? [...actions] : [actions];
+  }
+
+  get hideToolbarActions(): Array<PoRichTextToolbarActions> {
+    return this._hideToolbarActions;
+  }
 
   @Input('p-readonly') set readonly(value: boolean) {
     this._readonly = value;
@@ -115,21 +108,101 @@ export class PoRichTextToolbarComponent implements AfterViewInit {
     return this._readonly;
   }
 
-  @Output('p-command') command = new EventEmitter<string | { command: string; value: string }>();
-
-  @Output('p-modal') modal = new EventEmitter<any>();
-
-  @Output('p-link-editing') linkEditing = new EventEmitter<any>();
-
   get isInternetExplorer() {
-    return isIE();
+    return PoUtils.isIE();
   }
 
-  constructor(private languageService: PoLanguageService) {}
+  @Input('p-disabled') disabled?: boolean;
+
+  @HostBinding('attr.p-size')
+  @Input('p-size')
+  size: string;
+
+  constructor() {
+    this.literals = {
+      ...poRichTextLiteralsDefault[this.languageService?.getShortLanguage()]
+    };
+    this.alignButtons = [
+      {
+        command: 'justifyleft',
+        icon: 'ICON_ALIGN_LEFT',
+        tooltip: this.literals.left,
+        action: this.emitAlignCommand.bind(this, 'justifyleft'),
+        selected: true
+      },
+      {
+        command: 'justifycenter',
+        icon: 'ICON_ALIGN_CENTER',
+        tooltip: this.literals.center,
+        action: this.emitAlignCommand.bind(this, 'justifycenter')
+      },
+      {
+        command: 'justifyright',
+        icon: 'ICON_ALIGN_RIGHT',
+        tooltip: this.literals.right,
+        action: this.emitAlignCommand.bind(this, 'justifyright')
+      },
+      {
+        command: 'justifyfull',
+        icon: 'ICON_ALIGN_JUSTIFY',
+        tooltip: this.literals.justify,
+        action: this.emitAlignCommand.bind(this, 'justifyfull')
+      }
+    ];
+
+    this.formatButtons = [
+      {
+        command: 'bold',
+        icon: 'ICON_TEXT_BOLD',
+        tooltip: this.literals.bold,
+        action: this.emitCommand.bind(this, 'bold')
+      },
+      {
+        command: 'italic',
+        icon: 'ICON_TEXT_ITALIC',
+        tooltip: this.literals.italic,
+        action: this.emitCommand.bind(this, 'italic')
+      },
+      {
+        command: 'underline',
+        icon: 'ICON_TEXT_UNDERLINE',
+        tooltip: this.literals.underline,
+        action: this.emitCommand.bind(this, 'underline')
+      }
+    ];
+
+    this.listButtons = [
+      {
+        command: 'insertUnorderedList',
+        icon: 'ICON_LIST',
+        tooltip: this.literals.unorderedList,
+        action: this.emitCommand.bind(this, 'insertUnorderedList')
+      }
+    ];
+
+    this.mediaButtons = [
+      {
+        tooltip: this.literals.insertImage,
+        icon: 'ICON_PICTURE',
+        action: () => this.richTextImageModal.openModal()
+      }
+    ];
+
+    this.linkButtons = [
+      {
+        command: 'Createlink',
+        icon: 'ICON_LINK',
+        tooltip: `${this.literals.insertLink} (Ctrl + K)`,
+        action: () => this.richTextLinkModal.openModal(this.selectedLinkElement)
+      }
+    ];
+  }
 
   ngAfterViewInit() {
     this.removeButtonFocus();
-    this.setColorInColorPicker(poRichTextDefaultColor);
+    if (this.showColor()) {
+      this.setColorInColorPicker(poRichTextDefaultColor);
+    }
   }
 
   changeTextColor(value) {
@@ -156,21 +229,30 @@ export class PoRichTextToolbarComponent implements AfterViewInit {
     }
   }
 
+  // Verifica se uma ação específica do toolbar está oculta
+  isActionHidden(action: PoRichTextToolbarActions): boolean {
+    return this.hideToolbarActions.includes(action);
+  }
+
+  showColor(): boolean {
+    return !this.isInternetExplorer && !this.isActionHidden(PoRichTextToolbarActions.Color);
+  }
+
   shortcutTrigger() {
     this.richTextLinkModal.openModal(this.selectedLinkElement);
+  }
+
+  emitCommand(command: string) {
+    this.command.emit(command);
   }
 
   private emitAlignCommand(command: string) {
     const index = this.alignButtons.findIndex(btn => btn.command === command);
 
-    if (this.alignButtons[index].selected) {
+    if (!this.alignButtons[index].selected) {
       this.alignButtons[index].selected = false;
     }
 
-    this.command.emit(command);
-  }
-
-  emitCommand(command: string) {
     this.command.emit(command);
   }
 

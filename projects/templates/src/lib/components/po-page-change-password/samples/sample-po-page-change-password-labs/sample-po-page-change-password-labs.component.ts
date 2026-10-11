@@ -1,6 +1,6 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, inject } from '@angular/core';
 
-import { PoDialogService } from '@po-ui/ng-components';
+import { PoDialogService, PoRadioGroupOption } from '@po-ui/ng-components';
 import {
   PoPageChangePassword,
   PoPageChangePasswordComponent,
@@ -9,11 +9,15 @@ import {
 
 @Component({
   selector: 'sample-po-page-change-password-labs',
-  templateUrl: './sample-po-page-change-password-labs.component.html'
+  templateUrl: './sample-po-page-change-password-labs.component.html',
+  standalone: false
 })
 export class SamplePoPageChangePasswordLabsComponent implements OnInit {
+  private poDialog = inject(PoDialogService);
+
   @ViewChild(PoPageChangePasswordComponent, { static: true }) changePassword: PoPageChangePasswordComponent;
 
+  componentsSize: string;
   hideCurrentPassword: boolean;
   logo: string;
   recovery: string;
@@ -23,7 +27,10 @@ export class SamplePoPageChangePasswordLabsComponent implements OnInit {
   urlBack: string;
   urlHome: string;
 
-  constructor(private poDialog: PoDialogService) {}
+  public readonly componentsSizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
+  ];
 
   ngOnInit() {
     this.restore();
@@ -35,6 +42,7 @@ export class SamplePoPageChangePasswordLabsComponent implements OnInit {
   }
 
   restore() {
+    this.componentsSize = 'medium';
     this.hideCurrentPassword = false;
     this.logo = undefined;
     this.urlBack = '';
@@ -49,6 +57,7 @@ export class SamplePoPageChangePasswordLabsComponent implements OnInit {
     this.poDialog.alert({
       title: 'Authenticate',
       message: JSON.stringify(formData),
+      componentsSize: this.componentsSize,
       ok: () => this.changePassword.openConfirmation()
     });
   }

@@ -21,7 +21,13 @@
             [p-disabled]="itemsListSelected.length < 1"
             (p-primary-action)="checkOut()"
           >
-            <po-table p-striped [p-columns]="columnsItemsSelected" [p-items]="itemsListSelected"> </po-table>
+            <po-table
+              p-striped
+              [p-columns]="columnsItemsSelected"
+              [p-items]="itemsListSelected"
+              [p-hide-table-search]="false"
+            >
+            </po-table>
           </po-widget>
         </po-step>
 
@@ -29,7 +35,7 @@
           <po-widget>
             <div class="po-row po-font-display">
               <p>Order dispatched</p>
-              <span class="po-icon po-icon-ok"></span>
+              <po-icon p-icon="po-icon an an-check"></po-icon>
             </div>
           </po-widget>
         </po-step>

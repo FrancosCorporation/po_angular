@@ -1,11 +1,13 @@
-import { Component, OnChanges, OnInit, SimpleChanges } from '@angular/core';
 import { CurrencyPipe, DatePipe, DecimalPipe, TitleCasePipe } from '@angular/common';
+import { Component, OnChanges, OnInit, SimpleChanges, inject } from '@angular/core';
 
 import { PoTimePipe } from '../../../pipes/po-time/po-time.pipe';
 
 import { PoDynamicViewField } from './../po-dynamic-view/po-dynamic-view-field.interface';
 import { PoDynamicViewBaseComponent } from './po-dynamic-view-base.component';
-import { PoDynamicViewService } from './po-dynamic-view.service';
+import { PoDynamicViewService } from './services/po-dynamic-view.service';
+import { PoComboFilterService } from '../../po-field/po-combo/po-combo-filter.service';
+import { PoMultiselectFilterService } from '../../po-field/po-multiselect/po-multiselect-filter.service';
 
 /**
  * @docsExtends PoDynamicViewBaseComponent
@@ -25,34 +27,83 @@ import { PoDynamicViewService } from './po-dynamic-view.service';
  * <example name="po-dynamic-view-employee-on-load" title="PO Dynamic View - Employee on load">
  *  <file name="sample-po-dynamic-view-employee-on-load/sample-po-dynamic-view-employee-on-load.component.html"> </file>
  *  <file name="sample-po-dynamic-view-employee-on-load/sample-po-dynamic-view-employee-on-load.component.ts"> </file>
+ *  <file name="sample-po-dynamic-view-employee-on-load/sample-po-dynamic-view-employee-on-load.service.ts"> </file>
+ * </example>
+ *
+ * <example name="po-dynamic-view-container" title="PO Dynamic View - Employee on load">
+ *  <file name="sample-po-dynamic-view-container/sample-po-dynamic-view-container.component.html"> </file>
+ *  <file name="sample-po-dynamic-view-container/sample-po-dynamic-view-container.component.ts"> </file>
  * </example>
  */
 @Component({
   selector: 'po-dynamic-view',
-  templateUrl: './po-dynamic-view.component.html'
+  templateUrl: './po-dynamic-view.component.html',
+  standalone: false
 })
 export class PoDynamicViewComponent extends PoDynamicViewBaseComponent implements OnChanges, OnInit {
-  constructor(
-    currencyPipe: CurrencyPipe,
-    datePipe: DatePipe,
-    decimalPipe: DecimalPipe,
-    timePipe: PoTimePipe,
-    titleCasePipe: TitleCasePipe,
-    dynamicViewService: PoDynamicViewService
-  ) {
-    super(currencyPipe, datePipe, decimalPipe, timePipe, titleCasePipe, dynamicViewService);
+  initChanges;
+  constructor() {
+    const currencyPipe = inject(CurrencyPipe);
+    const datePipe = inject(DatePipe);
+    const decimalPipe = inject(DecimalPipe);
+    const timePipe = inject(PoTimePipe);
+    const titleCasePipe = inject(TitleCasePipe);
+    const dynamicViewService = inject(PoDynamicViewService);
+    const comboFilterService = inject(PoComboFilterService);
+    const multiselectFilterService = inject(PoMultiselectFilterService);
+
+    super(
+      currencyPipe,
+      datePipe,
+      decimalPipe,
+      timePipe,
+      titleCasePipe,
+      dynamicViewService,
+      comboFilterService,
+      multiselectFilterService
+    );
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    if (changes.fields || changes.value || changes.showAllValue) {
+    if (this.load && !this.initChanges) {
+      this.initChanges = false;
+    } else {
+      this.initChanges = true;
+    }
+    if ((changes.fields || changes.value || changes.showAllValue) && this.initChanges) {
       this.visibleFields = this.getVisibleFields();
+      this.setContainerFields();
     }
   }
 
   ngOnInit() {
     if (this.load) {
-      this.updateValuesAndFieldsOnLoad();
+      this.updateValuesAndFieldsOnLoad().finally(() => {
+        this.setContainerFields();
+      });
     }
+  }
+
+  setFieldValue(field) {
+    if (field.options) {
+      if (field.optionsMulti) {
+        const selectedOptions = field.options.filter(
+          option => Array.isArray(field.value) && field.value.some(value => value === option.value)
+        );
+        return selectedOptions.length ? selectedOptions.map(option => option.label) : field.value;
+      } else {
+        const selectedOption = field.options.find(option => option.value === field.value);
+        return selectedOption ? selectedOption.label : field.value;
+      }
+    } else if (field.type === 'boolean' && 'booleanTrue' in field && 'booleanFalse' in field) {
+      return field.value ? field.booleanTrue : field.booleanFalse;
+    } else {
+      return field.value;
+    }
+  }
+
+  protected containsLineBreak(value: string): boolean {
+    return value && value.includes('\n');
   }
 
   private async getValuesAndFieldsFromLoad(): Promise<{ value?: any; fields?: Array<PoDynamicViewField> }> {
@@ -104,5 +155,6 @@ export class PoDynamicViewComponent extends PoDynamicViewBaseComponent implement
     this.setFieldsOnLoad(fields);
 
     this.visibleFields = this.getVisibleFields();
+    this.initChanges = true;
   }
 }

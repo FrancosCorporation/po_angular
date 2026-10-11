@@ -8,10 +8,16 @@ import {
   ViewChild,
   ViewChildren,
   OnChanges,
-  SimpleChanges
+  OnDestroy,
+  OnInit,
+  SimpleChanges,
+  inject
 } from '@angular/core';
 
 import { animate, AnimationBuilder, AnimationFactory, AnimationPlayer, keyframes, style } from '@angular/animations';
+
+import { Subscription, Subject } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
 
 import { PoSlideBaseComponent } from './po-slide-base.component';
 import { PoSlideContentTemplateDirective } from './directives/po-slide-content-template.directive';
@@ -46,15 +52,37 @@ const poSlideTiming = '250ms ease';
  *   <file name="sample-po-slide-landscapes/sample-po-slide-landscapes.component.html"> </file>
  *   <file name="sample-po-slide-landscapes/sample-po-slide-landscapes.component.ts"> </file>
  * </example>
+ *
+ * <example name="po-slide-external-controls" title="PO Slide - External Controls">
+ *  <file name="sample-po-slide-external-controls/sample-po-slide-external-controls.component.html"> </file>
+ *  <file name="sample-po-slide-external-controls/sample-po-slide-external-controls.component.ts"> </file>
+ * </example>
  */
 @Component({
   selector: 'po-slide',
-  templateUrl: './po-slide.component.html'
+  templateUrl: './po-slide.component.html',
+  standalone: false
 })
-export class PoSlideComponent extends PoSlideBaseComponent implements DoCheck, OnChanges {
+export class PoSlideComponent extends PoSlideBaseComponent implements OnInit, DoCheck, OnChanges, OnDestroy {
+  private readonly builder = inject(AnimationBuilder);
+
+  @ContentChild(PoSlideContentTemplateDirective, { static: true })
+  slideContentTemplate: PoSlideContentTemplateDirective;
+
+  @ViewChild('slide', { static: true }) private readonly slide: ElementRef;
+
+  @ViewChildren(PoSlideItemComponent) private readonly itemsElements: QueryList<PoSlideItemComponent>;
+
+  currentSlideIndex = 0;
+  imageHeight: number;
+  slideItems: Array<PoSlideItem | any> = [];
+  slideItemWidth: number;
+
   private isLoaded: boolean = false;
   private player: AnimationPlayer;
   private setInterval: any;
+  private readonly resize$ = new Subject<any>();
+  private resizeSubscription: Subscription;
 
   private get hasElements() {
     return !!this.slide.nativeElement.offsetWidth && !!this.itemsElements && !!this.itemsElements.length;
@@ -72,27 +100,15 @@ export class PoSlideComponent extends PoSlideBaseComponent implements DoCheck, O
     return !!this.slides && !!this.slides.length;
   }
 
-  currentSlideIndex = 0;
-  imageHeight: number;
-  slideItems: Array<PoSlideItem | any> = [];
-  slideItemWidth: number;
-
-  @ContentChild(PoSlideContentTemplateDirective, { static: true })
-  slideContentTemplate: PoSlideContentTemplateDirective;
-
-  @ViewChild('slide', { static: true }) private slide: ElementRef;
-
-  @ViewChildren(PoSlideItemComponent) private itemsElements: QueryList<PoSlideItemComponent>;
-
-  constructor(private builder: AnimationBuilder) {
-    super();
+  @HostListener('window:resize') onResize() {
+    this.resize$.next({});
   }
 
-  @HostListener('window:resize') onResize() {
-    if (this.slide) {
+  ngOnInit() {
+    this.resizeSubscription = this.resize$.pipe(debounceTime(150)).subscribe(() => {
       this.setSlideItemWidth();
       this.goToItem(this.currentSlideIndex);
-    }
+    });
   }
 
   ngDoCheck() {
@@ -112,6 +128,25 @@ export class PoSlideComponent extends PoSlideBaseComponent implements DoCheck, O
     }
   }
 
+  ngOnDestroy() {
+    this.resizeSubscription?.unsubscribe();
+  }
+
+  /**
+   * Método que retorna o index do slide atual
+   *
+   * ```
+   * @ViewChild('slideComponent', { static: true }) slideComponent: PoSlideComponent;
+   *  myFunction() {
+   *    let currentIndex = this.slideComponent.getCurrentSlideIndex();
+   * }
+   *
+   * ```
+   */
+  getCurrentSlideIndex(): number {
+    return this.currentSlideIndex;
+  }
+
   goToItem(index: number) {
     if (this.interval > poSlideIntervalMin) {
       this.startInterval();
@@ -129,6 +164,17 @@ export class PoSlideComponent extends PoSlideBaseComponent implements DoCheck, O
     this.next();
   }
 
+  /**
+   * Método para chamar o próximo slide.
+   *
+   * ```
+   * @ViewChild('slideComponent', { static: true }) slideComponent: PoSlideComponent;
+   *
+   * myFunction() {
+   *  this.slideComponent.next();
+   * }
+   * ```
+   */
   next() {
     if (this.currentSlideIndex + 1 === this.slideItems.length) {
       this.currentSlideIndex = 0;
@@ -138,7 +184,17 @@ export class PoSlideComponent extends PoSlideBaseComponent implements DoCheck, O
     this.currentSlideIndex = (this.currentSlideIndex + 1) % this.slideItems.length;
     this.animate(this.offset);
   }
-
+  /**
+   * Método para chamar o slide anterior.
+   *
+   * ```
+   * @ViewChild('slideComponent', { static: true }) slideComponent: PoSlideComponent;
+   *
+   * myFunction() {
+   *  this.slideComponent.previous();
+   * }
+   * ```
+   */
   previous() {
     if (this.currentSlideIndex === 0) {
       this.currentSlideIndex = this.slideItems.length - 1;
@@ -159,6 +215,42 @@ export class PoSlideComponent extends PoSlideBaseComponent implements DoCheck, O
 
   setSlideHeight(height: number) {
     this.setHeight(height);
+  }
+
+  protected cancelInterval() {
+    clearInterval(this.setInterval);
+  }
+
+  protected setSlideItems(slides: Array<PoSlideItem | string | any>) {
+    if (this.hasSlides) {
+      this.slideContentTemplate ? this.createArrayForTemplate(slides) : this.createArrayFromSlides(slides);
+    } else {
+      this.slideItems = [];
+      this.cancelInterval();
+    }
+  }
+
+  protected startSlide() {
+    this.setSlideHeight(this.height);
+
+    if (this.interval > poSlideIntervalMin) {
+      this.startInterval();
+    }
+
+    this.currentSlideIndex = 0;
+  }
+
+  protected startInterval() {
+    if (this.setInterval) {
+      this.cancelInterval();
+    }
+
+    this.setInterval =
+      this.hasSlides && this.hasElements
+        ? setInterval(() => {
+            this.next();
+          }, this.interval)
+        : undefined;
   }
 
   private animate(offset: number) {
@@ -210,41 +302,5 @@ export class PoSlideComponent extends PoSlideBaseComponent implements DoCheck, O
     if (this.hasElements) {
       this.slideItemWidth = this.itemsElements.first.itemElement.nativeElement.getBoundingClientRect().width;
     }
-  }
-
-  protected cancelInterval() {
-    clearInterval(this.setInterval);
-  }
-
-  protected setSlideItems(slides: Array<PoSlideItem | string | any>) {
-    if (this.hasSlides) {
-      this.slideContentTemplate ? this.createArrayForTemplate(slides) : this.createArrayFromSlides(slides);
-    } else {
-      this.slideItems = [];
-      this.cancelInterval();
-    }
-  }
-
-  protected startSlide() {
-    this.setSlideHeight(this.height);
-
-    if (this.interval > poSlideIntervalMin) {
-      this.startInterval();
-    }
-
-    this.currentSlideIndex = 0;
-  }
-
-  protected startInterval() {
-    if (this.setInterval) {
-      this.cancelInterval();
-    }
-
-    this.setInterval =
-      this.hasSlides && this.hasElements
-        ? setInterval(() => {
-            this.next();
-          }, this.interval)
-        : undefined;
   }
 }

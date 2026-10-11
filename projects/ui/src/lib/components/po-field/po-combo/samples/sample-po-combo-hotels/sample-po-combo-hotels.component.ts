@@ -1,13 +1,19 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, inject } from '@angular/core';
 import { NgForm } from '@angular/forms';
 
 import { PoDatepickerComponent, PoNotificationService, PoSelectOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-combo-hotels',
-  templateUrl: './sample-po-combo-hotels.component.html'
+  templateUrl: './sample-po-combo-hotels.component.html',
+  standalone: false
 })
 export class SamplePoComboHotelsComponent {
+  private poNotification = inject(PoNotificationService);
+
+  @ViewChild('bookingForm', { static: true }) form: NgForm;
+  @ViewChild('datepicker', { static: true }) datepickerComponent: PoDatepickerComponent;
+
   adults: number = 1;
   category: boolean = false;
   checkin: Date;
@@ -35,11 +41,6 @@ export class SamplePoComboHotelsComponent {
     { label: '2 Rooms', value: 2 },
     { label: '3 Rooms', value: 3 }
   ];
-
-  @ViewChild('bookingForm', { static: true }) form: NgForm;
-  @ViewChild('datepicker', { static: true }) datepickerComponent: PoDatepickerComponent;
-
-  constructor(private poNotification: PoNotificationService) {}
 
   booking() {
     this.poNotification.success('Hotel booked successfully');

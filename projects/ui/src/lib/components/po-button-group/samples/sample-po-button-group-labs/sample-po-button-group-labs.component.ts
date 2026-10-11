@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 
 import {
   PoButtonGroupItem,
@@ -10,19 +10,27 @@ import {
 
 @Component({
   selector: 'sample-po-button-group-labs',
-  templateUrl: './sample-po-button-group-labs.component.html'
+  templateUrl: './sample-po-button-group-labs.component.html',
+  standalone: false
 })
 export class SamplePoButtonGroupLabsComponent implements OnInit {
+  private poNotification = inject(PoNotificationService);
+
   button: any;
   buttons: Array<PoButtonGroupItem>;
-  small: boolean;
+  size: string;
   toggle: PoButtonGroupToggle;
 
   iconsOptions: Array<PoRadioGroupOption> = [
-    { label: 'po-icon-news', value: 'po-icon-news' },
-    { label: 'po-icon-calendar', value: 'po-icon-calendar' },
-    { label: 'po-icon-user', value: 'po-icon-user' },
-    { label: 'po-icon-telephone', value: 'po-icon-telephone' }
+    { label: 'an an-newspaper', value: 'an an-newspaper' },
+    { label: 'an an-calendar-dots', value: 'an an-calendar-dots' },
+    { label: 'fa fa-podcast', value: 'fa fa-podcast' },
+    { label: 'fa fa-calculator', value: 'fa fa-calculator' }
+  ];
+
+  sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
   ];
 
   readonly toggleOptions: Array<PoSelectOption> = [
@@ -30,8 +38,6 @@ export class SamplePoButtonGroupLabsComponent implements OnInit {
     { label: 'single', value: PoButtonGroupToggle.Single },
     { label: 'multiple', value: PoButtonGroupToggle.Multiple }
   ];
-
-  constructor(private poNotification: PoNotificationService) {}
 
   ngOnInit() {
     this.restore();
@@ -54,6 +60,7 @@ export class SamplePoButtonGroupLabsComponent implements OnInit {
   }
 
   restore() {
+    this.size = 'medium';
     this.button = {};
     this.buttons = [];
   }

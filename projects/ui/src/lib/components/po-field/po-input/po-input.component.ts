@@ -1,5 +1,17 @@
-import { Component, ElementRef, forwardRef } from '@angular/core';
-import { AbstractControl, NG_VALUE_ACCESSOR, NG_VALIDATORS } from '@angular/forms';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  forwardRef,
+  ViewChild,
+  inject,
+  OnChanges,
+  SimpleChanges
+} from '@angular/core';
+import { AbstractControl, NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
+
+import { uuid } from '../../../utils/util';
 
 import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 
@@ -22,6 +34,12 @@ import { PoInputGeneric } from '../po-input-generic/po-input-generic';
  *  <file name="sample-po-input-reactive-form/sample-po-input-reactive-form.component.html"> </file>
  *  <file name="sample-po-input-reactive-form/sample-po-input-reactive-form.component.ts"> </file>
  * </example>
+ *
+ * <example name="po-input-mask-dynamic" title="PO Input - Dynamic Mask (CPF/CNPJ)">
+ *  <file name="sample-po-input-mask-dynamic/sample-po-input-mask-dynamic.component.html"> </file>
+ *  <file name="sample-po-input-mask-dynamic/sample-po-input-mask-dynamic.component.ts"> </file>
+ *  <file name="sample-po-input-mask-dynamic/document-mask.ts"> </file>
+ * </example>
  */
 @Component({
   selector: 'po-input',
@@ -37,12 +55,27 @@ import { PoInputGeneric } from '../po-input-generic/po-input-generic';
       useExisting: forwardRef(() => PoInputComponent),
       multi: true
     }
-  ]
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
-export class PoInputComponent extends PoInputGeneric {
+export class PoInputComponent extends PoInputGeneric implements OnChanges {
+  @ViewChild('inp', { static: true }) inp: ElementRef;
+
+  id = `po-input[${uuid()}]`;
+
   /* istanbul ignore next */
-  constructor(el: ElementRef) {
-    super(el);
+  constructor() {
+    const el = inject(ElementRef);
+    const cd = inject(ChangeDetectorRef);
+
+    super(el, cd);
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
   }
 
   extraValidation(c: AbstractControl): { [key: string]: any } {

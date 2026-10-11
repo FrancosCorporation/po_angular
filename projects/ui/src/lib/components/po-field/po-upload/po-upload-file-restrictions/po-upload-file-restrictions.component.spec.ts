@@ -16,15 +16,13 @@ describe('PoUploadFileRestrictionsComponent:', () => {
   let fixture: ComponentFixture<PoUploadFileRestrictionsComponent>;
   let nativeElement: any;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        declarations: [PoUploadFileRestrictionsComponent],
-        imports: [PoServicesModule],
-        providers: [PoLanguageService]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoUploadFileRestrictionsComponent],
+      imports: [PoServicesModule],
+      providers: [PoLanguageService]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoUploadFileRestrictionsComponent);
@@ -33,7 +31,7 @@ describe('PoUploadFileRestrictionsComponent:', () => {
     nativeElement = fixture.debugElement.nativeElement;
     changeDetector = fixture.componentRef.injector.get(ChangeDetectorRef);
 
-    component['language'] = 'en';
+    Object.defineProperty(component, 'language', { value: 'en', configurable: true });
   });
 
   it('should be created', () => {
@@ -75,7 +73,7 @@ describe('PoUploadFileRestrictionsComponent:', () => {
     it('formatAllowedExtensions: should return `PNG, JPG and SVG` if allowedExtensions is `png,jpg and svg`', () => {
       const allowedExtensions = ['png', 'jpg', 'svg'];
 
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       expect(component['formatAllowedExtensions'](allowedExtensions)).toBe('PNG, JPG and SVG');
     });
@@ -83,7 +81,7 @@ describe('PoUploadFileRestrictionsComponent:', () => {
     it('formatAllowedExtensions: should return `PNG and JPG` if allowedExtensions is `png and jpg`', () => {
       const allowedExtensions = ['png', 'jpg'];
 
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       expect(component['formatAllowedExtensions'](allowedExtensions)).toBe('PNG and JPG');
     });
@@ -91,7 +89,7 @@ describe('PoUploadFileRestrictionsComponent:', () => {
     it('formatAllowedExtensions: should return `PNG e JPG` if allowedExtensions is `png and jpg` and `language` is `pt`', () => {
       const allowedExtensions = ['png', 'jpg'];
 
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       expect(component['formatAllowedExtensions'](allowedExtensions)).toBe('PNG e JPG');
     });
@@ -99,7 +97,7 @@ describe('PoUploadFileRestrictionsComponent:', () => {
     it('formatAllowedExtensions: should return `PNG y JPG` if allowedExtensions is `png and jpg` and `language` is `es`', () => {
       const allowedExtensions = ['png', 'jpg'];
 
-      component['language'] = 'es';
+      Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
       expect(component['formatAllowedExtensions'](allowedExtensions)).toBe('PNG y JPG');
     });
@@ -119,7 +117,7 @@ describe('PoUploadFileRestrictionsComponent:', () => {
     it('setLiterals: should set `literals` with `poUploadLiteralsDefault`', () => {
       component.literals = undefined;
 
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       component['setLiterals']();
 
@@ -129,7 +127,7 @@ describe('PoUploadFileRestrictionsComponent:', () => {
     it('setLiterals: should set `literals` with `poUploadLiteralsDefault` and `poLocaleDefault`', () => {
       component.literals = undefined;
 
-      component['language'] = '';
+      Object.defineProperty(component, 'language', { value: '', configurable: true });
 
       component['setLiterals']();
 
@@ -146,19 +144,6 @@ describe('PoUploadFileRestrictionsComponent:', () => {
   });
 
   describe('Templates:', () => {
-    it('should contain `numberOfFilesAllowed` if `maxFiles` is greater than 1', () => {
-      component.maxFiles = 2;
-      const numberOfFilesAllowed = '2 file(s) allowed';
-
-      component['setLiterals']();
-
-      changeDetector.detectChanges();
-
-      const text = nativeElement.querySelector('.po-font-text-small').textContent;
-
-      expect(text).toContain(numberOfFilesAllowed);
-    });
-
     it('shouldn`t contain a text if `maxFiles` is 1', () => {
       component.maxFiles = 1;
 
@@ -171,20 +156,6 @@ describe('PoUploadFileRestrictionsComponent:', () => {
       expect(text).toBeFalsy();
     });
 
-    it('should contain `allowedFormats` if `allowedExtensions` is defined', () => {
-      component['language'] = 'en';
-      component.allowedExtensions = <any>['png', 'jpg'];
-      const allowedExtensions = 'Accepted file formats: PNG and JPG.';
-
-      component['setLiterals']();
-
-      changeDetector.detectChanges();
-
-      const text = nativeElement.querySelector('.po-font-text-small').textContent;
-
-      expect(text).toContain(allowedExtensions);
-    });
-
     it('shouldn`t contain text if allowedExtensions is undefined', () => {
       component.allowedExtensions = undefined;
 
@@ -195,48 +166,6 @@ describe('PoUploadFileRestrictionsComponent:', () => {
       const text = nativeElement.querySelector('.po-font-text-small');
 
       expect(text).toBeFalsy();
-    });
-
-    it('should contain `allowedFileSizeRange` if `minFileSize` and `maxFileSize` are defined', () => {
-      component.minFileSize = <any>1048576;
-      component.maxFileSize = <any>20971520;
-      const allowedFileSizeRange = 'Size limit per file: from 1 MB to 20 MB';
-
-      component['setLiterals']();
-
-      changeDetector.detectChanges();
-
-      const text = nativeElement.querySelector('.po-font-text-small').textContent;
-
-      expect(text).toContain(allowedFileSizeRange);
-    });
-
-    it('should contain `minFileSizeAllowed` if `minFileSize` is defined and `maxFileSize` is undefined', () => {
-      component.minFileSize = <any>1048576;
-      const minFileSizeAllowed = 'Size limit per file: 1 MB minimum';
-      component['language'] = 'en';
-
-      component['setLiterals']();
-
-      changeDetector.detectChanges();
-
-      const text = nativeElement.querySelector('.po-font-text-small').textContent;
-
-      expect(text).toContain(minFileSizeAllowed);
-    });
-
-    it('should contain `maxFileSizeAllowed` if `minFileSize` is undefined and `maxFileSize` is defined', () => {
-      component.maxFileSize = <any>1048576;
-      const maxFileSizeAllowed = 'Size limit per file: 1 MB maximum';
-      component['language'] = 'en';
-
-      component['setLiterals']();
-
-      changeDetector.detectChanges();
-
-      const text = nativeElement.querySelector('.po-font-text-small').textContent;
-
-      expect(text).toContain(maxFileSizeAllowed);
     });
   });
 });

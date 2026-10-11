@@ -5,19 +5,21 @@ import {
   Input,
   OnChanges,
   OnDestroy,
-  OnInit,
   Output,
+  Renderer2,
   SimpleChange,
   SimpleChanges,
-  Renderer2,
-  ViewChild
+  ViewChild,
+  output
 } from '@angular/core';
 
-import { capitalizeFirstLetter, convertToInt } from '../../../utils/util';
-import { PoCheckboxGroupOption } from '../../po-field/po-checkbox-group/interfaces/po-checkbox-group-option.interface';
-import { PoPopoverComponent } from '../../po-popover/po-popover.component';
-import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
 import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { convertToBoolean, convertToInt, getDefaultSizeFn, validateSizeFn, PoUtils } from '../../../utils/util';
+import { PoCheckboxGroupOption } from '../../po-field/po-checkbox-group/interfaces/po-checkbox-group-option.interface';
+import { PoPageSlideComponent } from '../../po-page/po-page-slide';
+import { PoPopoverComponent } from '../../po-popover/po-popover.component';
 import { PoTableColumn } from '../interfaces/po-table-column.interface';
 
 const PoTableColumnManagerMaxColumnsDefault = 99999;
@@ -41,24 +43,73 @@ export const poTableColumnManagerLiteralsDefault = {
   }
 };
 
+type Direction = 'up' | 'down';
+
 @Component({
   selector: 'po-table-column-manager',
-  templateUrl: './po-table-column-manager.component.html'
+  templateUrl: './po-table-column-manager.component.html',
+  standalone: false
 })
-export class PoTableColumnManagerComponent implements OnInit, OnChanges, OnDestroy {
-  private _maxColumns: number = PoTableColumnManagerMaxColumnsDefault;
+export class PoTableColumnManagerComponent implements OnChanges, OnDestroy {
+  @ViewChild(PoPopoverComponent) popover: PoPopoverComponent;
+  @ViewChild('pageSlideColumnsManager') pageSlideColumnsManager: PoPageSlideComponent;
+
+  @Input('p-columns') columns: Array<PoTableColumn> = [];
+
+  @Input('p-target') target: ElementRef;
+
+  @Input('p-columns-default') colunsDefault: Array<PoTableColumn>;
+
+  @Input('p-last-visible-columns-selected') lastVisibleColumnsSelected: Array<PoTableColumn> = [];
+
+  @Output('p-visible-columns-change') visibleColumnsChange = new EventEmitter<Array<PoTableColumn>>();
+
+  // Evento disparado ao fechar o popover do gerenciador de colunas após alterar as colunas visíveis.
+  // O po-table envia como parâmetro um array de string com as colunas visíveis atualizadas. Por exemplo: ["idCard", "name", "hireStatus", "age"].
+  @Output('p-change-visible-columns') changeVisibleColumns = new EventEmitter<Array<string>>();
+
+  // Evento disparado ao alterar o estado de fixação de uma coluna no gerenciador de colunas.
+  // O po-table envia como parâmetro um array de string com as propriedades das colunas fixas. Por exemplo: ["name", "age"].
+  changeFixedColumns = output<Array<string>>({ alias: 'p-change-fixed-columns' });
+
+  @Output('p-initial-columns') initialColumns = new EventEmitter<Array<string>>();
+
+  @Input({ alias: 'p-hide-action-fixed-columns', transform: convertToBoolean }) hideActionFixedColumns: boolean = false;
 
   literals;
   columnsOptions: Array<PoCheckboxGroupOption> = [];
   visibleColumns: Array<string> = [];
+  columnUpdate;
 
+  private _maxColumns: number = PoTableColumnManagerMaxColumnsDefault;
   private defaultColumns: Array<PoTableColumn> = [];
-  private lastEmittedValue: Array<string>;
-  private lastValueCheckedColumns: Array<string>;
-  private selectedColumns: Array<string>;
   private resizeListener: () => void;
+  private restoreDefaultEvent: boolean;
+  private lastEmittedValue: Array<string>;
+  private readonly minColumns: number = 1;
+  private _componentsSize?: string = undefined;
 
-  @Input('p-columns') columns: Array<PoTableColumn> = [];
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no table:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  @Input('p-components-size') set componentsSize(value: string) {
+    this._componentsSize = validateSizeFn(value, PoFieldSize);
+  }
+
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
 
   @Input('p-max-columns') set maxColumns(value: number) {
     this._maxColumns = convertToInt(value, PoTableColumnManagerMaxColumnsDefault);
@@ -68,15 +119,10 @@ export class PoTableColumnManagerComponent implements OnInit, OnChanges, OnDestr
     return this._maxColumns;
   }
 
-  @Input('p-target') target: ElementRef;
-
-  @Output('p-visible-columns-change') visibleColumnsChange = new EventEmitter<Array<PoTableColumn>>();
-
-  @Output('p-change-visible-columns') changeVisibleColumns = new EventEmitter<Array<string>>();
-
-  @ViewChild(PoPopoverComponent) popover: PoPopoverComponent;
-
-  constructor(private renderer: Renderer2, languageService: PoLanguageService) {
+  constructor(
+    private readonly renderer: Renderer2,
+    languageService: PoLanguageService
+  ) {
     const language = languageService.getShortLanguage();
 
     this.literals = {
@@ -85,12 +131,8 @@ export class PoTableColumnManagerComponent implements OnInit, OnChanges, OnDestr
     };
   }
 
-  ngOnInit() {
-    this.updateColumnsOptions(this.columns);
-  }
-
   ngOnChanges(changes: SimpleChanges) {
-    const { columns, maxColumns, target } = changes;
+    const { columns, maxColumns, target, lastVisibleColumnsSelected } = changes;
 
     if (target && target.firstChange) {
       this.initializeListeners();
@@ -101,7 +143,11 @@ export class PoTableColumnManagerComponent implements OnInit, OnChanges, OnDestr
     }
 
     if (maxColumns) {
-      this.updateColumnsOptions(this.columns);
+      this.updateValues(this.columns);
+    }
+
+    if (lastVisibleColumnsSelected?.currentValue) {
+      this.pageSlideColumnsManager.open();
     }
   }
 
@@ -109,102 +155,206 @@ export class PoTableColumnManagerComponent implements OnInit, OnChanges, OnDestr
     this.removeListeners();
   }
 
-  onChangeVisibleColumns(checkedColumns: Array<string>) {
-    // controla quando a alteração das colunas deve ser emitida para o dev
-    this.updatesControlValues(checkedColumns);
+  // aqui chegam os eventos do checkbox e do close do popover que também é disparado no resize
+  checkChanges(event: Array<string> = [], emit: boolean = false) {
+    this.verifyToEmitChange(event);
 
-    this.disableColumnsOptions(this.columnsOptions);
-
-    const visibleTableColumns = this.getVisibleTableColumns(checkedColumns);
-
-    this.visibleColumnsChange.emit(visibleTableColumns);
-  }
-
-  emitVisibleColumns() {
-    if (this.isUpdate(this.selectedColumns, this.lastEmittedValue)) {
-      this.lastEmittedValue = [...this.selectedColumns];
-      this.changeVisibleColumns.emit(this.selectedColumns);
-    } else if (this.isFirstTime(this.selectedColumns, this.lastEmittedValue, this.lastValueCheckedColumns)) {
-      this.lastEmittedValue = [...this.selectedColumns];
-      this.changeVisibleColumns.emit(this.selectedColumns);
+    if (emit) {
+      // controla emissões para o dev
+      this.verifyToEmitVisibleColumns();
     }
   }
 
   restore() {
-    this.updateColumnsOptions(this.defaultColumns);
-  }
-
-  private updatesControlValues(checkedColumns: Array<string>) {
-    if (!this.lastValueCheckedColumns && checkedColumns) {
-      this.lastValueCheckedColumns = checkedColumns;
-    } else {
-      if (this.lastValueCheckedColumns && checkedColumns && this.lastValueCheckedColumns !== checkedColumns) {
-        this.selectedColumns = checkedColumns;
-      }
+    this.restoreDefaultEvent = true;
+    this.defaultColumns = this.removePropertyFixed(this.defaultColumns);
+    const defaultColumns = this.getVisibleColumns(this.defaultColumns);
+    this.initialColumns.emit(this.getVisibleColumns(this.colunsDefault));
+    this.checkChanges(defaultColumns, this.restoreDefaultEvent);
+    if (!this.hideActionFixedColumns) {
+      this.changeFixedColumns.emit([]);
     }
   }
 
-  private isUpdate(selectedColumns: Array<string>, lastEmittedValue: Array<string>): boolean {
-    return selectedColumns && lastEmittedValue && !this.columnsAreEquals(lastEmittedValue, selectedColumns);
+  changePosition({ option, direction }) {
+    const indexColumn = this.columns.findIndex(el => el.property === option.value);
+    const newColumn = [...this.columns];
+
+    this.changePositionColumn(newColumn, indexColumn, direction);
+    this.columns = newColumn;
+    this.visibleColumnsChange.emit(this.columns);
   }
 
-  private isFirstTime(
-    selectedColumns: Array<string>,
-    lastEmittedValue: Array<string>,
-    lastValueCheckedColumns: Array<string>
-  ): boolean {
+  emitColumnFixed(option) {
+    const newColumn = [...this.columns];
+    if (option) {
+      newColumn.forEach(itemColumn => {
+        if (itemColumn.property === option.value) {
+          itemColumn.fixed = option.fixed;
+        }
+      });
+
+      const amountOfFixed = newColumn.filter(itemFixed => itemFixed.fixed === true).length;
+      const indexColumn = newColumn.findIndex(el => el.property === option.value);
+      const item = newColumn.splice(indexColumn, 1)[0];
+
+      if (option.fixed) {
+        newColumn.splice(amountOfFixed - 1, 0, item);
+      }
+
+      if (option.fixed === false) {
+        newColumn.splice(amountOfFixed, 0, item);
+      }
+
+      this.columns = [...newColumn];
+    }
+
+    this.visibleColumnsChange.emit(newColumn);
+    if (!this.hideActionFixedColumns) {
+      const fixedColumns = newColumn.filter(col => col.fixed === true).map(col => col.property);
+      this.changeFixedColumns.emit(fixedColumns);
+    }
+  }
+
+  private changePositionColumn(array: Array<PoTableColumn>, index: number, direction: Direction) {
+    if (direction === 'up') {
+      array.splice(index, 0, array.splice(index - 1, 1)[0]);
+    }
+
+    if (direction === 'down') {
+      array.splice(index, 0, array.splice(index + 1, 1)[0]);
+    }
+  }
+
+  private verifyToEmitChange(event: Array<string>) {
+    const newColumns = [...event];
+    if (newColumns.length >= 1 && this.allowsChangeVisibleColumns()) {
+      this.emitChangesToSelectedColumns(newColumns);
+    }
+    // Desabilita ultimo checkbox ativo
+    if (newColumns.length === 1) {
+      const columnsOptions = this.mapTableColumnsToCheckboxOptions(this.columnUpdate);
+      this.columnsOptions = this.disabledLastColumn(columnsOptions);
+    }
+  }
+
+  private emitChangesToSelectedColumns(newColumns: Array<string>) {
+    this.visibleColumns = [...newColumns];
+    const visibleTableColumns = this.getVisibleTableColumns(this.visibleColumns);
+
+    // emite alteração nas colunas selecionadas, porém não emite para o dev.
+    this.visibleColumnsChange.emit(visibleTableColumns);
+  }
+
+  private allowsChangeVisibleColumns(): boolean {
+    const visibleTableColumns = this.getVisibleTableColumns(this.visibleColumns);
+
+    return this.stringify(visibleTableColumns) !== this.stringify(this.columns);
+  }
+
+  private verifyToEmitVisibleColumns() {
+    if (this.restoreDefaultEvent) {
+      // veio do restore default
+      this.verifyRestoreValues();
+    } else {
+      // foi disparado no close popover;
+      this.verifyOnClose();
+    }
+  }
+
+  private verifyRestoreValues() {
+    const defaultColumns = [...this.defaultColumns];
+    const defaultVisibleColumns = this.getVisibleColumns(defaultColumns);
+
+    if (this.allowsChangeSelectedColumns(defaultVisibleColumns)) {
+      this.visibleColumnsChange.emit(this.defaultColumns);
+    }
+
+    this.restoreDefaultEvent = false;
+  }
+
+  private allowsChangeSelectedColumns(defaultVisibleColumns: Array<string>) {
+    const visibleColumns = this.getVisibleColumns(this.columns);
+
+    return !this.isEqualArrays(defaultVisibleColumns, visibleColumns);
+  }
+
+  private verifyOnClose() {
+    if (this.allowsEmission()) {
+      this.emitVisibleColumns();
+    }
+  }
+
+  private emitVisibleColumns() {
+    this.lastEmittedValue = [...this.visibleColumns];
+    this.changeVisibleColumns.emit(this.visibleColumns);
+  }
+
+  private allowsEmission(): boolean {
+    const updatedVisibleColumns = this.visibleColumns ? [...this.visibleColumns] : [];
+    const lastEmittedValue = this.lastEmittedValue ? [...this.lastEmittedValue] : [];
+    const lastVisibleColumnsSelected = this.lastVisibleColumnsSelected ? [...this.lastVisibleColumnsSelected] : [];
+    const lastVisibleColumns = this.getVisibleColumns(lastVisibleColumnsSelected);
+
     return (
-      selectedColumns &&
-      lastValueCheckedColumns &&
-      !lastEmittedValue &&
-      !this.columnsAreEquals(lastValueCheckedColumns, selectedColumns)
+      this.isUpdate(updatedVisibleColumns, lastEmittedValue) ||
+      this.isFirstTime(updatedVisibleColumns, lastVisibleColumns)
     );
   }
 
-  private columnsAreEquals(oldValue: Array<string>, newValue: Array<string>): boolean {
-    if (oldValue && newValue) {
-      const oldSortedValue = oldValue.slice().sort();
-      return (
-        newValue.length === oldSortedValue.length &&
-        newValue
-          .slice()
-          .sort()
-          .every((value, index) => value === oldSortedValue[index])
-      );
-    }
+  private isFirstTime(updatedVisibleColumns: Array<string>, lastVisibleColumns: Array<string>): boolean {
+    return !this.lastEmittedValue && !this.isEqualArrays(updatedVisibleColumns, lastVisibleColumns);
+  }
+
+  private isUpdate(updatedVisibleColumns: Array<string>, lastEmittedValue: Array<string>): boolean {
+    return this.lastEmittedValue && !this.isEqualArrays(updatedVisibleColumns, lastEmittedValue);
+  }
+
+  private isEqualArrays(first: Array<string>, second: Array<string>): boolean {
+    const one = first ? [...first] : [];
+    const two = second ? [...second] : [];
+    const firstSort = one.slice();
+    const secondSort = two.slice();
+    const firstString = JSON.stringify(firstSort);
+    const secondString = JSON.stringify(secondSort);
+
+    return firstString === secondString;
   }
 
   // desabilitará as colunas, que não estiverem selecionadas, após exeder o numero maximo de colunas.
   private disableColumnsOptions(columns: Array<PoCheckboxGroupOption> = []) {
-    // necessario timeout para que seja possivel atualizar os columnsOptions apos a mudança do model
-    setTimeout(() => {
-      this.columnsOptions = columns.map(column => ({
-        ...column,
-        disabled: this.isDisableColumn(column.value)
-      }));
-    });
+    return columns.map(column => ({
+      ...column,
+      disabled: this.isDisableColumn(column.value)
+    }));
   }
 
   private getColumnTitleLabel(column: PoTableColumn) {
-    return column.label || capitalizeFirstLetter(column.property);
+    return column.label || PoUtils.capitalizeFirstLetter(column.property);
   }
 
   /** Retorna um Array de column.property das colunas que são visiveis. */
   private getVisibleColumns(columns: Array<PoTableColumn>): Array<string> {
-    const visibleColumns = [];
+    let visibleColumns = [];
 
     columns.forEach(column => {
-      if (column.visible !== false && visibleColumns.length < this.maxColumns && column.type !== 'detail') {
-        visibleColumns.push(column.property);
+      if (this.isVisibleColumn(column, visibleColumns)) {
+        visibleColumns = [...visibleColumns, column.property];
       }
     });
 
     return visibleColumns;
   }
 
+  private isVisibleColumn(column: PoTableColumn, visibleColumns: Array<string>): boolean {
+    return column.visible !== false && visibleColumns.length < this.maxColumns && column.type !== 'detail';
+  }
+
   /** Retorna um Array PoTableColumn a partir das colunas visiveis no gerenciador de colunas. */
   private getVisibleTableColumns(visibleColumns: Array<string>): Array<PoTableColumn> {
-    return this.columns.map(column => ({
+    const columns = this.columns ? [...this.columns] : [];
+
+    return columns.map(column => ({
       ...column,
       visible: visibleColumns.includes(column.property) || column.type === 'detail'
     }));
@@ -212,7 +362,7 @@ export class PoTableColumnManagerComponent implements OnInit, OnChanges, OnDestr
 
   private initializeListeners() {
     this.resizeListener = this.renderer.listen('window', 'resize', () => {
-      if (this.popover) {
+      if (this.popover && !this.popover.isHidden) {
         this.popover.close();
       }
     });
@@ -223,14 +373,16 @@ export class PoTableColumnManagerComponent implements OnInit, OnChanges, OnDestr
   }
 
   private mapTableColumnsToCheckboxOptions(columns: Array<PoTableColumn> = []) {
+    const tableColumns = [...columns];
     const columnsOptions = [];
 
-    columns.forEach(column => {
+    tableColumns.forEach(column => {
       if (column.type !== 'detail') {
         columnsOptions.push({
           value: column.property,
           label: this.getColumnTitleLabel(column),
-          disabled: this.isDisableColumn(column.property)
+          disabled: this.isDisableColumn(column.property),
+          visible: column.visible
         });
       }
     });
@@ -238,18 +390,36 @@ export class PoTableColumnManagerComponent implements OnInit, OnChanges, OnDestr
     return columnsOptions;
   }
 
+  private disabledLastColumn(columns: Array<any>) {
+    return columns.map(column => ({
+      ...column,
+      disabled: column.type !== 'detail' && column.visible ? true : false
+    }));
+  }
+
   private onChangeColumns(columns: SimpleChange) {
-    const { firstChange, currentValue = [], previousValue = [] } = columns;
+    const { currentValue = [], previousValue = [] } = columns;
+    this.columnUpdate = columns.currentValue;
 
     // atualizara o defaultColumns, quando for a primeira vez ou quando o defaultColumns for diferente do currentValue
-    if (firstChange || this.defaultColumns.length !== currentValue.length) {
-      this.defaultColumns = currentValue;
+    if (!this.lastVisibleColumnsSelected && this.stringify(this.defaultColumns) !== this.stringify(currentValue)) {
+      this.defaultColumns = [...currentValue];
     }
 
     // verifica se o valor anterior é diferente do atual para atualizar as columnsOptions apenas quando for necessario
-    if (previousValue.length !== currentValue.length) {
-      this.updateColumnsOptions(currentValue);
+    if (this.stringify(previousValue) !== this.stringify(currentValue)) {
+      this.updateValues(currentValue);
     }
+  }
+
+  private updateValues(currentValue: Array<PoTableColumn>) {
+    const visibleColumns = this.getVisibleColumns(currentValue);
+    this.visibleColumns = [...visibleColumns];
+
+    const columnsOptions = this.mapTableColumnsToCheckboxOptions(currentValue);
+    this.columnsOptions = this.disableColumnsOptions(columnsOptions);
+
+    this.checkChanges(visibleColumns, false);
   }
 
   private removeListeners() {
@@ -258,10 +428,21 @@ export class PoTableColumnManagerComponent implements OnInit, OnChanges, OnDestr
     }
   }
 
-  private updateColumnsOptions(columns: Array<PoTableColumn>) {
-    this.visibleColumns = this.getVisibleColumns(columns);
-    this.columnsOptions = this.mapTableColumnsToCheckboxOptions(columns);
+  private stringify(columns: Array<PoTableColumn>) {
+    // não faz o stringify da propriedade icon e searchService, pois pode conter objeto complexo e disparar um erro.
+    return JSON.stringify(columns, (key, value) => {
+      if (key !== 'icon' && key !== 'searchService') {
+        return value;
+      }
+    });
+  }
 
-    this.onChangeVisibleColumns(this.visibleColumns);
+  private removePropertyFixed(arr: Array<any>) {
+    return arr.map(obj => {
+      if (obj.hasOwnProperty('fixed')) {
+        obj.fixed = false;
+      }
+      return obj;
+    });
   }
 }

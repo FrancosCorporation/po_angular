@@ -6,20 +6,21 @@ import { PoDynamicModule, PoFieldModule, PoModalModule } from '@po-ui/ng-compone
 
 import { PoAdvancedFilterBaseComponent } from './po-advanced-filter-base.component';
 import { PoAdvancedFilterComponent } from './po-advanced-filter.component';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('PoAdvancedFilterComponent', () => {
   let component: PoAdvancedFilterComponent;
   let fixture: ComponentFixture<PoAdvancedFilterComponent>;
   let filters: Array<any>;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [FormsModule, PoDynamicModule, PoFieldModule, PoModalModule],
-        declarations: [PoAdvancedFilterComponent]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoAdvancedFilterComponent],
+      imports: [FormsModule, PoDynamicModule, PoFieldModule, PoModalModule],
+      providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoAdvancedFilterComponent);
@@ -101,7 +102,7 @@ describe('PoAdvancedFilterComponent', () => {
     });
 
     describe('optionsServiceSubscribe: ', () => {
-      it(`should append the received value from dynamicForm into 'optionsServiceChosenOptions' 
+      it(`should append the received value from dynamicForm into 'optionsServiceChosenOptions'
         if it's different from undefined and if it does not already exist`, () => {
         const objectValue = { label: 'Vancouver', value: 12345 };
         component['optionsServiceChosenOptions'] = [{ label: 'Toronto', value: 12312 }];
@@ -115,7 +116,7 @@ describe('PoAdvancedFilterComponent', () => {
         expect(component['optionsServiceChosenOptions']).toEqual(expectedResult);
       });
 
-      it(`shouldn't append the received value from dynamicForm into 'optionsServiceChosenOptions' 
+      it(`shouldn't append the received value from dynamicForm into 'optionsServiceChosenOptions'
         if it already exists`, () => {
         const objectValue = { label: 'Vancouver', value: 12345 };
         component['optionsServiceChosenOptions'] = [objectValue];
@@ -127,7 +128,7 @@ describe('PoAdvancedFilterComponent', () => {
         expect(component['optionsServiceChosenOptions']).toEqual([objectValue]);
       });
 
-      it(`shouldn't append the received value from dynamicForm into 'optionsServiceChosenOptions' 
+      it(`shouldn't append the received value from dynamicForm into 'optionsServiceChosenOptions'
         if it is undefined`, () => {
         const objectValue = { label: 'Vancouver', value: 12345 };
         component['optionsServiceChosenOptions'] = [objectValue];

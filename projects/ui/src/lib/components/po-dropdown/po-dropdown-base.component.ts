@@ -1,8 +1,12 @@
-import { Input, Directive } from '@angular/core';
+import { Directive, HostBinding, HostListener, Input } from '@angular/core';
 
-import { convertToBoolean } from './../../utils/util';
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn } from './../../utils/util';
+import { PO_CONTROL_POSITIONS } from './../../services/po-control-position/po-control-position.constants';
 
+import { PoFieldSize } from '../../enums/po-field-size.enum';
 import { PoDropdownAction } from './po-dropdown-action.interface';
+
+const poDropdownDefaultPosition = 'bottom-left';
 
 /**
  * @description
@@ -34,15 +38,49 @@ import { PoDropdownAction } from './po-dropdown-action.interface';
  * ```
  * > Para maiores dúvidas referente à configuração de rotas, acesse em nosso portal /Guias /Começando
  * [/Configurando as rotas do po-menu](/guides/getting-started).
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                     |
+ * |----------------------------------------|-------------------------------------------------------|--------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                  |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                       |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                       |
+ * | `--font-weight`                        | Peso da fonte                                         | `var(--font-weight-bold)`                        |
+ * | `--line-height`                        | Tamanho da label                                      | `var(--line-height-none)`                        |
+ * | `--color`                              | Cor principal do dropdown                             | `var(--color-action-default)`                    |
+ * | `--border-radius`                      | Contém o valor do raio dos cantos do elemento&nbsp;   | `var(--border-radius-md)`                        |
+ * | `--border-width`                       | Contém o valor da largura dos cantos do elemento&nbsp;| `var(--border-width-md)`                         |
+ * | `--padding`                            | Preenchimento                                         | `0 1em`                                          |
+ * | **Hover**                              |                                                       |                                                  |
+ * | `--color-hover`                        | Cor principal no estado hover                         | `var(--color-brand-01-darkest)`                  |
+ * | `--background-hover`                   | Cor de background no estado hover                     | `var(--color-brand-01-lighter)`                  |
+ * | **Focused**                            |                                                       |                                                  |
+ * | `--outline-color-focused` &nbsp;       | Cor do outline do estado de focus                     | `var(--color-action-focus)`                      |
+ * | **Pressed**                            |                                                       |                                                  |
+ * | `--background-pressed` &nbsp;          | Cor de background no estado de pressionado&nbsp;      | `var(--color-brand-01-light)`                    |
+ * | **Disabled**                           |                                                       |                                                  |
+ * | `--color-disabled`                     | Cor principal no estado disabled                      | `var(--color-action-disabled)`                   |
+ *
  */
 
 @Directive()
 export class PoDropdownBaseComponent {
+  /** Adiciona um rótulo ao `dropdown`. */
+  @Input('p-label') label: string;
+
+  icon: string = 'ICON_ARROW_DOWN';
+  open: boolean = false;
+
   private _actions: Array<PoDropdownAction>;
   private _disabled: boolean = false;
-
-  icon: string = 'po-icon-arrow-down';
-  open: boolean = false;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+  private _position: string = poDropdownDefaultPosition;
 
   /** Lista de ações que serão exibidas no componente. */
   @Input('p-actions') set actions(value: Array<PoDropdownAction>) {
@@ -70,6 +108,84 @@ export class PoDropdownBaseComponent {
     return this._disabled;
   }
 
-  /** Adiciona um rótulo ao `dropdown`. */
-  @Input('p-label') label: string;
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho do componente:
+   * - `small`: altura do button como 32px (disponível apenas para acessibilidade AA).
+   * - `medium`: altura do button como 44px.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a posição preferencial de abertura do popup do dropdown em relação ao botão.
+   *
+   * Posições válidas:
+   * - `right`: No lado direito.
+   * - `right-bottom`: No lado direito inferior.
+   * - `right-top`: No lado direito superior.
+   * - `bottom`: Abaixo.
+   * - `bottom-left`: Abaixo e à esquerda (padrão).
+   * - `bottom-right`: Abaixo e à direita.
+   * - `left`: No lado esquerdo.
+   * - `left-top`: No lado esquerdo superior.
+   * - `left-bottom`: No lado esquerdo inferior.
+   * - `top`: Acima.
+   * - `top-right`: Acima e à direita.
+   * - `top-left`: Acima e à esquerda.
+   *
+   * > O popup será rotacionado automaticamente caso não caiba na posição definida.
+   *
+   * @default `bottom-left`
+   */
+  @Input('p-position') set position(value: string) {
+    this._position = PO_CONTROL_POSITIONS.includes(value) ? value : poDropdownDefaultPosition;
+  }
+
+  get position(): string {
+    return this._position;
+  }
+
+  get popupCustomPositions(): Array<string> {
+    if (this._position === 'bottom-right') {
+      return ['bottom-right', 'top-right'];
+    }
+    if (this._position === 'top-left') {
+      return ['top-left', 'bottom-left'];
+    }
+    if (this._position === 'top-right') {
+      return ['top-right', 'bottom-right'];
+    }
+    return ['bottom-left', 'top-left'];
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
+  }
 }

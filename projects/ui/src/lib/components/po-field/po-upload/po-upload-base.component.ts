@@ -1,17 +1,29 @@
+import {
+  ChangeDetectorRef,
+  Directive,
+  EventEmitter,
+  HostBinding,
+  HostListener,
+  input,
+  Input,
+  Output
+} from '@angular/core';
 import { AbstractControl, ControlValueAccessor, Validator } from '@angular/forms';
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
 
-import { convertToBoolean, isEquals, isIE, isMobile } from '../../../utils/util';
-import { requiredFailed } from '../validators';
+import { convertToBoolean, getDefaultSizeFn, isEquals, validateSizeFn, PoUtils } from '../../../utils/util';
+import { PoValidators } from '../validators';
 
-import { PoUploadFile } from './po-upload-file';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { PoModalAction } from '../../po-modal';
+import { PoProgressAction } from '../../po-progress';
 import { PoUploadFileRestrictions } from './interfaces/po-upload-file-restriction.interface';
 import { PoUploadLiterals } from './interfaces/po-upload-literals.interface';
-import { PoUploadService } from './po-upload.service';
+import { PoUploadFile } from './po-upload-file';
 import { PoUploadStatus } from './po-upload-status.enum';
-import { InputBoolean } from '../../../decorators';
-import { PoLanguageService } from '../../../services/po-language/po-language.service';
-import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
+import { PoUploadService } from './po-upload.service';
+import { PoHelperOptions } from '../../po-helper';
 
 export const poUploadLiteralsDefault = {
   en: <PoUploadLiterals>{
@@ -38,7 +50,14 @@ export const poUploadLiteralsDefault = {
     maxFileSizeAllowed: 'Size limit per file: {0} maximum',
     minFileSizeAllowed: 'Size limit per file: {0} minimum',
     errorOccurred: 'An error has occurred',
-    sentWithSuccess: 'Sent with success'
+    sentWithSuccess: 'Sent with success',
+    doneText: 'Done',
+    uploadingText: 'Uploading',
+    tryAgain: 'Try again',
+    close: 'Close file',
+    preview: 'Preview',
+    thumbnail: 'thumbnail',
+    continue: 'Continue'
   },
   es: <PoUploadLiterals>{
     files: 'archivos',
@@ -64,7 +83,14 @@ export const poUploadLiteralsDefault = {
     maxFileSizeAllowed: 'Limite de tamaño de archivo: hasta {0}',
     minFileSizeAllowed: 'Limite de tamaño de archivo: minimo {0}',
     errorOccurred: 'Ocurrio un error',
-    sentWithSuccess: 'Enviado con éxito'
+    sentWithSuccess: 'Enviado con éxito',
+    doneText: 'Hecho',
+    uploadingText: 'Subiendo',
+    tryAgain: 'Inténtalo de nuevo',
+    close: 'Cerrar archivo',
+    preview: 'Vista previa',
+    thumbnail: 'miniatura',
+    continue: 'Continuar'
   },
   pt: <PoUploadLiterals>{
     files: 'arquivos',
@@ -90,7 +116,14 @@ export const poUploadLiteralsDefault = {
     maxFileSizeAllowed: 'Limite de tamanho por arquivo: até {0}',
     minFileSizeAllowed: 'Limite de tamanho por arquivo: no mínimo {0}',
     errorOccurred: 'Ocorreu um erro',
-    sentWithSuccess: 'Enviado com sucesso'
+    sentWithSuccess: 'Enviado com sucesso',
+    doneText: 'Concluido',
+    uploadingText: 'Enviando',
+    tryAgain: 'Tente novamente',
+    close: 'Fechar arquivo',
+    preview: 'Pré-visualizar',
+    thumbnail: 'miniatura',
+    continue: 'Continuar'
   },
   ru: <PoUploadLiterals>{
     files: 'файлы',
@@ -116,7 +149,14 @@ export const poUploadLiteralsDefault = {
     maxFileSizeAllowed: 'Ограничение размера файла: до {0}',
     minFileSizeAllowed: 'Ограничение размера файла: не менее {0}',
     errorOccurred: 'Произошла ошибка.',
-    sentWithSuccess: 'Успешно отправлено'
+    sentWithSuccess: 'Успешно отправлено',
+    doneText: 'Сделанный',
+    uploadingText: 'Загрузка',
+    tryAgain: 'Попробуйте еще раз',
+    close: 'Закрыть файл',
+    preview: 'Просмотр',
+    thumbnail: 'миниатюра',
+    continue: 'Продолжить'
   }
 };
 
@@ -138,34 +178,82 @@ const poUploadMinFileSize = 0;
  *  - Função de sucesso que será disparada quando os arquivos forem enviados com sucesso.
  *  - Função de erro que será disparada quando houver erro no envio dos arquivos.
  *  - Permite habilitar uma área onde os arquivos podem ser arrastados.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                      |
+ * |----------------------------------------|-------------------------------------------------------|---------------------------------------------------|
+ * | **FIELD CONTAINER**                    |                                                       |                                                   |
+ * | `--field-container-title-justify`      | Alinhamento horizontal do título (`justify-content`)  | `space-between`                                   |
+ * | `--field-container-title-flex`         | Flex do título (`flex`)                               | `1 auto`                                          |
+ * | **TEXT SUPPORT**                       |                                                       |                                                   |
+ * | `--font-family-text-support`           | Família tipográfica usada no texto de suporte         | `var(--font-family-theme)`                        |
+ * | `--text-color-text-support`            | Cor da fonte no texto de suporte                      | `var(--color-neutral-dark-90)`                    |
+ * | **UPLOAD CONTENT**                     |                                                       |                                                   |
+ * | `--background-color-content` &nbsp;    | Cor de fundo                                          | `var(--color-neutral-light-10)`                   |
+ * | `--border-color-content`               | Cor da borda                                          | `var(--color-neutral-light-20)`                   |
+ * | `--border-radius-content`              | Contém o valor do raio dos cantos do elemento         | `var(--border-radius-md)`                         |
+ * | `--text-color-file-name`               | Cor do texto do nome do arquivo                       | `var(--color-neutral-dark-90)`                    |
+ * | `--font-family-file-name`              | Família tipográfica usada no texto do arquivo         | `var(--font-family-theme)`                        |
+ * | `--text-color-info-bar`                | Cor do texto de informação                            | `var(--color-neutral-mid-60)`                     |
+ * | `--font-family-info-bar`               | Família tipográfica usada no texto de informação      | `var(--font-family-theme)`                        |
+ * | **ERROR STATE**                        |                                                       |                                                   |
+ * | `--background-color-content-error`     | Cor de fundo do container de erro                     | `var(--color-neutral-light-00)`                   |
+ * | `--border-color-content-error`         | Cor da borda do container de erro                     | `var(--color-feedback-negative-base)`             |
+ * | `--text-color-error`                   | Cor do texto do container de erro                     | `var(--color-feedback-negative-dark)`             |
+ * | `--color-icon-error`                   | Cor do ícone no estado de erro                        | `var(--color-feedback-negative-base)`             |
+ * | `--font-family-error`                  | Família tipográfica usada no texto de erro            | `var(--font-family-theme)`                        |
+ * | **UPLOADED STATE**                     |                                                       |                                                   |
+ * | `--background-color-content-uploaded`  | Cor de fundo do container com status de enviado       | `var(--color-neutral-light-00)`                   |
+ * | `--border-color-content-uploaded`      | Cor da borda do container com status de enviado       | `var(--color-neutral-light-20)`                   |
+ * | **INTERACTIVE STATE**                  |                                                       |                                                   |
+ * | `--text-color-file-name-interactive`   | Cor do texto do nome do arquivo quando interativo     | `var(--color-action-default)`                     |
+ * | **THUMBNAIL**                          |                                                       |                                                   |
+ * | `--color-icon-thumbnail`               | Cor do ícone na thumbnail                             | `var(--color-action-default)`                     |
+ * | `--border-width-thumbnail`             | Tamanho da fonte na thumbnail                         | `var(--border-width-sm)`                          |
+ * | `--border-radius-thumbnail`            | Contém o valor do raio dos cantos na thumbnail        | `var(--border-radius-md)`                         |
+ * | `--background-color-thumbnail`         | Cor de fundo na thumbnail                             | `var(--color-neutral-light-05)`                   |
+ * | **Focused**                            |                                                       |                                                   |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                       |
  */
 @Directive()
 export abstract class PoUploadBaseComponent implements ControlValueAccessor, Validator {
-  private _directory?: boolean;
-  private _disabled?: boolean;
-  private _dragDrop?: boolean = false;
-  private _fileRestrictions?: PoUploadFileRestrictions;
-  private _formField?: string;
-  private _hideRestrictionsInfo?: boolean;
-  private _hideSelectButton?: boolean;
-  private _hideSendButton?: boolean;
-  private _isMultiple?: boolean;
-  private _literals?: any;
-  private _required?: boolean;
-  private language: string;
+  // Propriedade interna que define se o ícone de ajuda adicional terá cursor clicável (evento) ou padrão (tooltip).
+  @Input() additionalHelpEventTrigger: string | undefined;
 
-  allowedExtensions: string;
-  currentFiles: Array<PoUploadFile>;
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de ajuda adicional, com o texto desta propriedade sendo passado para o popover do componente `po-helper`.
+   * **Como boa prática, indica-se utilizar um texto com até 140 caracteres.**
+   * > Requer um recuo mínimo de 8px se o componente estiver próximo à lateral da tela.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Input('p-additional-help-tooltip') additionalHelpTooltip?: string;
 
-  canHandleDirectory: boolean;
-  onModelChange: any;
-  onModelTouched: any;
-
-  private validatorChange: any;
-
-  protected extensionNotAllowed = 0;
-  protected quantityNotAllowed = 0;
-  protected sizeNotAllowed = 0;
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define que o popover (`p-helper`) será incluído no body da página e não dentro do componente. Essa
+   * opção pode ser necessária em cenários com containers que possuem scroll ou overflow escondido, garantindo o
+   * posicionamento correto do tooltip próximo ao elemento.
+   *
+   * > Quando utilizado com `p-helper`, leitores de tela como o NVDA podem não ler o conteúdo do popover.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-append-in-body', transform: convertToBoolean }) appendBox?: boolean = false;
 
   /**
    * @optional
@@ -178,31 +266,7 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
    *
    * @default `false`
    */
-  @Input('p-auto-focus') @InputBoolean() autoFocus: boolean = false;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Permite a seleção de diretórios contendo um ou mais arquivos para envio.
-   *
-   * > A habilitação desta propriedade se restringe apenas à seleção de diretórios.
-   *
-   * > Definição não suportada pelo browser **Internet Explorer**, todavia será possível a seleção de arquivos padrão.
-   *
-   * @default `false`
-   */
-  @Input('p-directory') set directory(value: boolean) {
-    this._directory = convertToBoolean(value);
-
-    this.canHandleDirectory = this._directory && !isIE() && !isMobile();
-    this.setDirectoryAttribute(this.canHandleDirectory);
-  }
-
-  get directory() {
-    return this._directory;
-  }
+  @Input({ alias: 'p-auto-focus', transform: convertToBoolean }) autoFocus: boolean = false;
 
   /**
    * @optional
@@ -217,81 +281,6 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
    */
   @Input('p-drag-drop-height') dragDropHeight: number;
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Exibe a área onde é possível arrastar e selecionar os arquivos. Quando estiver definida, omite o botão para seleção de arquivos
-   * automaticamente.
-   *
-   * > Recomendamos utilizar apenas um `po-upload` com esta funcionalidade por tela.
-   *
-   * @default `false`
-   */
-  @Input('p-drag-drop') set dragDrop(value: boolean) {
-    this._dragDrop = convertToBoolean(value);
-  }
-
-  get dragDrop() {
-    return this._dragDrop;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Oculta visualmente as informações de restrições para o upload.
-   *
-   * @default `false`
-   */
-  @Input('p-hide-restrictions-info') set hideRestrictionsInfo(value: boolean) {
-    this._hideRestrictionsInfo = convertToBoolean(value);
-  }
-
-  get hideRestrictionsInfo() {
-    return this._hideRestrictionsInfo;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Omite o botão de seleção de arquivos.
-   *
-   * > Caso o valor definido seja `true`, caberá ao desenvolvedor a responsabilidade
-   * pela chamada do método `selectFiles()` para seleção de arquivos.
-   *
-   * @default `false`
-   */
-  @Input('p-hide-select-button') set hideSelectButton(value: boolean) {
-    this._hideSelectButton = convertToBoolean(value);
-  }
-  get hideSelectButton(): boolean {
-    return this._hideSelectButton;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Omite o botão de envio de arquivos.
-   *
-   * > Caso o valor definido seja `true`, caberá ao desenvolvedor a responsabilidade
-   * pela chamada do método `sendFiles()` para envio do(s) arquivo(s) selecionado(s).
-   *
-   * @default `false`
-   */
-  @Input('p-hide-send-button') set hideSendButton(value: boolean) {
-    this._hideSendButton = convertToBoolean(value);
-  }
-  get hideSendButton(): boolean {
-    return this._hideSendButton;
-  }
-
   /** Rótulo do campo. */
   @Input('p-label') label?: string;
 
@@ -299,69 +288,45 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
    * @optional
    *
    * @description
+   * Define se o título do campo será exibido de forma compacta.
    *
-   * Objeto com as literais usadas no `po-upload`.
+   * Quando habilitado (`true`), o modo compacto afeta o conjunto composto por:
+   * - `po-label`
+   * - `p-requirement (showRequired)`
+   * - `po-helper`
    *
-   * Existem duas maneiras de customizar o componente:
+   * Ou seja, todos os elementos relacionados ao título do campo
+   * (rótulo, indicador de obrigatoriedade e componente auxiliar) passam
+   * a seguir o comportamento de layout compacto.
    *
-   * - passando um objeto implementando a interface `PoUploadLiterals` com todas as literais disponíveis;
-   * - passando apenas as literais que deseja customizar:
+   * Também é possível definir esse comportamento de forma global,
+   * uma única vez, na folha de estilo geral da aplicação, por meio
+   * da customização dos tokens CSS:
+   *
+   * - `--field-container-title-justify`
+   * - `--field-container-title-flex`
+   *
+   * Exemplo:
+   *
    * ```
-   *  const customLiterals: PoUploadLiterals = {
-   *    folders: 'Pastas',
-   *    selectFile: 'Buscar arquivo',
-   *    startSending: 'Enviar'
-   *  };
+   * :root {
+   *   --field-container-title-justify: flex-start;
+   *   --field-container-title-flex: 0 1 auto;
+   * }
    * ```
    *
-   * E para carregar as literais customizadas, basta apenas passar o objeto para o componente:
+   * Dessa forma, o layout compacto passa a ser o padrão da aplicação,
+   * sem a necessidade de definir a propriedade individualmente em cada campo.
    *
-   * ```
-   * <po-upload
-   *   [p-literals]="customLiterals">
-   * </po-upload>
-   * ```
-   *
-   * > O objeto padrão de literais será traduzido de acordo com o idioma do *browser* (pt, en, es, ru).
+   * @default `false`
    */
-  @Input('p-literals') set literals(value: PoUploadLiterals) {
-    if (value instanceof Object && !(value instanceof Array)) {
-      this._literals = {
-        ...poUploadLiteralsDefault[poLocaleDefault],
-        ...poUploadLiteralsDefault[this.language],
-        ...value
-      };
-    } else {
-      this._literals = poUploadLiteralsDefault[this.language];
-    }
-  }
-  get literals() {
-    return this._literals || poUploadLiteralsDefault[this.language];
-  }
+  compactLabel = input<boolean, unknown>(false, { alias: 'p-compact-label', transform: convertToBoolean });
 
   /** Texto de apoio para o campo. */
   @Input('p-help') help?: string;
 
   /** URL que deve ser feita a requisição com os arquivos selecionados. */
   @Input('p-url') url: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Objeto que segue a definição da interface `PoUploadFileRestrictions`,
-   * que possibilita definir tamanho máximo/mínimo e extensão dos arquivos permitidos.
-   */
-  @Input('p-restrictions') set fileRestrictions(restrictions: PoUploadFileRestrictions) {
-    this._fileRestrictions = this.initRestrictions(restrictions);
-
-    this.setAllowedExtensions(restrictions);
-  }
-
-  get fileRestrictions(): PoUploadFileRestrictions {
-    return this._fileRestrictions;
-  }
 
   /** Define o valor do atributo `name` do componente. */
   @Input('name') name: string = 'file';
@@ -371,43 +336,9 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
    *
    * @description
    *
-   * Nome do campo de formulário que será enviado para o serviço informado na propriedade `p-url`.
-   *
-   * @default `files`
-   */
-  @Input('p-form-field') set formField(value: string) {
-    this._formField = value && typeof value === 'string' ? value : poUploadFormFieldDefault;
-
-    this.getUploadService().formField = this.formField;
-  }
-
-  get formField(): string {
-    return this._formField;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Indica que o campo será desabilitado.
-   */
-  @Input('p-disabled') set disabled(value: boolean) {
-    this._disabled = convertToBoolean(value);
-
-    this.validateModel(this.currentFiles);
-  }
-
-  get disabled() {
-    return this._disabled;
-  }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
    * Define se o envio do arquivo será automático ao selecionar o mesmo.
+   *
+   * > Esta propriedade funciona somente se a propriedade `p-url` tiver um valor atribuído.
    *
    * @default `false`
    */
@@ -418,17 +349,11 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
    *
    * @description
    *
-   * Define se pode selecionar mais de um arquivo.
+   * Desabilita botão de remover o(s) arquivo(s) selecionado(s).
    *
-   * > Se utilizada a `p-directory`, habilita-se automaticamente esta propriedade.
+   * @default `false`
    */
-  @Input('p-multiple') set isMultiple(value: boolean) {
-    this._isMultiple = convertToBoolean(value);
-  }
-
-  get isMultiple() {
-    return this.canHandleDirectory ? true : this._isMultiple;
-  }
+  @Input({ alias: 'p-disabled-remove-file', transform: convertToBoolean }) disabledRemoveFile: boolean = false;
 
   /**
    * @optional
@@ -450,22 +375,196 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
    *
    * @description
    *
-   * Indica que o campo será obrigatório.
+   * Exibe a pré-visualização de imagens ao anexá-las.
+   *
+   * > Propriedade funciona apenas em arquivos de formato de imagem (`.png`, `.jpg`, `.jpeg` e `.gif`).
+   * Será ignorada em outros tipos de arquivo.
+   *
+   * @default `true`
+   */
+  @Input('p-show-thumbnail') showThumbnail: boolean = true;
+
+  /** Objeto que contém os cabeçalhos que será enviado na requisição dos arquivos. */
+  @Input('p-headers') headers: { [name: string]: string | Array<string> };
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define se a propriedade `p-url` é obrigatória.
+   *
+   * Caso a propriedade seja definida como `false`:
+   * - o botão de "Selecionar arquivo" ficará habilitado mesmo sem a propriedade `p-url` definida.
+   * - o botão "Iniciar envio" ficará oculto até que a propriedade `p-url` seja definida.
+   *
+   * > Se utilizada com a propriedade `p-auto-upload` definida como `true` será necessário definir a propriedade `p-url`.
+   *
+   * @default `true`
+   */
+  @HostBinding('attr.p-required-url')
+  @Input({ alias: 'p-required-url', transform: convertToBoolean })
+  requiredUrl: boolean = true;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as opções do componente de ajuda (po-helper) que será exibido ao lado do label quando a propriedade `p-label` for definida, ou, ao lado do componente na ausência da propriedade `p-label`.
+   * > Para mais informações acesse: https://po-ui.io/documentation/po-helper.
+   *
+   * > Ao configurar esta propriedade, o antigo ícone de ajuda adicional (`p-additional-help-tooltip` e `p-additional-help`) será ignorado.
+   */
+  poHelperComponent = input<PoHelperOptions | string>(undefined, { alias: 'p-helper' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita a quebra automática do texto da propriedade `p-label`. Quando `p-label-text-wrap` for verdadeiro, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
    *
    * @default `false`
    */
-  @Input('p-required') set required(required: boolean) {
-    this._required = convertToBoolean(required);
+  labelTextWrap = input<boolean>(false, { alias: 'p-label-text-wrap' });
 
-    this.validateModel(this.currentFiles);
-  }
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Evento disparado ao clicar no ícone de ajuda adicional.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Output('p-additional-help') additionalHelp = new EventEmitter<any>();
 
-  get required() {
-    return this._required;
-  }
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define uma ação personalizada no componente `po-upload`, adicionando um botão no canto inferior direito
+   * de cada barra de progresso associada aos arquivos enviados ou em envio.
+   *
+   * A ação deve implementar a interface **PoProgressAction**, permitindo configurar propriedades como:
+   * - `label`: Texto do botão.
+   * - `icon`: Ícone a ser exibido no botão.
+   * - `type`: Tipo de botão (ex.: `danger` ou `default`).
+   * - `disabled`: Indica se o botão deve estar desabilitado.
+   * - `visible`: Indica se o botão deve estar visível.
+   *
+   * **Exemplo de uso:**
+   *
+   * ```html
+   * <po-upload
+   *  [p-custom-action]="customAction"
+   *  (p-custom-action-click)="onCustomActionClick($event)">
+   * </po-upload>
+   * ```
+   *
+   * ```typescript
+   * customAction: PoProgressAction = {
+   *   label: 'Baixar',
+   *   icon: 'an an-download',
+   *   type: 'default',
+   *   visible: true
+   * };
+   *
+   * onCustomActionClick(file: PoUploadFile) {
+   *   console.log(`Ação personalizada clicada para o arquivo: ${file.name}`);
+   * }
+   * ```
+   */
+  @Input('p-custom-action') customAction?: PoProgressAction;
 
-  /** Objeto que contém os cabeçalhos que será enviado na requisição dos arquvios. */
-  @Input('p-headers') headers: { [name: string]: string | Array<string> };
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define uma ou duas ações personalizadas do modal de pré-visualização, adicionando um botão ou dois botões no canto inferior direito
+   * do modal.
+   *
+   * A ação deve implementar a interface **PoModalAction**, permitindo configurar propriedades como:
+   * - `label`: Texto do botão.
+   * - `action`: Ícone a ser exibido no botão.
+   * - `danger`: Define a propriedade `p-danger` do botão.
+   * - `disabled`: Indica se o botão deve estar desabilitado.
+   * - `visible`: Indica se o botão deve estar visível.
+   *
+   * **Exemplo de uso:**
+   *
+   * ```html
+   * <po-upload
+   *  [p-custom-modal-actions]="customActions"
+   * </po-upload>
+   * ```
+   *
+   * ```typescript
+   * customActions:  Array<PoModalAction> = [
+   *  { label: 'Confirmar', action: this.confirmModal.bind(this) },
+   *  { label: 'Cancelar', action: this.closeModal.bind(this) }
+   *];
+   *
+   * ```
+   */
+  @Input('p-custom-modal-actions') customModalActions?: Array<PoModalAction>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento emitido ao clicar na ação personalizada configurada no `p-custom-action`.
+   *
+   * O evento retorna o arquivo associado à barra de progresso onde a ação foi clicada,
+   * permitindo executar operações específicas para aquele arquivo.
+   *
+   * **Exemplo de uso:**
+   *
+   * ```html
+   * <po-upload
+   *  [p-custom-action]="customAction"
+   *  (p-custom-action-click)="onCustomActionClick($event)">
+   * </po-upload>
+   * ```
+   *
+   * ```typescript
+   * customAction: PoProgressAction = {
+   *   label: 'Baixar',
+   *   icon: 'an an-download',
+   *   type: 'default',
+   *   visible: true
+   * };
+   *
+   * onCustomActionClick(file: PoUploadFile) {
+   *   console.log(`Ação personalizada clicada para o arquivo: ${file.name}`);
+   *   // Lógica para download do arquivo
+   *   this.downloadFile(file);
+   * }
+   *
+   * downloadFile(file: PoUploadFile) {
+   *   // Exemplo de download
+   *   console.log(`Iniciando o download do arquivo: ${file.name}`);
+   * }
+   * ```
+   */
+  @Output('p-custom-action-click') customActionClick: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado quando uma tecla é pressionada enquanto o foco está no componente.
+   * Retorna um objeto `KeyboardEvent` com informações sobre a tecla.
+   */
+  @Output('p-keydown') keydown: EventEmitter<KeyboardEvent> = new EventEmitter<KeyboardEvent>();
 
   /**
    * @optional
@@ -474,14 +573,51 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
    *
    * Função que será executada no momento de realizar o envio do arquivo,
    * onde será possível adicionar informações ao parâmetro que será enviado na requisição.
-   * É passado por parâmetro um objeto com o arquivo e a propiedade data nesta propriedade pode ser informado algum dado,
-   * que será enviado em conjunto com o arquivo na requisição, por exemplo:
+   * É passado por parâmetro um objeto com o arquivo e as propriedades data e extraFormData,
+   * que serão enviadas em conjunto com o arquivo na requisição, por exemplo:
    *
+   * > data, nesta propriedade pode ser informado algum dado
    * ```
-   *   event.data = {id: 'id do usuario'};
+   *   event.data = {id: 'id do usuário'};
+   * ```
+   * > extraFormData, nesta propriedade pode ser informado algum dado solicitado pela API
+   * > que não possa estar no objeto `data`, assim o conteúdo sará extraído do objeto e
+   * > enviado como parâmetro
+   * ```
+   *   event.extraFormData = {id: 'id do usuário'};
    * ```
    */
   @Output('p-upload') onUpload: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento será disparado ao clicar no ícone de fechar.
+   * > Por parâmetro será passado o objeto do arquivo.
+   */
+  @Output('p-cancel') onCancel: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento será disparado ao abrir o modal de pré-visualização.
+   * > Por parâmetro será passado o objeto do arquivo.
+   */
+  @Output('p-open-modal-preview') onOpenModalPreview: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento será disparado ao clicar no ícone de remover.
+   * > Por parâmetro será passado o objeto do arquivo.
+   */
+  @Output('p-remove') onRemove: EventEmitter<any> = new EventEmitter<any>();
 
   /**
    * @optional
@@ -509,19 +645,354 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
    * @description
    *
    * Função para atualizar o ngModel do componente, necessário quando não for utilizado dentro da *tag* `form`.
+   *
+   * Na versão 12.2.0 do Angular a verificação `strictTemplates` vem true como default. Portanto, para utilizar
+   * two-way binding no componente deve se utilizar da seguinte forma:
+   *
+   * ```
+   * <po-upload ... [ngModel]="UploadModel" (ngModelChange)="uploadModel = $event"> </po-upload>
+   * ```
+   *
    */
   @Output('ngModelChange') ngModelChange: EventEmitter<any> = new EventEmitter<any>();
 
-  constructor(protected uploadService: PoUploadService, languageService: PoLanguageService) {
+  allowedExtensions: string;
+  currentFiles: Array<PoUploadFile>;
+
+  canHandleDirectory: boolean;
+  displayAdditionalHelp: boolean = false;
+  onModelChange: any;
+
+  protected extensionNotAllowed = 0;
+  protected quantityNotAllowed = 0;
+  protected sizeNotAllowed = 0;
+  protected onModelTouched: any = null;
+
+  private _directory?: boolean;
+  private _disabled?: boolean;
+  private _dragDrop?: boolean = false;
+  private _fileRestrictions?: PoUploadFileRestrictions;
+  private _formField?: string;
+  private _hideRestrictionsInfo?: boolean;
+  private _hideSelectButton?: boolean;
+  private _hideSendButton?: boolean;
+  private _isMultiple?: boolean;
+  private _literals?: any;
+  private _loading: boolean = false;
+  private _required?: boolean;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+  private readonly language: string;
+  private validatorChange: any;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite a seleção de diretórios contendo um ou mais arquivos para envio.
+   *
+   * > A habilitação desta propriedade se restringe apenas à seleção de diretórios.
+   *
+   * > Definição não suportada pelo browser **Internet Explorer**, todavia será possível a seleção de arquivos padrão.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-directory', transform: convertToBoolean }) set directory(value: boolean) {
+    this._directory = value;
+
+    this.canHandleDirectory = this._directory && !PoUtils.isIE() && !PoUtils.isMobile();
+    this.setDirectoryAttribute(this.canHandleDirectory);
+  }
+
+  get directory() {
+    return this._directory;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Exibe a área onde é possível arrastar e selecionar os arquivos. Quando estiver definida, omite o botão para seleção de arquivos
+   * automaticamente.
+   *
+   * > Recomendamos utilizar apenas um `po-upload` com esta funcionalidade por tela.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-drag-drop', transform: convertToBoolean }) set dragDrop(value: boolean) {
+    this._dragDrop = value;
+  }
+
+  get dragDrop() {
+    return this._dragDrop;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Oculta visualmente as informações de restrições para o upload.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-restrictions-info', transform: convertToBoolean }) set hideRestrictionsInfo(value: boolean) {
+    this._hideRestrictionsInfo = value;
+  }
+
+  get hideRestrictionsInfo() {
+    return this._hideRestrictionsInfo;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Omite o botão de seleção de arquivos.
+   *
+   * > Caso o valor definido seja `true`, caberá ao desenvolvedor a responsabilidade
+   * pela chamada do método `selectFiles()` para seleção de arquivos.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-select-button', transform: convertToBoolean }) set hideSelectButton(value: boolean) {
+    this._hideSelectButton = value;
+  }
+  get hideSelectButton(): boolean {
+    return this._hideSelectButton;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Omite o botão de envio de arquivos.
+   *
+   * > Caso o valor definido seja `true`, caberá ao desenvolvedor a responsabilidade
+   * pela chamada do método `sendFiles()` para envio do(s) arquivo(s) selecionado(s).
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-send-button', transform: convertToBoolean }) set hideSendButton(value: boolean) {
+    this._hideSendButton = value;
+  }
+  get hideSendButton(): boolean {
+    return this._hideSendButton;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Objeto com as literais usadas no `po-upload`.
+   *
+   * Existem duas maneiras de customizar o componente:
+   *
+   * - passando um objeto implementando a interface `PoUploadLiterals` com todas as literais disponíveis;
+   * - passando apenas as literais que deseja customizar:
+   *   ```
+   *    const customLiterals: PoUploadLiterals = {
+   *      folders: 'Pastas',
+   *      selectFile: 'Buscar arquivo',
+   *      startSending: 'Enviar'
+   *    };
+   *   ```
+   *
+   * E para carregar as literais customizadas, basta apenas passar o objeto para o componente:
+   *
+   * ```
+   * <po-upload
+   *   [p-literals]="customLiterals">
+   * </po-upload>
+   * ```
+   *
+   * > O objeto padrão de literais será traduzido de acordo com o idioma do *browser* (pt, en, es, ru).
+   */
+  @Input('p-literals') set literals(value: PoUploadLiterals) {
+    if (value instanceof Object && !(value instanceof Array)) {
+      this._literals = {
+        ...poUploadLiteralsDefault[poLocaleDefault],
+        ...poUploadLiteralsDefault[this.language],
+        ...value
+      };
+    } else {
+      this._literals = poUploadLiteralsDefault[this.language];
+    }
+  }
+  get literals() {
+    return this._literals || poUploadLiteralsDefault[this.language];
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Objeto que segue a definição da interface `PoUploadFileRestrictions`,
+   * que possibilita definir tamanho máximo/mínimo e extensão dos arquivos permitidos.
+   */
+  @Input('p-restrictions') set fileRestrictions(restrictions: PoUploadFileRestrictions) {
+    this._fileRestrictions = this.initRestrictions(restrictions);
+
+    this.setAllowedExtensions(restrictions);
+  }
+
+  get fileRestrictions(): PoUploadFileRestrictions {
+    return this._fileRestrictions;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Nome do campo de formulário que será enviado para o serviço informado na propriedade `p-url`.
+   *
+   * @default `files`
+   */
+  @Input('p-form-field') set formField(value: string) {
+    this._formField = value && typeof value === 'string' ? value : poUploadFormFieldDefault;
+
+    this.getUploadService().formField = this.formField;
+  }
+
+  get formField(): string {
+    return this._formField;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Indica que o campo será desabilitado.
+   */
+  @Input({ alias: 'p-disabled', transform: convertToBoolean }) set disabled(value: boolean) {
+    this._disabled = value;
+
+    this.validateModel(this.currentFiles);
+  }
+
+  get disabled() {
+    return this._disabled;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de carregamento no botão `Selecionar arquivo`, à esquerda do texto, sinalizando que uma operação está em andamento.
+   *
+   * > Incompatível com `p-drag-drop` e `p-hide-select-button`, pois o estado de loading depende da exibição do botão `Selecionar arquivo`.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-loading', transform: convertToBoolean })
+  set loading(value: boolean) {
+    this._loading = value;
+    this.cd?.markForCheck();
+  }
+
+  get loading(): boolean {
+    return this._loading;
+  }
+
+  get isDisabled(): boolean {
+    return this.disabled || this.loading;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define se pode selecionar mais de um arquivo.
+   *
+   * > Se utilizada a `p-directory`, habilita-se automaticamente esta propriedade.
+   */
+  @Input({ alias: 'p-multiple', transform: convertToBoolean }) set isMultiple(value: boolean) {
+    this._isMultiple = value;
+  }
+
+  get isMultiple() {
+    return this.canHandleDirectory ? true : this._isMultiple;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define que o campo será obrigatório.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-required', transform: convertToBoolean }) set required(required: boolean) {
+    this._required = required;
+
+    this.validateModel(this.currentFiles);
+  }
+
+  get required() {
+    return this._required;
+  }
+
+  /**
+   * Define se a indicação de campo obrigatório será exibida.
+   *
+   * > Não será exibida a indicação se:
+   * - Não possuir `p-help` e/ou `p-label`.
+   */
+  @Input('p-show-required') showRequired: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho e as ações do componente:
+   * - `small`: altura do button como 32px (disponível apenas para acessibilidade AA).
+   * - `medium`: altura do button como 44px.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  constructor(
+    protected uploadService: PoUploadService,
+    languageService: PoLanguageService,
+    protected cd: ChangeDetectorRef
+  ) {
     this.language = languageService.getShortLanguage();
   }
 
-  abstract sendFeedback(): void;
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
 
   // Função implementada do ControlValueAccessor
   // Usada para interceptar os estados de habilitado via forms api
   setDisabledState(isDisabled: boolean) {
     this.disabled = isDisabled;
+    this.cd.markForCheck();
   }
 
   registerOnChange(fn: any): void {
@@ -537,7 +1008,7 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
   }
 
   validate(abstractControl: AbstractControl): { [key: string]: any } {
-    if (requiredFailed(this.required, this.disabled, abstractControl.value)) {
+    if (PoValidators.requiredFailed(this.required, this.disabled, abstractControl.value)) {
       return {
         required: {
           valid: false
@@ -576,10 +1047,31 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
         break;
       }
       const file = new PoUploadFile(files[i]);
+      let currentFile: any = file;
 
-      if (this.checkRestrictions(file)) {
-        poUploadFiles = this.insertFileInFiles(file, poUploadFiles);
+      if (!this.checkRestrictions(file)) {
+        currentFile = {
+          uid: file.uid,
+          displayName: file.displayName,
+          name: file.name,
+          extension: file.extension,
+          size: file.size,
+          status: 2,
+          sizeNotAllowed: file.sizeNotAllowed,
+          extensionNotAllowed: file.extensionNotAllowed,
+          errorMessage: ''
+        };
       }
+
+      if (this.showThumbnail && currentFile.rawFile?.type?.startsWith('image/')) {
+        PoUtils.convertImageToBase64(currentFile.rawFile).then(base64 => {
+          currentFile.thumbnailUrl = base64;
+          this.cd.detectChanges();
+        });
+      }
+
+      poUploadFiles = this.insertFileInFiles(currentFile, poUploadFiles);
+      this.sendFeedback(currentFile);
     }
     this.sendFeedback();
     return poUploadFiles;
@@ -604,7 +1096,12 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
       const isAcceptSize = file.size >= minFileSize && file.size <= maxFileSize;
 
       if (!isAcceptSize) {
+        file.sizeNotAllowed = true;
         this.sizeNotAllowed = this.sizeNotAllowed + 1;
+      }
+
+      if (!isAccept) {
+        file.extensionNotAllowed = true;
       }
 
       return isAccept && isAcceptSize;
@@ -675,6 +1172,13 @@ export abstract class PoUploadBaseComponent implements ControlValueAccessor, Val
 
     return files;
   }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
+  }
+
+  abstract sendFeedback(file?): void;
 
   abstract setDirectoryAttribute(value: boolean);
 }

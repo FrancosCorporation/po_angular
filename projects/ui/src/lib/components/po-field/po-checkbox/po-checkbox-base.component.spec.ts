@@ -1,20 +1,31 @@
-import { Directive } from '@angular/core';
+import { Component, Directive } from '@angular/core';
 
 import { expectPropertiesValues } from '../../../util-test/util-expect.spec';
 
+import { PoThemeA11yEnum } from '../../../services';
 import { PoCheckboxBaseComponent } from './po-checkbox-base.component';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-@Directive()
-class PoCheckboxComponent extends PoCheckboxBaseComponent {
+@Component({
+  selector: 'po-checkbox-base-host',
+  template: '',
+  standalone: false
+})
+class PoCheckboxBaseHostComponent extends PoCheckboxBaseComponent {
   protected changeModelValue(value: boolean | null) {}
 }
 
 describe('PoCheckboxBaseComponent:', () => {
-  let component: PoCheckboxBaseComponent;
+  let component: PoCheckboxBaseHostComponent;
+  let fixture: ComponentFixture<PoCheckboxBaseHostComponent>;
 
   beforeEach(() => {
-    component = new PoCheckboxComponent();
-    component.propagateChange = (value: any) => {};
+    TestBed.configureTestingModule({
+      declarations: [PoCheckboxBaseHostComponent]
+    });
+
+    fixture = TestBed.createComponent(PoCheckboxBaseHostComponent);
+    component = fixture.componentInstance;
   });
 
   it('should be created', () => {
@@ -25,15 +36,96 @@ describe('PoCheckboxBaseComponent:', () => {
 
   describe('Properties:', () => {
     it('disabled: should update with true value', () => {
-      const booleanValidTrueValues = [true, 'true', 1, ''];
-
-      expectPropertiesValues(component, 'disabled', booleanValidTrueValues, true);
+      component.disabled = true;
+      expect(component.disabled).toBeTrue();
     });
 
     it('disabled: should update with false value', () => {
-      const booleanInvalidValues = [undefined, null, 2, 'string', 0, NaN, false];
+      component.disabled = false;
+      expect(component.disabled).toBeFalse();
+    });
 
-      expectPropertiesValues(component, 'disabled', booleanInvalidValues, false);
+    it('disabled: should coerce empty string to true via Angular transform', () => {
+      fixture.componentRef.setInput('p-disabled', '');
+      fixture.detectChanges();
+      expect(component.disabled).toBeTrue();
+    });
+
+    it('p-compact-label: should update property with `true` when input is true', () => {
+      fixture.componentRef.setInput('p-compact-label', true);
+      fixture.detectChanges();
+
+      expect(component.compactLabel()).toBe(true);
+    });
+
+    it('p-compact-label: should have default value as false', () => {
+      expect(component.compactLabel()).toBe(false);
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+
+        component.size = 'large';
+        expect(component.size).toBe('large');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+
+        component.size = 'large';
+        expect(component.size).toBe('large');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
     });
   });
 
@@ -54,8 +146,12 @@ describe('PoCheckboxBaseComponent:', () => {
 
     it('setDisabledState: should set `component.disabled` with boolean parameter', () => {
       const expectedValue = true;
+      const markForCheck = spyOn(component['cd'], 'markForCheck');
+
       component.setDisabledState(expectedValue);
+
       expect(component.disabled).toBe(expectedValue);
+      expect(markForCheck).toHaveBeenCalled();
     });
 
     it('changeValue: should call only `change.emit` with `checkboxValue` if propagateChange is `null`', () => {
@@ -71,10 +167,15 @@ describe('PoCheckboxBaseComponent:', () => {
 
     it('checkOption: should call `changeModelValue` and `changeValue` if `disabled` is false.', () => {
       component.disabled = false;
+      const event: any = {
+        target: {
+          closest: (sel: string) => null
+        }
+      };
       const spyOnChangeValue = spyOn(component, 'changeValue');
       const spyOnChangeModelValue = spyOn(component, <any>'changeModelValue');
 
-      component.checkOption(true);
+      component.checkOption(event, true);
 
       expect(spyOnChangeValue).toHaveBeenCalled();
       expect(spyOnChangeModelValue).toHaveBeenCalled();
@@ -82,10 +183,64 @@ describe('PoCheckboxBaseComponent:', () => {
 
     it('checkOption: shouldn`t call `changeModelValue` and `changeValue` if `disabled` is true.', () => {
       component.disabled = true;
+      const event: any = {
+        target: {
+          closest: (sel: string) => null
+        }
+      };
       const spyOnChangeValue = spyOn(component, 'changeValue');
       const spyOnChangeModelValue = spyOn(component, <any>'changeModelValue');
 
-      component.checkOption(true);
+      component.checkOption(event, true);
+
+      expect(spyOnChangeValue).not.toHaveBeenCalled();
+      expect(spyOnChangeModelValue).not.toHaveBeenCalled();
+    });
+
+    it('checkOption: should call `changeModelValue` with true if value is mixed', () => {
+      const event: any = {
+        target: {
+          closest: (sel: string) => null
+        }
+      };
+      const spyOnChangeValue = spyOn(component, 'changeValue');
+      const spyOnChangeModelValue = spyOn(component, <any>'changeModelValue');
+
+      component.checkOption(event, 'mixed');
+
+      expect(spyOnChangeValue).toHaveBeenCalled();
+      expect(spyOnChangeModelValue).toHaveBeenCalledWith(true);
+    });
+
+    it('checkOption: should return early when event target is inside `po-helper` (no calls)', () => {
+      component.disabled = false;
+      const event: any = {
+        target: {
+          closest: (sel: string) => (sel === 'po-helper' ? {} : null) // truthy
+        }
+      };
+
+      const spyOnChangeValue = spyOn(component, 'changeValue');
+      const spyOnChangeModelValue = spyOn(component as any, 'changeModelValue');
+
+      component.checkOption(event, true);
+
+      expect(spyOnChangeValue).not.toHaveBeenCalled();
+      expect(spyOnChangeModelValue).not.toHaveBeenCalled();
+    });
+
+    it('checkOption: should return early for `mixed` value when target is inside `po-helper` (no calls)', () => {
+      component.disabled = false;
+      const event: any = {
+        target: {
+          closest: () => ({})
+        }
+      };
+
+      const spyOnChangeValue = spyOn(component, 'changeValue');
+      const spyOnChangeModelValue = spyOn(component as any, 'changeModelValue');
+
+      component.checkOption(event, 'mixed');
 
       expect(spyOnChangeValue).not.toHaveBeenCalled();
       expect(spyOnChangeModelValue).not.toHaveBeenCalled();

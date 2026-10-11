@@ -14,9 +14,11 @@ import { PoHttpRequestType } from './po-http-request-type.enum';
  *
  * Serviço para execução de requisições HTTP.
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoHttpClientService {
-  constructor(private httpClient: HttpClient) {}
+  constructor(private readonly httpClient: HttpClient) {}
 
   /**
    * Constrói uma requisição HTTP personalizada.
@@ -24,7 +26,7 @@ export class PoHttpClientService {
    * @param {PoHttpRequestData} poHttpOperationData Parâmetros para a construção
    * da requisição.
    */
-  createRequest(poHttpOperationData: PoHttpRequestData): Observable<HttpResponse<Object>> {
+  createRequest(poHttpOperationData: PoHttpRequestData): Observable<HttpResponse<object>> {
     const httpHeaders = this.createHttpHeaders(poHttpOperationData.headers);
 
     return this.httpClient.request(poHttpOperationData.method, poHttpOperationData.url, {

@@ -1,19 +1,20 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
 import { PoButtonGroupItem, PoNotificationService } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-button-group-attendance',
-  templateUrl: './sample-po-button-group-attendance.component.html'
+  templateUrl: './sample-po-button-group-attendance.component.html',
+  standalone: false
 })
 export class SamplePoButtonGroupAttendanceComponent {
-  attendances: Array<PoButtonGroupItem> = [
-    { label: 'Appointment', icon: 'po-icon-calendar', action: this.getPassword.bind(this) },
-    { label: 'Emergency', icon: 'po-icon-injector', action: this.getPassword.bind(this) },
-    { label: 'Exams', icon: 'po-icon-exam', action: this.getPassword.bind(this) }
-  ];
+  private poNotification = inject(PoNotificationService);
 
-  constructor(private poNotification: PoNotificationService) {}
+  attendances: Array<PoButtonGroupItem> = [
+    { label: 'Appointment', icon: 'an an-calendar-dots', action: this.getPassword.bind(this) },
+    { label: 'Emergency', icon: 'an an-syringe', action: this.getPassword.bind(this) },
+    { label: 'Exams', icon: 'an an-flask', action: this.getPassword.bind(this) }
+  ];
 
   getPassword(attendance) {
     const password = this.randomPassword();

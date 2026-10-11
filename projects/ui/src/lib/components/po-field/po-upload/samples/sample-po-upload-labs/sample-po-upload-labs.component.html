@@ -1,9 +1,12 @@
 <po-upload
   name="upload"
   [(ngModel)]="upload"
+  [p-helper]="helperText"
   [p-auto-upload]="properties.includes('autoupload')"
   [p-directory]="properties.includes('directory')"
   [p-disabled]="properties.includes('disabled')"
+  [p-required-url]="properties.includes('requiredUrl')"
+  [p-disabled-remove-file]="properties.includes('disabledRemoveFile')"
   [p-drag-drop]="properties.includes('dragDrop')"
   [p-drag-drop-height]="dragDropHeight"
   [p-form-field]="formField"
@@ -13,19 +16,32 @@
   [p-hide-send-button]="properties.includes('sendButton')"
   [p-label]="label"
   [p-literals]="customLiterals"
+  [p-loading]="properties.includes('loading')"
   [p-multiple]="properties.includes('multiple')"
   [p-optional]="properties.includes('optional')"
   [p-required]="properties.includes('required')"
+  [p-show-required]="properties.includes('showRequired')"
+  [p-show-thumbnail]="properties.includes('showThumbnail')"
   [p-restrictions]="restrictions"
+  [p-size]="size"
   [p-url]="url"
   [p-headers]="headers"
+  [p-custom-action]="action"
+  [p-label-text-wrap]="properties?.includes('labelTextWrap')"
+  [p-compact-label]="properties?.includes('compactLabel')"
+  [p-custom-modal-actions]="customModalActions"
+  (p-custom-action-click)="changeEvent('p-custom-action-click')"
   (p-error)="changeEvent('p-error')"
+  (p-keydown)="changeEvent('p-keydown')"
   (p-success)="changeEvent('p-success')"
   (p-upload)="changeEvent('p-upload')"
+  (p-upload)="changeEvent('p-upload')"
+  (p-open-modal-preview)="changeEvent('p-open-modal-preview')"
+  (p-remove)="changeEvent('p-remove')"
 >
 </po-upload>
 
-<hr />
+<po-divider />
 
 <div class="po-row">
   <po-info class="po-md-6" p-label="Model" [p-value]="upload | json"> </po-info>
@@ -33,15 +49,15 @@
   <po-info class="po-md-6" p-label="Event" [p-value]="event"> </po-info>
 </div>
 
-<hr />
+<po-divider />
 
-<form #fRestrictions="ngForm">
-  <div class="po-row">
+<div class="po-row">
+  <form #fRestrictions="ngForm">
     <po-input
       class="po-md-6"
       name="allowedExtensions"
       [(ngModel)]="allowedExtensions"
-      p-help="Enter the allowed extensions separated by comma"
+      p-help="Digite as extensões permitidas separadas por vírgula"
       p-label="Allowed Extensions"
       p-placeholder=".png, .jpeg, .jpg"
       (p-change)="onChangeExtension()"
@@ -49,71 +65,63 @@
     </po-input>
 
     <po-number
-      class="po-md-6"
+      class="po-md-6 po-lg-3"
       name="maxFiles"
       [(ngModel)]="maxFiles"
       p-clean
-      p-help="Requires that the 'p-multiple' property be enabled"
+      p-help="Requer p-multiple habilitado"
       p-label="Max Files"
       (p-change)="onChangeMaxFiles(maxFiles)"
     >
     </po-number>
-  </div>
 
-  <div class="po-row">
     <po-number
-      class="po-md-4"
+      class="po-md-6 po-lg-3"
       name="dragDropHeight"
       [(ngModel)]="dragDropHeight"
       p-clean
-      p-help="Height of drag drop area"
+      p-help="Altura da área de arrastar e soltar"
       p-label="Drag Drop Height"
       p-min="160"
     >
     </po-number>
 
     <po-number
-      class="po-md-4"
+      class="po-md-6 po-lg-3"
       name="minSize"
       [(ngModel)]="minSize"
       p-clean
-      p-help="In megabytes"
+      p-help="Em megabytes"
       p-label="Min File Size"
       (p-change)="onChangeMinSize(minSize)"
     >
     </po-number>
 
     <po-number
-      class="po-md-4"
+      class="po-md-6 po-lg-3"
       name="maxSize"
       [(ngModel)]="maxSize"
       p-clean
-      p-help="In megabytes"
+      p-help="Em megabytes"
       p-label="Max File Size"
       (p-change)="onChangeMaxSize(maxSize)"
     >
     </po-number>
-  </div>
-</form>
 
-<hr />
+    <po-divider />
 
-<form #f="ngForm">
-  <div class="po-row">
     <po-input class="po-md-6" name="label" [(ngModel)]="label" p-clean p-label="Label"> </po-input>
 
     <po-input class="po-md-6" name="help" [(ngModel)]="help" p-clean p-label="Help"> </po-input>
-  </div>
 
-  <div class="po-row">
+    <po-input class="po-md-6" name="helperText" [(ngModel)]="helperText" p-clean p-label="Additional Help"> </po-input>
+
     <po-input class="po-md-6" name="formField" [(ngModel)]="formField" p-clean p-label="Form Field"> </po-input>
 
-    <po-input class="po-md-6" name="url" [(ngModel)]="url" p-clean p-label="URL" p-required> </po-input>
-  </div>
+    <po-input class="po-md-12 po-lg-6" name="url" [(ngModel)]="url" p-clean p-label="URL" p-required> </po-input>
 
-  <div class="po-row">
     <po-input
-      class="po-md-6"
+      class="po-md-12 po-lg-6"
       name="headers"
       [(ngModel)]="headersLabs"
       p-help='Ex.: {"Authorization": "12312414"}'
@@ -123,12 +131,23 @@
     </po-input>
 
     <po-input
-      class="po-md-6"
+      class="po-md-12 po-lg-6"
       name="literals"
       [(ngModel)]="literals"
       p-help='Ex.: {"selectFile": "Select file", "deleteFile": "Delete file", "cancel": "Cancel sending"}'
       p-label="Literals"
       (p-change)="changeLiterals()"
+    >
+    </po-input>
+
+    <po-input
+      class="po-md-12 po-lg-6"
+      name="customModalActions"
+      [(ngModel)]="modalActions"
+      [p-disabled]="!properties.includes('showThumbnail')"
+      p-help='Ex.: [{"label": "Label", "disabled": false}]'
+      p-label="Custom Modal Actions"
+      (p-change)="changeModalActions()"
     >
     </po-input>
 
@@ -142,9 +161,34 @@
       [p-options]="propertiesOptions"
     >
     </po-checkbox-group>
-  </div>
 
-  <div class="po-row">
-    <po-button class="po-md-3" p-label="Sample Restore" (p-click)="restore()"> </po-button>
-  </div>
-</form>
+    @if (properties.includes('showCustomAction')) {
+      <div>
+        <po-widget p-title="Action Button">
+          <form [formGroup]="actionForm" class="po-row">
+            <po-input class="po-md-6 po-lg-4" formControlName="label" p-label="Label" />
+            <po-select class="po-md-6 po-lg-3" formControlName="icon" p-label="Icon" [p-options]="iconOptions" />
+            <po-select class="po-md-6 po-lg-3" formControlName="type" p-label="Type" [p-options]="typeOptions" />
+            <po-switch class="po-md-3 po-lg-2" formControlName="disabled" p-label="Disabled" />
+            <po-switch class="po-md-3 po-lg-2" formControlName="visible" p-label="Visible" />
+          </form>
+        </po-widget>
+      </div>
+    }
+
+    <po-radio-group
+      class="po-md-12"
+      name="size"
+      [(ngModel)]="size"
+      p-columns="4"
+      p-label="Size"
+      p-help="Para aplicar o tamanho small, configure o nível de acessibilidade para AA, ajustável no navbar ou serviço de tema (https://po-ui.io/documentation/po-theme)."
+      [p-options]="sizeOptions"
+    >
+    </po-radio-group>
+
+    <div class="po-row po-mt-1">
+      <po-button class="po-lg-3 po-md-6" p-label="Sample Restore" (p-click)="restore()"> </po-button>
+    </div>
+  </form>
+</div>

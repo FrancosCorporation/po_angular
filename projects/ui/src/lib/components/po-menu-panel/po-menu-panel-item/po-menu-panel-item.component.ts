@@ -1,4 +1,4 @@
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, inject } from '@angular/core';
 
 import { Subscription } from 'rxjs';
 
@@ -14,14 +14,15 @@ import { PoMenuPanelItemsService } from '../services/po-menu-panel-items.service
  */
 @Component({
   selector: 'po-menu-panel-item',
-  templateUrl: './po-menu-panel-item.component.html'
+  templateUrl: './po-menu-panel-item.component.html',
+  standalone: false
 })
 export class PoMenuPanelItemComponent implements OnDestroy, OnInit {
-  itemsSubscription: Subscription;
+  private readonly menuItemsService = inject(PoMenuPanelItemsService);
 
   @Input('p-menu-item-internal') menuItemInternal: PoMenuPanelItemInternal;
 
-  constructor(private menuItemsService: PoMenuPanelItemsService) {}
+  itemsSubscription: Subscription;
 
   ngOnDestroy() {
     this.itemsSubscription.unsubscribe();

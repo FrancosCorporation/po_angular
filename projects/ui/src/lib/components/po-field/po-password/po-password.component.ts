@@ -1,14 +1,24 @@
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  forwardRef,
+  Input,
+  inject,
+  OnChanges,
+  SimpleChanges
+} from '@angular/core';
 import { AbstractControl, NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
-import { Component, ElementRef, forwardRef, Input } from '@angular/core';
 
-import { convertToBoolean } from '../../../utils/util';
+import { convertToBoolean, uuid } from '../../../utils/util';
 import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 
 /**
  * @docsExtends PoInputBaseComponent
  *
  * @description
- * O po-password é um input específico para senhas. Já possui tipo, estilo e ícone predefinidos.
+ * O `po-password` é um input específico para senhas. Já possui tipo, estilo e ícone predefinidos.
  *
  * @example
  *
@@ -30,6 +40,7 @@ import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 @Component({
   selector: 'po-password',
   templateUrl: './po-password.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -41,13 +52,16 @@ import { PoInputGeneric } from '../po-input-generic/po-input-generic';
       useExisting: forwardRef(() => PoPasswordComponent),
       multi: true
     }
-  ]
+  ],
+  standalone: false
 })
-export class PoPasswordComponent extends PoInputGeneric {
-  private _hidePasswordPeek?: boolean = false;
-
+export class PoPasswordComponent extends PoInputGeneric implements OnChanges {
+  id = `po-password[${uuid()}]`;
   type = 'password';
   visiblePassword = false;
+
+  private _hidePasswordPeek?: boolean = false;
+  private _noAutocompletePassword?: boolean = true;
 
   /**
    * @optional
@@ -58,12 +72,20 @@ export class PoPasswordComponent extends PoInputGeneric {
    *
    * @default `false`
    */
-  @Input('p-hide-password-peek') set hidePasswordPeek(value: boolean) {
-    this._hidePasswordPeek = convertToBoolean(value);
+  @Input({ alias: 'p-hide-password-peek', transform: convertToBoolean }) set hidePasswordPeek(value: boolean) {
+    this._hidePasswordPeek = value;
     if (value) {
       this.visiblePassword = false;
       this.type = 'password';
     }
+  }
+
+  @Input({ alias: 'p-no-autocomplete', transform: convertToBoolean }) override set noAutocomplete(value: boolean) {
+    this._noAutocompletePassword = value;
+  }
+
+  override get noAutocomplete() {
+    return this._noAutocompletePassword;
   }
 
   get hidePasswordPeek(): boolean {
@@ -75,8 +97,17 @@ export class PoPasswordComponent extends PoInputGeneric {
   }
 
   /* istanbul ignore next */
-  constructor(el: ElementRef) {
-    super(el);
+  constructor() {
+    const el = inject(ElementRef);
+    const cd = inject(ChangeDetectorRef);
+
+    super(el, cd);
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
   }
 
   extraValidation(c: AbstractControl): { [key: string]: any } {

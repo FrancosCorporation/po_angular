@@ -3,7 +3,7 @@ import { Inject, Injectable, InjectionToken } from '@angular/core';
 import * as LocalForage from 'localforage';
 import 'localforage';
 
-import IdleQueue from 'custom-idle-queue';
+import { IdleQueue } from 'custom-idle-queue';
 
 import { PoLokiDriver } from '../drivers/lokijs/po-loki-driver';
 import { PoStorageConfig } from './po-storage-config.interface';
@@ -30,7 +30,7 @@ export const PO_STORAGE_CONFIG_TOKEN = new InjectionToken('PO_STORAGE_CONFIG_TOK
  * Para instalar o `po-storage` em sua aplicação execute o seguinte comando:
  *
  * ```shell
- * ng add @po-ui/ng-storage
+ * `ng add @po-ui/ng-storage`
  * ```
  * Será instalado o pacote `@po-ui/ng-storage` e também já importará `PoStorageModule` no módulo principal da sua aplicação, conforme abaixo:
  *
@@ -82,12 +82,19 @@ export const PO_STORAGE_CONFIG_TOKEN = new InjectionToken('PO_STORAGE_CONFIG_TOK
  * export class AppModule {}
  * ```
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoStorageService {
   private driver: string = null;
-  private idleQueue = new IdleQueue();
-  private storagePromise: Promise<LocalForage>;
-  private lokijsDriver: PoLokiDriver;
+  private readonly idleQueue = new IdleQueue();
+  private storagePromise: Promise<any>;
+  private readonly lokijsDriver: PoLokiDriver;
+
+  constructor(@Inject(PO_STORAGE_CONFIG_TOKEN) config?: PoStorageConfig) {
+    this.lokijsDriver = new PoLokiDriver();
+    this.setStoragePromise(config);
+  }
 
   /**
    * Retorna a configuração padrão para o armazenamento. Caso nenhuma configuração seja inserida,
@@ -115,11 +122,6 @@ export class PoStorageService {
 
   private static getConfig(storageConfig?: PoStorageConfig) {
     return storageConfig || PoStorageService.getDefaultConfig();
-  }
-
-  constructor(@Inject(PO_STORAGE_CONFIG_TOKEN) config?: PoStorageConfig) {
-    this.lokijsDriver = new PoLokiDriver();
-    this.setStoragePromise(config);
   }
 
   /**
@@ -303,6 +305,7 @@ export class PoStorageService {
 
   /**
    * Lista com todas as chaves armazenadas.
+   *
    * @returns {Promise<Array<string>>} Promessa que é resolvida com todas as chaves armazenadas.
    */
   keys(): Promise<Array<string>> {
@@ -311,6 +314,7 @@ export class PoStorageService {
 
   /**
    * Quantidade de chaves armazenadas.
+   *
    * @returns {Promise<number>} Promessa que é resolvida com o número de chaves armazenadas.
    */
   length(): Promise<number> {
@@ -347,10 +351,10 @@ export class PoStorageService {
   /**
    * Determina se o processo de inicialização do *driver* assíncrono foi concluído.
    *
-   * @returns {Promise<LocalForage>} Promessa que é resolvida quando o processo de inicialização do *driver* assíncrono
+   * @returns {Promise<any>} Promessa que é resolvida quando o processo de inicialização do *driver* assíncrono
    * for concluído.
    */
-  ready(): Promise<LocalForage> {
+  ready(): Promise<any> {
     return this.storagePromise;
   }
 

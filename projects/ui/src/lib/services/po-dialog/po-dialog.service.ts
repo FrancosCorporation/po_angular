@@ -4,7 +4,7 @@ import { PoComponentInjectorService } from './../po-component-injector/po-compon
 import { PoDialogAlertOptions, PoDialogConfirmOptions } from './interfaces/po-dialog.interface';
 import { PoDialogBaseService } from './po-dialog-base.service';
 import { PoDialogComponent } from './po-dialog.component';
-import { PoDialogType } from './po-dialog.enum';
+import { PoDialogType } from './enums/po-dialog.enum';
 
 /**
  * @docsExtends PoDialogBaseService
@@ -26,15 +26,17 @@ import { PoDialogType } from './po-dialog.enum';
  *  <file name="sample-po-dialog-cancel-credit-card/sample-po-dialog-cancel-credit-card.component.ts"> </file>
  * </example>
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoDialogService extends PoDialogBaseService {
-  constructor(private poComponentInjector: PoComponentInjectorService) {
+  constructor(private readonly poComponentInjector: PoComponentInjectorService) {
     super();
   }
 
   openDialog(dialogType: PoDialogType, dialogOptions: PoDialogAlertOptions | PoDialogConfirmOptions): void {
     const componentRef: ComponentRef<any> = this.poComponentInjector.createComponentInApplication(PoDialogComponent);
-    componentRef.changeDetectorRef.detectChanges();
     componentRef.instance.open(dialogOptions, dialogType, componentRef);
+    componentRef.changeDetectorRef.detectChanges();
   }
 }

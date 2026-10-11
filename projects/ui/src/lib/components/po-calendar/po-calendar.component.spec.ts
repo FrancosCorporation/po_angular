@@ -1,13 +1,21 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 
 import { PoDateService } from '../../services/po-date/po-date.service';
 
 import { configureTestSuite } from './../../util-test/util-expect.spec';
 
+import { PoCalendarWrapperComponent } from './po-calendar-wrapper/po-calendar-wrapper.component';
+import { PoCalendarHeaderComponent } from './po-calendar-header/po-calendar-header.component';
+import { PoCalendarPresetListComponent } from './po-calendar-preset-list/po-calendar-preset-list.component';
+
 import { PoCalendarBaseComponent } from './po-calendar-base.component';
 import { PoCalendarComponent } from './po-calendar.component';
-import { PoCalendarLangService } from './services/po-calendar.lang.service';
+import { PoCalendarMode } from './po-calendar-mode.enum';
 import { PoCalendarService } from './services/po-calendar.service';
+import { PO_CALENDAR_DEFAULT_RANGE_PRESETS } from './constants/po-calendar-range-presets.constant';
 
 describe('PoCalendarComponent:', () => {
   let component: PoCalendarComponent;
@@ -16,8 +24,15 @@ describe('PoCalendarComponent:', () => {
 
   configureTestSuite(() => {
     TestBed.configureTestingModule({
-      declarations: [PoCalendarComponent],
-      providers: [PoCalendarService, PoCalendarLangService, PoDateService]
+      imports: [CommonModule, FormsModule],
+      declarations: [
+        PoCalendarComponent,
+        PoCalendarWrapperComponent,
+        PoCalendarHeaderComponent,
+        PoCalendarPresetListComponent
+      ],
+      providers: [PoCalendarService, PoDateService],
+      schemas: [NO_ERRORS_SCHEMA]
     });
   });
 
@@ -25,7 +40,6 @@ describe('PoCalendarComponent:', () => {
     fixture = TestBed.createComponent(PoCalendarComponent);
     component = fixture.componentInstance;
     nativeElement = fixture.debugElement.nativeElement;
-    fixture.detectChanges();
   });
 
   it('should be created', () => {
@@ -34,190 +48,272 @@ describe('PoCalendarComponent:', () => {
   });
 
   describe('Methods:', () => {
-    it('ngOnInit: should call `init`', () => {
-      spyOn(component, <any>'init');
+    it('ngOnInit: should call `setActivateDate`', () => {
+      spyOn(component, <any>'setActivateDate');
 
       component.ngOnInit();
 
-      expect(component['init']).toHaveBeenCalled();
+      expect(component['setActivateDate']).toHaveBeenCalled();
     });
 
-    it('getBackgroundColor: should return `po-calendar-box-background-selected` if displayValue is equal propertyValue', () => {
-      expect(component.getBackgroundColor(10, 10)).toBe('po-calendar-box-background-selected');
+    it('ngOnChanges: should call `setActivateDate` if `changes` contain minDate', () => {
+      const changes: any = {
+        minDate: '2021-08-08'
+      };
+
+      const spy = spyOn(component, <any>'setActivateDate');
+
+      component.ngOnChanges(changes);
+
+      expect(spy).toHaveBeenCalled();
     });
 
-    it('getBackgroundColor: should return `po-calendar-box-background` if displayValue is not equal propertyValue', () => {
-      expect(component.getBackgroundColor(11, 10)).toBe('po-calendar-box-background');
+    it('ngOnChanges: should call `setActivateDate` if `changes` contain maxDate', () => {
+      const changes: any = {
+        maxDate: '2021-08-08'
+      };
+
+      const spy = spyOn(component, <any>'setActivateDate');
+
+      component.ngOnChanges(changes);
+
+      expect(spy).toHaveBeenCalled();
     });
 
-    it('getDayBackgroundColor: should call `getDayColor` with `date` and `background`', () => {
-      const date = new Date(2018, 5, 5);
+    it(`ngOnChanges: shouldn't call 'setActivateDate' if 'changes' not contain maxDate ou minDate`, () => {
+      const changes = {};
 
-      spyOn(component, <any>'getDayColor');
+      const spy = spyOn(component, <any>'setActivateDate');
 
-      component.getDayBackgroundColor(date);
+      component.ngOnChanges(changes);
 
-      expect(component['getDayColor']).toHaveBeenCalledWith(date, 'background');
+      expect(spy).not.toHaveBeenCalled();
     });
 
-    it('getDayForegroundColor: should call `getDayColor` with `date` and `foreground`', () => {
-      const date = new Date(2018, 5, 5);
+    it('ngDoCheck: should sync internal signals from input properties', () => {
+      component.mode = PoCalendarMode.Range;
+      component.rangePresets = true;
+      component.rangePresetOptions = undefined;
+      component.rangePresetsOrder = 'desc';
+      component.minDate = new Date(2024, 0, 1);
+      component.maxDate = new Date(2024, 11, 31);
 
-      spyOn(component, <any>'getDayColor');
+      component.ngDoCheck();
 
-      component.getDayForegroundColor(date);
-
-      expect(component['getDayColor']).toHaveBeenCalledWith(date, 'foreground');
+      expect(component['_isRange']()).toBeTrue();
+      expect(component['_rangePresetsValue']()).toBeTrue();
+      expect(component['_rangePresetOptionsValue']()).toBeUndefined();
+      expect(component['_rangePresetsOrderValue']()).toBe('desc');
+      expect(component['_minDateValue']()).toEqual(component.minDate);
+      expect(component['_maxDateValue']()).toEqual(component.maxDate);
     });
 
-    it('getForegroundColor: should return `po-calendar-box-foreground-selected` if displayValue is equal propertyValue', () => {
-      expect(component.getForegroundColor(10, 10)).toBe('po-calendar-box-foreground-selected');
+    it('getActivateDate: should get activateDate if range is true', () => {
+      const expectedValue = new Date(2020, 10, 10);
+      component.activateDate = { start: expectedValue, end: new Date(2020, 11, 10) };
+
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      expect(component.getActivateDate('start')).toBe(expectedValue);
     });
 
-    it('getForegroundColor: should return `po-calendar-box-foreground` if displayValue is not equal propertyValue', () => {
-      expect(component.getForegroundColor(11, 10)).toBe('po-calendar-box-foreground');
+    it('getActivateDate: should get `null` if range is true', () => {
+      component.activateDate = null;
+
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      expect(component.getActivateDate('start')).toBe(null);
     });
 
-    it(`getMonthLabel: should call 'poCalendarLangService.getMonthLabel'`, () => {
-      spyOn(component.poCalendarLangService, 'getMonthLabel');
-      component.getMonthLabel();
+    it('getActivateDate: should get `activateDate` if range is false', () => {
+      component.activateDate = new Date();
 
-      expect(component.poCalendarLangService.getMonthLabel).toHaveBeenCalled();
+      spyOnProperty(component, 'isRange').and.returnValue(false);
+
+      expect(component.getActivateDate('start')).toEqual(component.activateDate);
     });
 
-    it(`getYearLabel: should call 'poCalendarLangService.getYearLabel'`, () => {
-      spyOn(component.poCalendarLangService, 'getYearLabel');
-      component.getYearLabel();
+    it('getValue: should get value if range is true and value is truthy', () => {
+      const expectedValue = new Date(2020, 10, 10);
+      component.value = { start: expectedValue, end: new Date(2021, 5, 10) };
 
-      expect(component.poCalendarLangService.getYearLabel).toHaveBeenCalled();
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      expect(component.getValue('start')).toBe(expectedValue);
     });
 
-    it(`onNextMonth: should call 'updateDisplay' with 'displayYear' and 'displayMonthNumber +1' if displayMonthNumber
-      is less then 11`, () => {
-      component.displayYear = 1997;
-      component.displayMonthNumber = 10;
+    it('getValue: should get `null` if range is true and value is null', () => {
+      component.value = null;
 
-      spyOn(component, <any>'updateDisplay');
-      component.onNextMonth();
+      spyOnProperty(component, 'isRange').and.returnValue(true);
 
-      expect(component['updateDisplay']).toHaveBeenCalledWith(1997, 11);
+      expect(component.getValue('start')).toBe(null);
     });
 
-    it(`onNextMonth: should call 'updateDisplay' with 'displayYear +1' and 0 if displayMonthNumber is greater or equal
-      then 11`, () => {
-      component.displayYear = 1997;
-      component.displayMonthNumber = 11;
+    it('getValue: should get `value` if range is false', () => {
+      component.value = new Date();
 
-      spyOn(component, <any>'updateDisplay');
-      component.onNextMonth();
+      spyOnProperty(component, 'isRange').and.returnValue(false);
 
-      expect(component['updateDisplay']).toHaveBeenCalledWith(1998, 0);
+      expect(component.getValue('start')).toEqual(component.value);
     });
 
-    it(`onPreviousMonth: should call 'updateDisplay' with 'displayYear' and 'displayMonthNumber -1' if displayMonthNumber is
-      greater then 0`, () => {
-      component.displayYear = 1997;
-      component.displayMonthNumber = 10;
+    it('getValueFromSelectedDate: should return { start, end: null } if component.value is null', () => {
+      const selectedDate = new Date(2020, 10, 10);
+      const expectedValue = { start: selectedDate, end: null };
 
-      spyOn(component, <any>'updateDisplay');
-      component.onPreviousMonth();
+      component.value = null;
 
-      expect(component['updateDisplay']).toHaveBeenCalledWith(1997, 9);
+      expect(component['getValueFromSelectedDate'](selectedDate)).toEqual(expectedValue);
     });
 
-    it(`onPreviousMonth: should call 'updateDisplay' with 'displayYear -1' and 11 if displayMonthNumber is equal or less then 0`, () => {
-      component.displayYear = 1997;
-      component.displayMonthNumber = 0;
+    it('getValueFromSelectedDate: should return { start, end: null } if component.value.start and component.value.end are truthy', () => {
+      const selectedDate = new Date(2020, 10, 10);
+      const expectedValue = { start: selectedDate, end: null };
 
-      spyOn(component, <any>'updateDisplay');
-      component.onPreviousMonth();
+      component.value = { start: new Date(2020, 8, 10), end: new Date(2020, 9, 5) };
 
-      expect(component['updateDisplay']).toHaveBeenCalledWith(1996, 11);
+      expect(component['getValueFromSelectedDate'](selectedDate)).toEqual(expectedValue);
     });
 
-    it(`onSelectDate: should call 'convertDateToISO' to set 'dateIso' and set 'date' to 'dateparam'`, () => {
-      const dateParam = new Date(2018, 6, 5);
-      const isoExtended = '2018-07-05T03:00:00.000Z';
+    it('getValueFromSelectedDate: should return { start, end: null } if component.value.start > selectedDate', () => {
+      const selectedDate = new Date(2020, 10, 10);
+      const expectedValue = { start: selectedDate, end: null };
 
-      spyOn(component.poDate, 'convertDateToISO').and.returnValue(isoExtended);
+      component.value = { start: new Date(2020, 11, 10), end: null };
 
-      component.onSelectDate(dateParam);
-
-      expect(component['dateIso']).toBe(isoExtended);
-      expect(component['date']).toBe(dateParam);
+      expect(component['getValueFromSelectedDate'](selectedDate)).toEqual(expectedValue);
     });
 
-    it(`onSelectDate: should call 'change.emit' with dateparam`, () => {
-      const dateParam = new Date(2018, 6, 5);
-      const result = '2018-07-05';
+    it('getValueFromSelectedDate: should return { start, end } if component.value.end is falsy', () => {
+      const start = new Date(2020, 9, 10);
+      const selectedDate = new Date(2020, 10, 10);
+      const expectedValue = { start, end: selectedDate };
 
+      component.value = { start, end: null };
+
+      expect(component['getValueFromSelectedDate'](selectedDate)).toEqual(expectedValue);
+    });
+
+    it(`onSelectDate: should set component.value with selectedDate if isRange is false'`, () => {
+      const selectedDate = new Date(2018, 6, 5);
+
+      spyOnProperty(component, 'isRange').and.returnValue(false);
+
+      component.onSelectDate(selectedDate);
+
+      expect(component.value).toBe(selectedDate);
+    });
+
+    it(`onSelectDate: should set component.value with { start, end } if isRange is true'`, () => {
+      const selectedDate = new Date(2018, 6, 5);
+      component.value = null;
+
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+      spyOn(component, <any>'getValueFromSelectedDate').and.callThrough();
+
+      component.onSelectDate(selectedDate);
+
+      expect(component['getValueFromSelectedDate']).toHaveBeenCalled();
+      expect(component.value).toEqual({ start: selectedDate, end: null });
+    });
+
+    it(`onSelectDate: should update activateDate when isRange is true and component.value is falsy`, () => {
+      const selectedDate = new Date(2018, 6, 5);
+      component.value = null;
+
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      component.onSelectDate(selectedDate, 'end');
+
+      expect(component.activateDate).toEqual({ start: selectedDate, end: selectedDate });
+    });
+
+    it(`onSelectDate: should update activateDate when isRange is true and { start, end } are truthy`, () => {
+      const selectedDate = new Date(2018, 6, 5);
+      component.value = { start: new Date(2018, 4, 5), end: new Date(2018, 5, 5) };
+
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      component.onSelectDate(selectedDate, 'end');
+
+      expect(component.activateDate).toEqual({ start: selectedDate, end: selectedDate });
+    });
+
+    it(`onSelectDate: should call 'convertDateToISO' to set 'dateIso' and call updateModel with new value`, () => {
+      const selectedDate = new Date(2018, 6, 5);
+      const isoDate = '2018-07-05';
+
+      spyOnProperty(component, 'isRange').and.returnValue(false);
       spyOn(component.change, 'emit');
+      spyOn(component, <any>'updateModel');
 
-      component.onSelectDate(dateParam);
+      component.onSelectDate(selectedDate);
 
-      expect(component.change.emit).toHaveBeenCalledWith(result);
+      expect(component.value).toBe(selectedDate);
+      expect(component['updateModel']).toHaveBeenCalledWith(isoDate);
+      expect(component.change.emit).toHaveBeenCalledWith(isoDate);
     });
 
-    it(`onSelectDate: should call 'propagateChange' with 'isoExtended' if 'propagateChange' is defined`, () => {
-      const dateParam = new Date(2018, 6, 5);
-      const isoExtended = '2018-07-05T03:00:00.000Z';
+    it(`convertDateFromIso: should return null if date param is not string`, () => {
+      const dateFromIso = component['convertDateFromIso'](<any>{});
+
+      expect(dateFromIso).toBe(null);
+    });
+
+    it(`convertDateFromIso: should return converted date from iso if date param is string`, () => {
+      const dateParam = '2018-07-05';
+
+      const dateFromIso = component['convertDateFromIso'](dateParam);
+
+      expect(dateFromIso.toISOString().substring(0, 10)).toBe(dateParam);
+    });
+
+    it(`updateModel: should call propagateChange with model param`, () => {
+      const expectedValue = new Date();
       component['propagateChange'] = () => {};
 
-      spyOn(component.poDate, 'convertDateToISO').and.returnValue(isoExtended);
       spyOn(component, <any>'propagateChange');
 
-      component.onSelectDate(dateParam);
+      component['updateModel'](expectedValue);
 
-      expect(component['propagateChange']).toHaveBeenCalledWith(isoExtended);
+      expect(component['propagateChange']).toHaveBeenCalledWith(expectedValue);
     });
 
-    it(`onSelectMonth: should call 'selectDay' and 'updateDisplay' with year and month`, () => {
-      spyOn(component, 'selectDay');
-      spyOn(component, <any>'updateDisplay');
-      component.onSelectMonth(2015, 10);
+    it(`convertDateToISO: should convert { start, end } date to null if invalid value and range is true`, () => {
+      const date = { start: 123, end: 12 };
+      const expectedValue = { start: null, end: null };
 
-      expect(component.selectDay).toHaveBeenCalled();
-      expect(component['updateDisplay']).toHaveBeenCalledWith(2015, 10);
+      spyOnProperty(component, 'isRange').and.returnValue(true);
+
+      expect(component['convertDateToISO'](date)).toEqual(expectedValue);
     });
 
-    it(`onSelectYear: should call 'updateDisplay' and 'selectMonth' if 'lastDisplay' is equal to 'month'`, () => {
-      component['lastDisplay'] = 'month';
+    it(`convertDateToISO: should return { start: null, end: null } if date is null`, () => {
+      const date = null;
+      const expectedValue = { start: null, end: null };
 
-      spyOn(component, 'selectMonth');
-      spyOn(component, 'selectDay');
-      spyOn(component, <any>'updateDisplay');
+      spyOnProperty(component, 'isRange').and.returnValue(true);
 
-      component.onSelectYear(2015, 10);
-
-      expect(component.selectMonth).toHaveBeenCalled();
-      expect(component.selectDay).not.toHaveBeenCalled();
-      expect(component['updateDisplay']).toHaveBeenCalledWith(2015, 10);
+      expect(component['convertDateToISO'](date)).toEqual(expectedValue);
     });
 
-    it(`onSelectYear: should call 'updateDisplay' and 'selectDay' if 'lastDisplay' is different to 'month'`, () => {
-      component['lastDisplay'] = '';
+    it(`convertDateToISO: should convert { start, end } date to iso if range is true`, () => {
+      const date = { start: new Date(2020, 6, 5), end: new Date(2021, 6, 5) };
+      const expectedValue = { start: '2020-07-05', end: '2021-07-05' };
 
-      spyOn(component, 'selectMonth');
-      spyOn(component, 'selectDay');
-      spyOn(component, <any>'updateDisplay');
+      spyOnProperty(component, 'isRange').and.returnValue(true);
 
-      component.onSelectYear(2015, 10);
-
-      expect(component.selectMonth).not.toHaveBeenCalled();
-      expect(component.selectDay).toHaveBeenCalled();
-      expect(component['updateDisplay']).toHaveBeenCalledWith(2015, 10);
+      expect(component['convertDateToISO'](date)).toEqual(expectedValue);
     });
 
-    it(`onSelectYear: should set 'currentYear' to the value of 'yearParam'`, () => {
-      const yearParam = 2018;
+    it(`convertDateToISO: should convert simple date to iso if range is false`, () => {
+      const date = new Date(2020, 6, 5);
+      const expectedValue = '2020-07-05';
 
-      spyOn(component, 'selectMonth');
-      spyOn(component, 'selectDay');
-      spyOn(component, <any>'updateDisplay');
+      spyOnProperty(component, 'isRange').and.returnValue(false);
 
-      component.onSelectYear(yearParam, 10);
-
-      expect(component.currentYear).toBe(yearParam);
+      expect(component['convertDateToISO'](date)).toBe(expectedValue);
     });
 
     it('registerOnChange: should set `propagateChange` with value of the `fnParam`', () => {
@@ -236,81 +332,6 @@ describe('PoCalendarComponent:', () => {
       expect(component['onTouched']).toBe(fnParam);
     });
 
-    it('registerOnValidatorChange: should set `validatorChange` with value of the `fnParam`', () => {
-      const fnParam = () => {};
-
-      component.registerOnValidatorChange(fnParam);
-
-      expect(component['validatorChange']).toBe(fnParam);
-    });
-
-    it(`selectDay: should set 'dayVisible' to 'true', 'monthVisible' to 'false', 'yearVisible' to 'false' and
-      'lastDisplay' to 'day'`, () => {
-      component.selectDay();
-
-      expect(component.dayVisible).toBeTruthy();
-      expect(component.monthVisible).toBeFalsy();
-      expect(component.yearVisible).toBeFalsy();
-      expect(component['lastDisplay']).toBe('day');
-    });
-
-    it(`selectMonth: should set 'dayVisible' to 'false', 'monthVisible' to 'true', 'yearVisible' to 'false' and
-      'lastDisplay' to 'month'`, () => {
-      component.selectMonth();
-
-      expect(component.dayVisible).toBeFalsy();
-      expect(component.monthVisible).toBeTruthy();
-      expect(component.yearVisible).toBeFalsy();
-      expect(component['lastDisplay']).toBe('month');
-    });
-
-    it(`selectYear: should set 'dayVisible' to 'false', 'monthVisible' to 'false' and 'yearVisible' to 'true'`, () => {
-      component.selectYear();
-
-      expect(component.dayVisible).toBeFalsy();
-      expect(component.monthVisible).toBeFalsy();
-      expect(component.yearVisible).toBeTruthy();
-    });
-
-    it(`updateYear: should call 'updateDisplay' with '2007' and '11'`, () => {
-      component.displayYear = 1997;
-      component.displayMonthNumber = 11;
-      const value = 10;
-      const yearExpected = 2007;
-
-      spyOn(component, <any>'updateDisplay');
-      component.updateYear(value);
-
-      expect(component['updateDisplay']).toHaveBeenCalledWith(yearExpected, 11);
-    });
-
-    it(`updateYear: should call 'updateDisplay' with '1987' and '11'`, () => {
-      component.displayYear = 1997;
-      component.displayMonthNumber = 11;
-
-      spyOn(component, <any>'updateDisplay');
-      component.updateYear(-10);
-
-      expect(component['updateDisplay']).toHaveBeenCalledWith(1987, 11);
-    });
-
-    it('validateModel: should call `validatorChange` to validateModel if `validatorChange` is a function', () => {
-      component['validatorChange'] = () => {};
-      const model = ['value'];
-
-      spyOn(component, <any>'validatorChange');
-
-      component['validateModel'](model);
-
-      expect(component['validatorChange']).toHaveBeenCalledWith(model);
-    });
-
-    it('validateModel: shouldn`t call `validatorChange` when it is falsy', () => {
-      component['validateModel']([]);
-
-      expect(component['validatorChange']).toBeUndefined();
-    });
-
     it('validate: should return null', () => {
       expect(component['validate'](undefined)).toBeNull();
     });
@@ -325,720 +346,1806 @@ describe('PoCalendarComponent:', () => {
       expect(component['writeDate']).toHaveBeenCalledWith(value);
     });
 
-    it(`writeValue: should set 'date' to 'undefined', call 'updateDate' with 'today' and not call 'writeDate' if value
-      is undefined`, () => {
+    it('writeValue: should set component.value with null if value param is undefined', () => {
       const value = undefined;
 
       spyOn(component, <any>'writeDate');
-      spyOn(component, <any>'updateDate');
 
       component.writeValue(value);
 
-      expect(component['writeDate']).not.toHaveBeenCalled();
-      expect(component['updateDate']).toHaveBeenCalledWith(component['today']);
-      expect(component['date']).toBeUndefined();
+      expect(component['writeDate']).not.toHaveBeenCalledWith(value);
     });
 
-    it(`addAllYearsInDecade: should update 'displayDecade' with 10 years`, () => {
-      component.displayDecade = [];
+    it(`writeDate: should set { start, end } with null if param is undefined`, () => {
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+      spyOn(component, <any>'convertDateFromIso').and.callThrough();
 
-      component['addAllYearsInDecade'](2011);
+      component['writeDate'](undefined);
 
-      expect(component.displayDecade).toEqual([2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020]);
+      expect(component.value.start).toBe(null);
+      expect(component.value.end).toBe(null);
+      expect(component['convertDateFromIso']).toHaveBeenCalled();
     });
 
-    it(`equalsDate: should return 'true' if date1 is equal date2`, () => {
-      const date1 = new Date(2018, 5, 5);
-      const date2 = new Date(2018, 5, 5);
+    it(`writeDate: should set value and call 'convertDateFromIso' if value.start and value.end are not Date`, () => {
+      const value = { start: '2018-07-05T03:00:00.000', end: '2019-04-05T03:00:00.000' };
 
-      expect(component['equalsDate'](date1, date2)).toBeTruthy();
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+      spyOn(component, <any>'convertDateFromIso').and.callThrough();
+
+      component['writeDate'](value);
+
+      expect(component.value.start instanceof Date).toBe(true);
+      expect(component.value.end instanceof Date).toBe(true);
+      expect(component['convertDateFromIso']).toHaveBeenCalled();
     });
 
-    it(`equalsDate: should return 'false' if date1 is different from the date2`, () => {
-      expect(component['equalsDate'](new Date(2018, 5, 5), new Date(2018, 5, 6))).toBeFalsy();
+    it(`writeDate: should set value and not call 'convertDateFromIso' if value.start and value.end are Date`, () => {
+      const value = { start: new Date(2018, 7, 5), end: new Date(2019, 9, 5) };
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+      spyOn(component, <any>'convertDateFromIso').and.callThrough();
+
+      component['writeDate'](value);
+
+      expect(component.value.start instanceof Date).toBe(true);
+      expect(component.value.end instanceof Date).toBe(true);
+      expect(component['convertDateFromIso']).not.toHaveBeenCalled();
     });
 
-    it(`getDecadeArray: should set 'displayDecade' to instance of 'Array' and call 'updateDecade' with 'year' if 'year'
-      is multiple of 10`, () => {
-      const year = 2000;
-      component['displayDecade'] = undefined;
+    it(`writeDate: should set value and call 'convertDateFromIso' if value param is not a Date`, () => {
+      const value = '2018-07-05T03:00:00.000';
 
-      spyOn(component, <any>'updateDecade');
+      spyOnProperty(component, <any>'isRange').and.returnValue(false);
+      spyOn(component, <any>'convertDateFromIso').and.callThrough();
 
-      component['getDecadeArray'](year);
+      component['writeDate'](value);
 
-      expect(component['updateDecade']).toHaveBeenCalledWith(year);
-      expect(component['displayDecade'] instanceof Array).toBeTruthy();
+      expect(component.value instanceof Date).toBe(true);
+      expect(component['convertDateFromIso']).toHaveBeenCalled();
     });
 
-    it(`getDecadeArray: should set 'displayDecade' to instance of 'Array' and call 'updateDecade' with 'yearMultipleTen'
-      if 'year' not is multiple of 10`, () => {
-      const year = 1995;
-      const yearMultipleTen = 1990;
-      component['displayDecade'] = undefined;
-
-      spyOn(component, <any>'updateDecade');
-
-      component['getDecadeArray'](year);
-
-      expect(component['updateDecade']).toHaveBeenCalledWith(yearMultipleTen);
-      expect(component['displayDecade'] instanceof Array).toBeTruthy();
-    });
-
-    it(`getColorForDate: should return 'po-calendar-box-background-selected' if 'poDate.validateDateRange'
-      return 'true'`, () => {
-      spyOn(component.poDate, 'validateDateRange').and.returnValue(true);
-
-      const result = component['getColorForDate'](new Date(), 'background');
-
-      expect(result).toBe('po-calendar-box-background-selected');
-    });
-
-    it(`getColorForDate: should return 'po-calendar-box-background-selected-disabled' if 'poDate.validateDateRange'
-      return 'false'`, () => {
-      spyOn(component.poDate, 'validateDateRange').and.returnValue(false);
-
-      const result = component['getColorForDate'](new Date(), 'background');
-
-      expect(result).toBe('po-calendar-box-background-selected-disabled');
-    });
-
-    it(`getColorForDate: should call 'poDate.validateDateRange' with 'date', 'minDate' and 'maxDate'`, () => {
-      const date = new Date();
-      component.minDate = new Date(2018, 4, 3);
-      component.maxDate = new Date(2018, 4, 8);
-
-      spyOn(component.poDate, 'validateDateRange').and.returnValue(false);
-
-      component['getColorForDate'](date, 'background');
-
-      expect(component.poDate.validateDateRange).toHaveBeenCalledWith(date, component.minDate, component.maxDate);
-    });
-
-    it(`getColorForDateRange: should return 'po-calendar-box-background' if 'poDate.validateDateRange'
-      return 'true'`, () => {
-      spyOn(component.poDate, 'validateDateRange').and.returnValue(true);
-
-      const result = component['getColorForDateRange'](new Date(), 'background');
-
-      expect(result).toBe('po-calendar-box-background');
-    });
-
-    it(`getColorForDateRange: should return 'po-calendar-box-background-disabled' if 'poDate.validateDateRange'
-      return 'false'`, () => {
-      spyOn(component.poDate, 'validateDateRange').and.returnValue(false);
-
-      const result = component['getColorForDateRange'](new Date(), 'background');
-
-      expect(result).toBe('po-calendar-box-background-disabled');
-    });
-
-    it(`getColorForDateRange: should call 'poDate.validateDateRange' with 'date', 'minDate' and 'maxDate'`, () => {
-      const date = new Date();
-      component.minDate = new Date(2018, 4, 3);
-      component.maxDate = new Date(2018, 4, 8);
-
-      spyOn(component.poDate, 'validateDateRange').and.returnValue(false);
-
-      component['getColorForDateRange'](date, 'background');
-
-      expect(component.poDate.validateDateRange).toHaveBeenCalledWith(date, component.minDate, component.maxDate);
-    });
-
-    it(`getColorForToday: should return 'po-calendar-box-background-today' if 'poDate.validateDateRange'
-      return 'true'`, () => {
-      spyOn(component.poDate, 'validateDateRange').and.returnValue(true);
-
-      const result = component['getColorForToday'](new Date(), 'background');
-
-      expect(result).toBe('po-calendar-box-background-today');
-    });
-
-    it(`getColorForToday: should return 'po-calendar-box-background-today-disabled' if 'poDate.validateDateRange'
-      return 'false'`, () => {
-      spyOn(component.poDate, 'validateDateRange').and.returnValue(false);
-
-      const result = component['getColorForToday'](new Date(), 'background');
-
-      expect(result).toBe('po-calendar-box-background-today-disabled');
-    });
-
-    it(`getColorForToday: should call 'poDate.validateDateRange' with 'date', 'minDate' and 'maxDate'`, () => {
-      const date = new Date();
-      component.minDate = new Date(2018, 4, 3);
-      component.maxDate = new Date(2018, 4, 8);
-
-      spyOn(component.poDate, 'validateDateRange').and.returnValue(false);
-
-      component['getColorForToday'](date, 'background');
-
-      expect(component.poDate.validateDateRange).toHaveBeenCalledWith(date, component.minDate, component.maxDate);
-    });
-
-    it(`getDayColor: should return value of the 'getColorForDate' if 'equalsDate' return 'true'`, () => {
-      const colorClass = 'po-calendar-box-background-selected';
-      const dateParam = new Date(2018, 5, 6);
-
-      spyOn(component, <any>'equalsDate').and.returnValue(true);
-      spyOn(component, <any>'getColorForDate').and.returnValue(colorClass);
-
-      const result = component['getDayColor'](dateParam, 'background');
-
-      expect(result).toBe(colorClass);
-    });
-
-    it(`getDayColor: should call 'equalsDate' with 'dateParam' and 'this.date' and return value of the 'getColorForDate'
-      if 'equalsDate' return 'true'`, () => {
-      const colorClass = 'po-calendar-box-background-selected';
-      const dateParam = new Date(2018, 5, 6);
-
-      spyOn(component, <any>'equalsDate').and.returnValue(true);
-      spyOn(component, <any>'getColorForDate').and.returnValue(colorClass);
-
-      const result = component['getDayColor'](dateParam, 'background');
-
-      expect(result).toBe(colorClass);
-      expect(component['equalsDate']).toHaveBeenCalledWith(dateParam, component['date']);
-    });
-
-    it(`getDayColor: should call 'equalsDate' with 'dateParam' and 'this.today' and return 'po-calendar-box-background-today'
-      if 'equalsDate' return 'true'`, () => {
-      const colorClass = 'po-calendar-box-background-today';
-      const dateParam = new Date(2018, 5, 6);
-
-      spyOn(component, <any>'equalsDate').and.returnValues(false, true);
-      spyOn(component, <any>'getColorForToday').and.returnValue(colorClass);
-
-      const result = component['getDayColor'](dateParam, 'background');
-
-      expect(result).toBe(colorClass);
-      expect(component['equalsDate']).toHaveBeenCalledWith(dateParam, component['today']);
-    });
-
-    it(`getDayColor: should call 'equalsDate', 'getColorForDateRange' and return value of the 'getColorForDateRange' if
-      'equalsDate' return 'false'`, () => {
-      const colorClass = 'po-calendar-box-background';
-      const dateParam = new Date(2018, 5, 6);
-      const local = 'background';
-
-      spyOn(component, <any>'equalsDate').and.returnValue(false);
-      spyOn(component, <any>'getColorForDateRange').and.returnValue(colorClass);
-
-      const result = component['getDayColor'](dateParam, local);
-
-      expect(result).toBe(colorClass);
-      expect(component['equalsDate']).toHaveBeenCalledWith(dateParam, component['today']);
-      expect(component['equalsDate']).toHaveBeenCalledWith(dateParam, component['date']);
-      expect(component['getColorForDateRange']).toHaveBeenCalledWith(dateParam, local);
-    });
-
-    it(`init: should call 'updateDate' with today date if 'this.date' is undefined and 'poDate.isValidIso'
-      return 'false'`, () => {
-      component['date'] = undefined;
-      component['today'] = new Date(2018, 5, 6);
-
-      spyOn(component, <any>'updateDate');
-      spyOn(component.poDate, 'isValidIso').and.returnValue(false);
-
-      component['init']();
-
-      expect(component['updateDate']).toHaveBeenCalledWith(component['today']);
-    });
-
-    it(`init: should call 'updateDate' with today date if 'this.date' is defined and 'poDate.isValidIso'
-      return 'false'`, () => {
-      component['date'] = new Date(2018, 4, 10);
-      component['today'] = new Date(2018, 5, 6);
-
-      spyOn(component, <any>'updateDate');
-      spyOn(component.poDate, 'isValidIso').and.returnValue(false);
-
-      component['init']();
-
-      expect(component['updateDate']).toHaveBeenCalledWith(component['today']);
-    });
-
-    it(`init: should call 'updateDate' with today date if 'this.date' is undefined and 'poDate.isValidIso'
-      return 'true'`, () => {
-      component['date'] = undefined;
-      component['today'] = new Date(2018, 5, 6);
-
-      spyOn(component, <any>'updateDate');
-      spyOn(component.poDate, 'isValidIso').and.returnValue(true);
-
-      component['init']();
-
-      expect(component['updateDate']).toHaveBeenCalledWith(component['today']);
-    });
-
-    it(`init: should call 'updateDate' with 'this.date' date if 'this.date' is defined and 'poDate.isValidIso'
-      return 'true'`, () => {
-      component['date'] = new Date(2018, 4, 10);
-
-      spyOn(component, <any>'updateDate');
-      spyOn(component.poDate, 'isValidIso').and.returnValue(true);
-
-      component['init']();
-
-      expect(component['updateDate']).toHaveBeenCalledWith(component['date']);
-    });
-
-    it(`init: should call 'poDate.convertDateToISO' with 'this.date', 'initializeLanguage' and 'selectDay'`, () => {
-      component['date'] = new Date(2018, 4, 10);
-
-      spyOn(component, <any>'updateDate');
-      const initializeLanguageSpy = spyOn(component, <any>'initializeLanguage');
-      const selectDaySpy = spyOn(component, <any>'selectDay');
-      spyOn(component.poDate, 'convertDateToISO');
-
-      component['init']();
-
-      expect(component.poDate.convertDateToISO).toHaveBeenCalledWith(component['date']);
-      expect(initializeLanguageSpy).toHaveBeenCalled();
-      expect(selectDaySpy).toHaveBeenCalled();
-      expect(component['updateDate']).toHaveBeenCalledBefore(selectDaySpy);
-      expect(component['updateDate']).toHaveBeenCalledBefore(initializeLanguageSpy);
-    });
-
-    it(`selectDateFromDate: should set 'this.date' with dateParam and call 'onSelectDate' with 'this.date'`, () => {
-      const dateParam = new Date();
-
-      spyOn(component, 'onSelectDate');
-
-      component['selectDateFromDate'](dateParam);
-
-      expect(component['date']).toEqual(dateParam);
-      expect(component.onSelectDate).toHaveBeenCalledWith(dateParam);
-    });
-
-    it(`selectDateFromIso: should set 'this.date' with 'dateExpected' and call 'onSelectDate' with 'this.date'`, () => {
-      const dateParam = '2018-07-05';
-
-      spyOn(component, 'onSelectDate');
-
-      component['selectDateFromIso'](dateParam);
-
-      expect(component['date'].toISOString().substring(0, 10)).toBe(dateParam);
-      expect(component.onSelectDate).toHaveBeenCalledWith(component['date']);
-    });
-
-    it(`updateDate: should set 'currentMonthNumber' and 'currentYear' to 'date.getMonth()' and 'date.getFullYear()' and
-      call 'updateDisplay'`, () => {
-      const date = new Date();
-
-      spyOn(component, <any>'updateDisplay');
-
-      component['updateDate'](date);
-
-      expect(component['currentMonthNumber']).toBe(date.getMonth());
-      expect(component.currentYear).toBe(date.getFullYear());
-      expect(component['updateDisplay']).toHaveBeenCalledWith(component.currentYear, component['currentMonthNumber']);
-    });
-
-    it(`updateDate: shouldn't call 'updateDisplay' if not have date`, () => {
-      const date = undefined;
-
-      spyOn(component, <any>'updateDisplay');
-
-      component['updateDate'](date);
-
-      expect(component['updateDisplay']).not.toHaveBeenCalled();
-    });
-
-    it(`updateDecade: should call 'addAllYearsInDecade' and update 'displayStartDecade' and 'displayFinalDecade'`, () => {
-      spyOn(component, <any>'addAllYearsInDecade');
-
-      component['updateDecade'](2000);
-
-      expect(component['displayStartDecade']).toBe(2000);
-      expect(component['displayFinalDecade']).toBe(2009);
-      expect(component['addAllYearsInDecade']).toHaveBeenCalledWith(2000);
-    });
-
-    it(`updateDisplay: should call 'poCalendarService.monthDays' to set 'displayDays'`, () => {
-      const monthDays = [1, 2, 3, 4];
-      const year = 2018;
-      const month = 2;
-
-      spyOn(component['poCalendarService'], 'monthDays').and.returnValue([...monthDays]);
-
-      component['updateDisplay'](year, month);
-
-      expect(component['displayDays']).toEqual(monthDays);
-      expect(component['poCalendarService']['monthDays']).toHaveBeenCalledWith(year, month);
-    });
-
-    it(`updateDisplay: should set 'displayMonthNumber', 'displayMonth', 'displayYear' and call 'getDecadeArray'
-      with 'year'`, () => {
-      const monthDays = [1, 2, 3, 4];
-      const year = 2018;
-      const month = 2;
-
-      spyOn(component['poCalendarService'], 'monthDays').and.returnValue([...monthDays]);
-      spyOn(component, <any>'getDecadeArray');
-
-      component['updateDisplay'](year, month);
-
-      expect(component.displayMonthNumber).toEqual(month);
-      expect(component['displayMonth']).toEqual(component['displayMonths'][month]);
-      expect(component['displayYear']).toEqual(year);
-      expect(component['getDecadeArray']).toHaveBeenCalledWith(year);
-    });
-
-    it(`writeDate: should call 'selectDateFromDate' with 'value' if 'value' is instance of 'Date' and call
-      'updateDate' with 'this.date'`, () => {
+    it(`writeDate: should set value and not call 'convertDateFromIso' if value param is a Date`, () => {
       const value = new Date();
-      component['date'] = new Date();
 
-      spyOn(component, <any>'selectDateFromDate');
-      spyOn(component, <any>'updateDate');
-      spyOn(component, <any>'writeDateIso');
+      spyOnProperty(component, <any>'isRange').and.returnValue(false);
+      spyOn(component, <any>'convertDateFromIso').and.callThrough();
 
       component['writeDate'](value);
 
-      expect(component['selectDateFromDate']).toHaveBeenCalledWith(value);
-      expect(component['writeDateIso']).not.toHaveBeenCalled();
-      expect(component['updateDate']).toHaveBeenCalledWith(component['date']);
+      expect(component.value instanceof Date).toBe(true);
+      expect(component['convertDateFromIso']).not.toHaveBeenCalled();
     });
 
-    it(`writeDate: should call 'writeDateIso' with 'value' if 'value' not is instance of 'Date' and call
-      'updateDate' with 'this.date'`, () => {
-      const value = '2018-07-05T03:00:00.000';
-      component['date'] = new Date();
+    it(`getValidateStartDate: should return null if range is true and value param is undefined`, () => {
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
 
-      spyOn(component, <any>'selectDateFromDate');
-      spyOn(component, <any>'updateDate');
-      spyOn(component, <any>'writeDateIso');
-
-      component['writeDate'](value);
-
-      expect(component['selectDateFromDate']).not.toHaveBeenCalled();
-      expect(component['writeDateIso']).toHaveBeenCalledWith(value);
-      expect(component['updateDate']).toHaveBeenCalledWith(component['date']);
+      expect(component['getValidateStartDate'](undefined)).toBe(null);
     });
 
-    it(`writeDateIso: should call 'selectDateFromIso' with 'value' if 'poDate.isValidIso'
-      return 'true'`, () => {
-      const value = '2018-07-05T03:00:00.000';
+    it(`getValidateStartDate: should return start date if range is true and value param is valid`, () => {
+      const today = new Date();
+
+      const date = { start: today };
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+
+      expect(component['getValidateStartDate'](date)).toEqual(today);
+    });
+
+    it(`getValidateStartDate: should return date if range is false and value param is Date`, () => {
       const date = new Date();
-      component['date'] = date;
+      spyOnProperty(component, <any>'isRange').and.returnValue(false);
 
-      spyOn(component.poDate, 'isValidIso').and.returnValue(true);
-      spyOn(component, <any>'selectDateFromIso');
-
-      component['writeDateIso'](value);
-
-      expect(component['selectDateFromIso']).toHaveBeenCalledWith(value);
-      expect(component.poDate.isValidIso).toHaveBeenCalledWith(value);
-      expect(component['date']).toEqual(date);
+      expect(component['getValidateStartDate'](date)).toEqual(date);
     });
 
-    it(`writeDateIso: should not call 'selectDateFromIso' with 'value' and set 'this.date' to 'undefined'
-      if 'poDate.isValidIso' return 'false'`, () => {
-      const value = '2018-07-05T03:00:00.000';
-      component['date'] = new Date();
+    it(`getValidateStartDate:  should return date if range is false and value param is string`, () => {
+      const date = '2010-10-10';
+      spyOnProperty(component, <any>'isRange').and.returnValue(false);
 
-      spyOn(component.poDate, 'isValidIso').and.returnValue(false);
-      spyOn(component, <any>'selectDateFromIso');
+      expect(component['getValidateStartDate'](date)).toEqual(date);
+    });
 
-      component['writeDateIso'](value);
+    it(`getValidateStartDate: should return null if range is false and value param is undefined`, () => {
+      spyOnProperty(component, <any>'isRange').and.returnValue(false);
 
-      expect(component['selectDateFromIso']).not.toHaveBeenCalled();
-      expect(component.poDate.isValidIso).toHaveBeenCalledWith(value);
-      expect(component['date']).toBeUndefined();
+      expect(component['getValidateStartDate'](undefined)).toEqual(null);
+    });
+
+    it(`onHeaderChange: `, () => {
+      const start = new Date(2010, 8, 10);
+      const end = new Date(2010, 9, 10);
+
+      component.activateDate = { start, end };
+
+      const nextMonth = 7;
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+
+      component.onHeaderChange({ month: nextMonth, year: 2010 }, 'start');
+
+      expect(component.activateDate.start.getMonth()).toEqual(nextMonth - 1);
+      expect(component.activateDate.start.getFullYear()).toEqual(2010);
+
+      expect(component.activateDate.end.getMonth()).toEqual(9);
+      expect(component.activateDate.end.getFullYear()).toEqual(2010);
+    });
+
+    it(`onHeaderChange: change the header correctly when the selected date is in the middle of the month`, () => {
+      const start = new Date('Wed Mar 15 2023 00:00:00');
+      const end = new Date('Sat Apr 01 2023 00:00:00');
+
+      component.activateDate = { start, end };
+
+      const nextMonth = 1;
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+
+      component.onHeaderChange({ month: nextMonth, year: 2023 }, 'start');
+
+      expect(component.activateDate.start.getMonth()).toEqual(nextMonth - 1);
+      expect(component.activateDate.start.getFullYear()).toEqual(2023);
+
+      expect(component.activateDate.end.getMonth()).toEqual(3);
+      expect(component.activateDate.end.getFullYear()).toEqual(2023);
+    });
+
+    it(`onHeaderChange: change the header correctly when the selected date is on the last day of the month`, () => {
+      const start = new Date('Thu Mar 31 2023 00:00:00');
+      const end = new Date('Sat Apr 01 2023 00:00:00');
+
+      component.activateDate = { start, end };
+
+      const nextMonth = 1;
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+
+      component.onHeaderChange({ month: nextMonth, year: 2023 }, 'start');
+
+      expect(component.activateDate.start.getMonth()).toEqual(nextMonth - 1);
+      expect(component.activateDate.start.getFullYear()).toEqual(2023);
+
+      expect(component.activateDate.end.getMonth()).toEqual(3);
+      expect(component.activateDate.end.getFullYear()).toEqual(2023);
+    });
+
+    it(`onHeaderChange: change the header correctly when the previous month is in another year`, () => {
+      const start = new Date('Tue Jan 03 2023 00:00:00');
+      const end = new Date('Wed Feb 01 2023 00:00:00');
+
+      component.activateDate = { start, end };
+
+      const nextMonth = 11;
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+
+      component.onHeaderChange({ month: nextMonth, year: 2022 }, 'start');
+
+      expect(component.activateDate.start.getMonth()).toEqual(nextMonth - 1);
+      expect(component.activateDate.start.getFullYear()).toEqual(2022);
+
+      expect(component.activateDate.end.getMonth()).toEqual(1);
+      expect(component.activateDate.end.getFullYear()).toEqual(2023);
+    });
+
+    it(`onHeaderChange: change header correctly when next month is in later year`, () => {
+      const start = new Date('Fri Nov 03 2023 00:00:00 ');
+      const end = new Date('Fri Dec 01 2023 00:00:00');
+
+      component.activateDate = { start, end };
+
+      const nextMonth = 1; // Janeiro em formato 1-indexed
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+
+      component.onHeaderChange({ month: nextMonth, year: 2024 }, 'end');
+
+      expect(component.activateDate.start.getMonth()).toEqual(10);
+      expect(component.activateDate.start.getFullYear()).toEqual(2023);
+
+      expect(component.activateDate.end.getMonth()).toEqual(nextMonth - 1); // 0 = Janeiro 0-indexed
+      expect(component.activateDate.end.getFullYear()).toEqual(2024);
+    });
+
+    it(`onHeaderChange: `, () => {
+      const start = new Date(2011, 0, 10);
+      const end = new Date(2011, 1, 10);
+
+      component.activateDate = { start, end };
+
+      const nextMonth = 11;
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+
+      component.onHeaderChange({ month: nextMonth, year: 2010 }, 'start');
+
+      expect(component.activateDate.start.getMonth()).toEqual(nextMonth - 1);
+      expect(component.activateDate.start.getFullYear()).toEqual(2010);
+
+      expect(component.activateDate.end.getMonth()).toEqual(1);
+      expect(component.activateDate.end.getFullYear()).toEqual(2011);
+    });
+
+    it(`onHeaderChange: `, () => {
+      const start = new Date(2010, 10, 10);
+      const end = new Date(2010, 11, 10);
+
+      component.activateDate = { start, end };
+
+      const nextMonth = 1; // Janeiro em formato 1-indexed
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+
+      component.onHeaderChange({ month: nextMonth, year: 2011 }, 'end');
+
+      expect(component.activateDate.start.getMonth()).toEqual(10);
+      expect(component.activateDate.start.getFullYear()).toEqual(2010);
+
+      expect(component.activateDate.end.getMonth()).toEqual(nextMonth - 1); // 0 = Janeiro 0-indexed
+      expect(component.activateDate.end.getFullYear()).toEqual(2011);
+    });
+
+    it(`onHeaderChange: `, () => {
+      const start = new Date(2010, 7, 10);
+      const end = new Date(2010, 8, 10);
+
+      component.activateDate = { start, end };
+
+      const nextMonth = 9;
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+
+      component.onHeaderChange({ month: nextMonth, year: 2010 }, 'end');
+
+      expect(component.activateDate.start.getMonth()).toEqual(7);
+      expect(component.activateDate.start.getFullYear()).toEqual(2010);
+
+      expect(component.activateDate.end.getMonth()).toEqual(nextMonth - 1);
+      expect(component.activateDate.end.getFullYear()).toEqual(2010);
+    });
+
+    it('onHeaderChange: should use new Date when activateDate.start is not a Date', () => {
+      component.activateDate = { start: 'invalid', end: new Date(2010, 8, 10) } as any;
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+      const buildSpy = spyOn(component as any, 'buildDateWithMonthYear').and.callThrough();
+
+      component.onHeaderChange({ month: 5, year: 2010 }, 'start');
+
+      expect(buildSpy).toHaveBeenCalled();
+      expect(buildSpy.calls.mostRecent().args[0] instanceof Date).toBeTrue();
+    });
+
+    it('onHeaderChange: should use new Date when activateDate.end is not a Date', () => {
+      component.activateDate = { start: new Date(2010, 7, 10), end: 'invalid' } as any;
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(true);
+      const buildSpy = spyOn(component as any, 'buildDateWithMonthYear').and.callThrough();
+
+      component.onHeaderChange({ month: 5, year: 2010 }, 'end');
+
+      expect(buildSpy).toHaveBeenCalled();
+      expect(buildSpy.calls.mostRecent().args[0] instanceof Date).toBeTrue();
+    });
+
+    it('buildDateWithMonthYear: should default day to 1 when baseDate is not a Date', () => {
+      const result = (component as any).buildDateWithMonthYear('invalid', 1, 2024);
+
+      expect(result.getFullYear()).toBe(2024);
+      expect(result.getMonth()).toBe(1);
+      expect(result.getDate()).toBe(1);
+    });
+
+    it('buildDateWithMonthYear: should clamp day to last day of target month', () => {
+      const baseDate = new Date(2024, 0, 31);
+
+      const result = (component as any).buildDateWithMonthYear(baseDate, 1, 2024);
+
+      expect(result.getFullYear()).toBe(2024);
+      expect(result.getMonth()).toBe(1);
+      expect(result.getDate()).toBe(29);
+    });
+
+    it(`onHeaderChange: should set activateDate if isRange is false`, () => {
+      component.activateDate = null;
+
+      spyOnProperty(component, <any>'isRange').and.returnValue(false);
+
+      component.onHeaderChange({ month: 10, year: 2010 }, 'start');
+
+      expect(component.activateDate).toEqual(null);
+    });
+
+    it('onHoverDate: should set hoverValue', () => {
+      const expectedValue = new Date(2010, 7, 10);
+
+      component.onHoverDate(expectedValue);
+
+      expect(component.hoverValue).toBe(expectedValue);
+    });
+
+    it('onSelectDate: should clear value and emit empty string when selectedDate is empty or undefined', () => {
+      spyOn(component as any, 'updateModel');
+      spyOn(component.change, 'emit');
+      spyOn(component['changeDetector'], 'markForCheck');
+
+      component.value = new Date();
+
+      component.onSelectDate('');
+      expect(component.value).toBeNull();
+      expect(component['updateModel']).toHaveBeenCalledWith('');
+      expect(component.change.emit).toHaveBeenCalledWith('');
+      expect(component['changeDetector'].markForCheck).toHaveBeenCalled();
+
+      component.value = new Date();
+
+      component.onSelectDate(undefined);
+      expect(component.value).toBeNull();
+      expect(component['updateModel']).toHaveBeenCalledWith('');
+      expect(component.change.emit).toHaveBeenCalledWith('');
+      expect(component['changeDetector'].markForCheck).toHaveBeenCalled();
+    });
+
+    it('onCloseCalendar: should emit change with current value when not in date-time mode', () => {
+      const currentValue = new Date(2024, 4, 10);
+
+      component.value = currentValue;
+      spyOn(component.change, 'emit');
+
+      component.onCloseCalendar();
+
+      expect(component.change.emit).toHaveBeenCalledWith(currentValue as any);
+    });
+
+    it('onCloseCalendar: should emit close event when not in date-time mode', () => {
+      spyOn(component.close, 'emit');
+
+      component.onCloseCalendar();
+
+      expect(component.close.emit).toHaveBeenCalled();
+    });
+
+    it('onCloseCalendar: should NOT emit close in date-time mode (Tab flows to timer)', () => {
+      spyOnProperty(component, 'isDateTime').and.returnValue(true);
+      spyOn(component.close, 'emit');
+      spyOn(component.change, 'emit');
+
+      component.onCloseCalendar();
+
+      expect(component.close.emit).not.toHaveBeenCalled();
+      expect(component.change.emit).not.toHaveBeenCalled();
+    });
+
+    it('onTimeChange: should emit changeTime with the time value', () => {
+      spyOn(component.changeTime, 'emit');
+
+      component.onTimeChange('14:30');
+
+      expect(component.changeTime.emit).toHaveBeenCalledWith('14:30');
+    });
+
+    it('onTimerBoundaryTab: should emit timerBoundaryTab event', () => {
+      spyOn(component.timerBoundaryTab, 'emit');
+      const event = { direction: 'forward', event: new KeyboardEvent('keydown'), column: 'minutes' };
+
+      component.onTimerBoundaryTab(event);
+
+      expect(component.timerBoundaryTab.emit).toHaveBeenCalledWith(event);
+    });
+
+    describe('onSelectDate in date-time mode:', () => {
+      beforeEach(() => {
+        component.mode = PoCalendarMode.DateTime;
+        component['timerComponent'] = { writeValue: jasmine.createSpy('writeValue') } as any;
+      });
+
+      it('should reset timer and emit changeTime with empty string when clearing in date-time mode', () => {
+        spyOn(component.changeTime, 'emit');
+        spyOn(component.change, 'emit');
+
+        component.onSelectDate(undefined);
+
+        expect(component['timerComponent'].writeValue).toHaveBeenCalledWith(null);
+        expect(component.changeTime.emit).toHaveBeenCalledWith('');
+        expect(component.change.emit).toHaveBeenCalledWith('');
+      });
+
+      it('should set current time on timer and emit changeTime when isTodayPresetSelection is true', () => {
+        spyOn(component.changeTime, 'emit');
+        const today = new Date();
+
+        component['isTodayPresetSelection'] = true;
+        component.onSelectDate(today);
+
+        expect(component['timerComponent'].writeValue).toHaveBeenCalled();
+        expect(component.changeTime.emit).toHaveBeenCalled();
+
+        const emittedTime = (component.changeTime.emit as jasmine.Spy).calls.mostRecent().args[0];
+        expect(emittedTime).toMatch(/^\d{2}:\d{2}$/);
+      });
+
+      it('should include seconds in time when showSeconds is true and isTodayPresetSelection is true', () => {
+        spyOn(component.changeTime, 'emit');
+        component.showSeconds = true;
+        const today = new Date();
+
+        component['isTodayPresetSelection'] = true;
+        component.onSelectDate(today);
+
+        const emittedTime = (component.changeTime.emit as jasmine.Spy).calls.mostRecent().args[0];
+        expect(emittedTime).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+      });
+
+      it('should not set time on timer when selecting today without isTodayPresetSelection', () => {
+        spyOn(component.changeTime, 'emit');
+        const today = new Date();
+
+        component.onSelectDate(today);
+
+        expect(component.changeTime.emit).not.toHaveBeenCalled();
+      });
+
+      it('should not set time on timer when selecting a date that is not today', () => {
+        spyOn(component.changeTime, 'emit');
+        const notToday = new Date(2020, 0, 1);
+
+        component.onSelectDate(notToday);
+
+        expect(component.changeTime.emit).not.toHaveBeenCalled();
+      });
+
+      it('should reset isTodayPresetSelection flag after setting time', () => {
+        const today = new Date();
+
+        component['isTodayPresetSelection'] = true;
+        component.onSelectDate(today);
+
+        expect(component['isTodayPresetSelection']).toBe(false);
+      });
+
+      it('should emit close before change for Today preset', () => {
+        const emitOrder: Array<string> = [];
+        spyOn(component.close, 'emit').and.callFake(() => emitOrder.push('close'));
+        spyOn(component.change, 'emit').and.callFake(() => emitOrder.push('change'));
+        spyOn(component.changeTime, 'emit').and.callFake(() => emitOrder.push('changeTime'));
+        const today = new Date();
+
+        component['isTodayPresetSelection'] = true;
+        component.onSelectDate(today);
+
+        expect(emitOrder[0]).toBe('close');
+        expect(emitOrder[1]).toBe('change');
+        expect(emitOrder[2]).toBe('changeTime');
+      });
+    });
+
+    describe('isToday:', () => {
+      it('should return true for today', () => {
+        const today = new Date();
+        expect(component['poCalendarService'].isToday(today)).toBe(true);
+      });
+
+      it('should return false for yesterday', () => {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        expect(component['poCalendarService'].isToday(yesterday)).toBe(false);
+      });
+
+      it('should return false for null', () => {
+        expect(component['poCalendarService'].isToday(null)).toBe(false);
+      });
+
+      it('should return false for undefined', () => {
+        expect(component['poCalendarService'].isToday(undefined)).toBe(false);
+      });
+    });
+
+    describe('onSelectTodayPreset:', () => {
+      it('should set isTodayPresetSelection flag to true', () => {
+        component['isTodayPresetSelection'] = false;
+        component.onSelectTodayPreset();
+        expect(component['isTodayPresetSelection']).toBe(true);
+      });
+    });
+
+    describe('effectivePresets:', () => {
+      it('should return default presets when rangePresets is true and rangePresetOptions is undefined', () => {
+        component.mode = PoCalendarMode.Range;
+        component.rangePresets = true;
+        component.ngDoCheck();
+
+        const result = component.effectivePresets();
+        expect(result.length).toBe(PO_CALENDAR_DEFAULT_RANGE_PRESETS.length);
+        PO_CALENDAR_DEFAULT_RANGE_PRESETS.forEach(preset => {
+          expect(result.some(p => p.label === preset.label)).toBeTrue();
+        });
+      });
+
+      it('should return empty array when rangePresets is false and rangePresetOptions is undefined', () => {
+        component.mode = PoCalendarMode.Range;
+        component.rangePresets = false;
+        component.ngDoCheck();
+
+        expect(component.effectivePresets()).toEqual([]);
+      });
+
+      it('should return empty array when mode is not Range', () => {
+        component.rangePresets = true;
+        component.ngDoCheck();
+
+        expect(component.effectivePresets()).toEqual([]);
+      });
+
+      it('should return defaults + custom when rangePresets is true and rangePresetOptions has values', () => {
+        component.mode = PoCalendarMode.Range;
+        component.rangePresets = true;
+        const customPresets = [{ label: 'custom', dateRange: () => ({ start: new Date(), end: new Date() }) }];
+        component.rangePresetOptions = customPresets;
+        component.ngDoCheck();
+
+        const result = component.effectivePresets();
+        expect(result.length).toBe(PO_CALENDAR_DEFAULT_RANGE_PRESETS.length + customPresets.length);
+        expect(result.some(p => p.label === 'custom')).toBeTrue();
+      });
+
+      it('should return only custom presets when rangePresets is false and rangePresetOptions has values', () => {
+        component.mode = PoCalendarMode.Range;
+        component.rangePresets = false;
+        const customPresets = [{ label: 'custom', dateRange: () => ({ start: new Date(), end: new Date() }) }];
+        component.rangePresetOptions = customPresets;
+        component.ngDoCheck();
+
+        const result = component.effectivePresets();
+        // custom + mandatory 'today'
+        expect(result.some(p => p.label === 'custom')).toBeTrue();
+        expect(result.some(p => p.label === 'today')).toBeTrue();
+      });
+
+      it('should return empty array when rangePresets is true but mode is not Range', () => {
+        component.rangePresets = true;
+        component.mode = undefined;
+        component.ngDoCheck();
+
+        expect(component.effectivePresets()).toEqual([]);
+      });
+
+      it('should filter default presets when rangePresets is an array of keys', () => {
+        component.mode = PoCalendarMode.Range;
+        component.rangePresets = ['7days', '30days'];
+        component.ngDoCheck();
+
+        const result = component.effectivePresets();
+        // Should include 7days, 30days, and today (mandatory)
+        expect(result.some(p => p.label === 'today')).toBeTrue();
+        expect(result.some(p => p.label === '7days')).toBeTrue();
+        expect(result.some(p => p.label === '30days')).toBeTrue();
+        expect(result.some(p => p.label === 'yesterday')).toBeFalse();
+      });
+
+      it('should always include today preset even if not in array', () => {
+        component.mode = PoCalendarMode.Range;
+        component.rangePresets = ['7days'];
+        component.ngDoCheck();
+
+        const result = component.effectivePresets();
+        expect(result.some(p => p.label === 'today')).toBeTrue();
+      });
+
+      it('should inject today preset when only custom presets exist without today', () => {
+        component.mode = PoCalendarMode.Range;
+        component.rangePresets = false;
+        const customPresets = [{ label: 'myPreset', dateRange: () => ({ start: new Date(), end: new Date() }) }];
+        component.rangePresetOptions = customPresets;
+        component.ngDoCheck();
+
+        const result = component.effectivePresets();
+        expect(result.some(p => p.label === 'today')).toBeTrue();
+        expect(result.some(p => p.label === 'myPreset')).toBeTrue();
+      });
+
+      it('should combine filtered default presets with custom presets when rangePresets is Array<string> and rangePresetOptions has values', () => {
+        component.mode = PoCalendarMode.Range;
+        component.rangePresets = ['today', 'yesterday', '7days'];
+
+        const today = new Date();
+        const customPreset1 = {
+          label: 'custom1',
+          dateRange: () => {
+            const start = new Date(today);
+            start.setDate(start.getDate() - 3);
+            return { start, end: today };
+          }
+        };
+        const customPreset2 = {
+          label: 'custom2',
+          dateRange: () => {
+            const start = new Date(today);
+            start.setDate(start.getDate() - 15);
+            return { start, end: today };
+          }
+        };
+        component.rangePresetOptions = [customPreset1, customPreset2];
+        component.ngDoCheck();
+
+        const result = component.effectivePresets();
+
+        // Should contain the filtered default presets
+        expect(result.some(p => p.label === 'today')).toBeTrue();
+        expect(result.some(p => p.label === 'yesterday')).toBeTrue();
+        expect(result.some(p => p.label === '7days')).toBeTrue();
+
+        // Should contain custom presets
+        expect(result.some(p => p.label === 'custom1')).toBeTrue();
+        expect(result.some(p => p.label === 'custom2')).toBeTrue();
+
+        // Should NOT contain default presets not in the array
+        expect(result.some(p => p.label === '14days')).toBeFalse();
+        expect(result.some(p => p.label === '30days')).toBeFalse();
+        expect(result.some(p => p.label === '3months')).toBeFalse();
+        expect(result.some(p => p.label === '6months')).toBeFalse();
+
+        // Result should be sorted (all are past/present, sorted by proximity)
+        // and enriched with isDisabled property
+        result.forEach(p => {
+          expect(p.isDisabled).toBeDefined();
+        });
+      });
+    });
+
+    describe('sortPresetsByTemporality:', () => {
+      it('should sort presets in ASC order: Future -> Present -> Past', () => {
+        component.rangePresetsOrder = 'asc';
+        const today = new Date();
+        const presets = [
+          {
+            label: 'past',
+            dateRange: () => {
+              const start = new Date(today);
+              start.setDate(start.getDate() - 10);
+              return { start, end: today };
+            }
+          },
+          {
+            label: 'future',
+            dateRange: () => {
+              const start = new Date(today);
+              start.setDate(start.getDate() + 5);
+              const end = new Date(today);
+              end.setDate(end.getDate() + 10);
+              return { start, end };
+            }
+          },
+          {
+            label: 'present',
+            dateRange: () => ({ start: new Date(today.getFullYear(), today.getMonth(), today.getDate()), end: today })
+          }
+        ];
+
+        const result = component['sortPresetsByTemporality'](presets);
+        expect(result[0].label).toBe('future');
+        expect(result[1].label).toBe('present');
+        expect(result[2].label).toBe('past');
+      });
+
+      it('should sort presets in DESC order: Past -> Present -> Future', () => {
+        component.rangePresetsOrder = 'desc';
+        const today = new Date();
+        const presets = [
+          {
+            label: 'past',
+            dateRange: () => {
+              const start = new Date(today);
+              start.setDate(start.getDate() - 10);
+              return { start, end: today };
+            }
+          },
+          {
+            label: 'future',
+            dateRange: () => {
+              const start = new Date(today);
+              start.setDate(start.getDate() + 5);
+              const end = new Date(today);
+              end.setDate(end.getDate() + 10);
+              return { start, end };
+            }
+          },
+          {
+            label: 'present',
+            dateRange: () => ({ start: new Date(today.getFullYear(), today.getMonth(), today.getDate()), end: today })
+          }
+        ];
+
+        const result = component['sortPresetsByTemporality'](presets);
+        expect(result[0].label).toBe('past');
+        expect(result[1].label).toBe('present');
+        expect(result[2].label).toBe('future');
+      });
+
+      it('should sort by proximity within the same group (ASC)', () => {
+        component.rangePresetsOrder = 'asc';
+        const today = new Date();
+        const presets = [
+          {
+            label: 'far-past',
+            dateRange: () => {
+              const start = new Date(today);
+              start.setDate(start.getDate() - 30);
+              return { start, end: today };
+            }
+          },
+          {
+            label: 'near-past',
+            dateRange: () => {
+              const start = new Date(today);
+              start.setDate(start.getDate() - 3);
+              return { start, end: today };
+            }
+          }
+        ];
+
+        const result = component['sortPresetsByTemporality'](presets);
+        expect(result[0].label).toBe('near-past');
+        expect(result[1].label).toBe('far-past');
+      });
+    });
+
+    describe('enrichPresetsWithDisabledState:', () => {
+      it('should set isDisabled to true when preset start is before minDate', () => {
+        component['_minDate'] = new Date(2025, 5, 1);
+
+        const presets = [
+          {
+            label: 'before-min',
+            dateRange: () => ({
+              start: new Date(2025, 4, 1),
+              end: new Date(2025, 5, 15)
+            })
+          }
+        ];
+
+        const result = component['enrichPresetsWithDisabledState'](presets);
+        expect(result[0].isDisabled).toBeTrue();
+      });
+
+      it('should set isDisabled to true when preset end is after maxDate', () => {
+        component['_maxDate'] = new Date(2025, 5, 30);
+
+        const presets = [
+          {
+            label: 'after-max',
+            dateRange: () => ({
+              start: new Date(2025, 5, 1),
+              end: new Date(2025, 6, 15)
+            })
+          }
+        ];
+
+        const result = component['enrichPresetsWithDisabledState'](presets);
+        expect(result[0].isDisabled).toBeTrue();
+      });
+
+      it('should set isDisabled to true when preset violates both minDate and maxDate', () => {
+        component['_minDate'] = new Date(2025, 5, 10);
+        component['_maxDate'] = new Date(2025, 5, 20);
+
+        const presets = [
+          {
+            label: 'invalid-both',
+            dateRange: () => ({
+              start: new Date(2025, 4, 1),
+              end: new Date(2025, 6, 30)
+            })
+          }
+        ];
+
+        const result = component['enrichPresetsWithDisabledState'](presets);
+        expect(result[0].isDisabled).toBeTrue();
+      });
+
+      it('should set isDisabled to false when preset is within min/max range', () => {
+        component['_minDate'] = new Date(2025, 0, 1);
+        component['_maxDate'] = new Date(2025, 11, 31);
+
+        const presets = [
+          {
+            label: 'valid',
+            dateRange: () => ({
+              start: new Date(2025, 5, 1),
+              end: new Date(2025, 5, 15)
+            })
+          }
+        ];
+
+        const result = component['enrichPresetsWithDisabledState'](presets);
+        expect(result[0].isDisabled).toBeFalse();
+      });
+
+      it('should set isDisabled to false when no minDate/maxDate configured', () => {
+        const presets = [
+          {
+            label: 'no-limits',
+            dateRange: () => ({
+              start: new Date(2025, 5, 1),
+              end: new Date(2025, 5, 15)
+            })
+          }
+        ];
+
+        const result = component['enrichPresetsWithDisabledState'](presets);
+        expect(result[0].isDisabled).toBeFalse();
+      });
+
+      it('should correctly disable some presets and enable others', () => {
+        component['_minDate'] = new Date(2025, 5, 1);
+
+        const presets = [
+          {
+            label: 'invalid',
+            dateRange: () => ({
+              start: new Date(2025, 4, 1),
+              end: new Date(2025, 4, 15)
+            })
+          },
+          {
+            label: 'valid',
+            dateRange: () => ({
+              start: new Date(2025, 5, 5),
+              end: new Date(2025, 5, 15)
+            })
+          }
+        ];
+
+        const result = component['enrichPresetsWithDisabledState'](presets);
+        const invalidPreset = result.find(p => p.label === 'invalid');
+        const validPreset = result.find(p => p.label === 'valid');
+        expect(invalidPreset.isDisabled).toBeTrue();
+        expect(validPreset.isDisabled).toBeFalse();
+      });
+
+      it('should set isDisabled to false when only maxDate is set and preset end is within range', () => {
+        component['_maxDate'] = new Date(2025, 11, 31);
+
+        const presets = [
+          {
+            label: 'within-max',
+            dateRange: () => ({
+              start: new Date(2025, 5, 1),
+              end: new Date(2025, 5, 15)
+            })
+          }
+        ];
+
+        const result = component['enrichPresetsWithDisabledState'](presets);
+        expect(result[0].isDisabled).toBeFalse();
+      });
+
+      it('should use explicit minDate/maxDate parameters when provided instead of component properties', () => {
+        component['_minDate'] = undefined;
+        component['_maxDate'] = undefined;
+
+        const presets = [
+          {
+            label: 'test-explicit',
+            dateRange: () => ({
+              start: new Date(2025, 3, 1),
+              end: new Date(2025, 7, 30)
+            })
+          }
+        ];
+
+        const explicitMin = new Date(2025, 5, 1);
+        const explicitMax = new Date(2025, 5, 30);
+
+        const result = component['enrichPresetsWithDisabledState'](presets, explicitMin, explicitMax);
+        expect(result[0].isDisabled).toBeTrue();
+      });
+    });
+
+    describe('onPresetSelected:', () => {
+      it('should update value, activateDate, and selectedPresetLabel', () => {
+        const start = new Date(2025, 0, 1);
+        const end = new Date(2025, 0, 31);
+
+        spyOnProperty(component, 'isRange').and.returnValue(true);
+        spyOn(component.change, 'emit');
+        spyOn(component, <any>'updateModel');
+
+        component.onPresetSelected({ label: 'test', start, end });
+
+        expect(component.selectedPresetLabel).toBe('test');
+        expect(component.value.start).toEqual(start);
+        expect(component.value.end).toEqual(end);
+        expect(component.activateDate.start).toEqual(start);
+        expect(component.activateDate.end).toEqual(end);
+        expect(component['updateModel']).toHaveBeenCalled();
+        expect(component.change.emit).toHaveBeenCalled();
+      });
+
+      it('should clamp dates to minDate/maxDate', () => {
+        const minDate = new Date(2025, 0, 10);
+        const maxDate = new Date(2025, 0, 20);
+
+        component['_minDate'] = minDate;
+        component['_maxDate'] = maxDate;
+
+        spyOnProperty(component, 'isRange').and.returnValue(true);
+        spyOn(component.change, 'emit');
+        spyOn(component, <any>'updateModel');
+
+        component.onPresetSelected({ label: 'test', start: new Date(2025, 0, 1), end: new Date(2025, 0, 31) });
+
+        expect(component.value.start.getTime()).toEqual(minDate.getTime());
+        expect(component.value.end.getTime()).toEqual(maxDate.getTime());
+      });
+
+      it('should do nothing when clamped start > end', () => {
+        const minDate = new Date(2025, 0, 10);
+        const maxDate = new Date(2025, 0, 20);
+
+        component['_minDate'] = minDate;
+        component['_maxDate'] = maxDate;
+
+        spyOnProperty(component, 'isRange').and.returnValue(true);
+        spyOn(component.change, 'emit');
+
+        component.onPresetSelected({ label: 'test', start: new Date(2025, 0, 25), end: new Date(2025, 0, 5) });
+
+        expect(component.change.emit).not.toHaveBeenCalled();
+      });
+    });
+
+    it('onSelectDate: should clear selectedPresetLabel', () => {
+      component.selectedPresetLabel = 'today';
+
+      spyOnProperty(component, 'isRange').and.returnValue(false);
+
+      component.onSelectDate(new Date(2025, 0, 1));
+
+      expect(component.selectedPresetLabel).toBeNull();
+    });
+  });
+
+  describe('Month-Year/Year mode:', () => {
+    describe('isMonthDisabled:', () => {
+      it('should return true when month is before minDate', () => {
+        component.minDate = new Date(2025, 5, 1); // June 2025
+        component['selectedYear'] = 2025;
+
+        expect(component.isMonthDisabled(3)).toBeTrue(); // April (index 3 = month 4)
+      });
+
+      it('should return false when month is equal to minDate month', () => {
+        component.minDate = new Date(2025, 5, 1); // June 2025
+        component['selectedYear'] = 2025;
+
+        expect(component.isMonthDisabled(5)).toBeFalse(); // June (index 5 = month 6)
+      });
+
+      it('should return false when month is after minDate', () => {
+        component.minDate = new Date(2025, 5, 1); // June 2025
+        component['selectedYear'] = 2025;
+
+        expect(component.isMonthDisabled(7)).toBeFalse(); // August (index 7 = month 8)
+      });
+
+      it('should return true when month is after maxDate', () => {
+        component.maxDate = new Date(2025, 8, 30); // September 2025
+        component['selectedYear'] = 2025;
+
+        expect(component.isMonthDisabled(10)).toBeTrue(); // November (index 10 = month 11)
+      });
+
+      it('should return false when month is equal to maxDate month', () => {
+        component.maxDate = new Date(2025, 8, 30); // September 2025
+        component['selectedYear'] = 2025;
+
+        expect(component.isMonthDisabled(8)).toBeFalse(); // September (index 8 = month 9)
+      });
+
+      it('should return false when no minDate or maxDate', () => {
+        component.minDate = undefined;
+        component.maxDate = undefined;
+        component['selectedYear'] = 2025;
+
+        expect(component.isMonthDisabled(0)).toBeFalse();
+        expect(component.isMonthDisabled(11)).toBeFalse();
+      });
+
+      it('should return true when year is before minDate year', () => {
+        component.minDate = new Date(2025, 0, 1);
+        component['selectedYear'] = 2024;
+
+        expect(component.isMonthDisabled(11)).toBeTrue();
+      });
+
+      it('should return true when year is after maxDate year', () => {
+        component.maxDate = new Date(2025, 11, 31);
+        component['selectedYear'] = 2026;
+
+        expect(component.isMonthDisabled(0)).toBeTrue();
+      });
+    });
+
+    describe('isYearDisabled:', () => {
+      it('should return true when year is before minDate year', () => {
+        component.minDate = new Date(2020, 0, 1);
+
+        expect(component.isYearDisabled(2019)).toBeTrue();
+      });
+
+      it('should return false when year equals minDate year', () => {
+        component.minDate = new Date(2020, 0, 1);
+
+        expect(component.isYearDisabled(2020)).toBeFalse();
+      });
+
+      it('should return true when year is after maxDate year', () => {
+        component.maxDate = new Date(2030, 11, 31);
+
+        expect(component.isYearDisabled(2031)).toBeTrue();
+      });
+
+      it('should return false when year equals maxDate year', () => {
+        component.maxDate = new Date(2030, 11, 31);
+
+        expect(component.isYearDisabled(2030)).toBeFalse();
+      });
+
+      it('should return false when no minDate or maxDate', () => {
+        component.minDate = undefined;
+        component.maxDate = undefined;
+
+        expect(component.isYearDisabled(1900)).toBeFalse();
+        expect(component.isYearDisabled(2100)).toBeFalse();
+      });
+
+      it('should return false when year is within range', () => {
+        component.minDate = new Date(2020, 0, 1);
+        component.maxDate = new Date(2030, 11, 31);
+
+        expect(component.isYearDisabled(2025)).toBeFalse();
+      });
+    });
+
+    describe('isYearDisabled with selectedMonth:', () => {
+      it('should return true when selectedMonth is set and year+month is before minDate', () => {
+        component.minDate = new Date(2025, 5, 1);
+        component['selectedMonth'] = 3;
+
+        expect(component.isYearDisabled(2025)).toBeTrue();
+      });
+
+      it('should return true when selectedMonth is set and year+month is after maxDate', () => {
+        component.maxDate = new Date(2025, 5, 30);
+        component['selectedMonth'] = 8;
+
+        expect(component.isYearDisabled(2025)).toBeTrue();
+      });
+
+      it('should return false when selectedMonth is set and year+month is within range', () => {
+        component.minDate = new Date(2020, 0, 1);
+        component.maxDate = new Date(2030, 11, 31);
+        component['selectedMonth'] = 6;
+
+        expect(component.isYearDisabled(2025)).toBeFalse();
+      });
+    });
+
+    describe('selectMonth:', () => {
+      beforeEach(() => {
+        component.mode = PoCalendarMode.MonthYear;
+        component.ngOnInit();
+        fixture.detectChanges();
+      });
+
+      it('should set selectedIndexMonth, selectedMonth and call updateModel on Enter key', () => {
+        spyOn(component as any, 'updateModel');
+        const event = new KeyboardEvent('keydown', { key: 'Enter' });
+
+        component.selectMonth(3, event);
+
+        expect(component['selectedIndexMonth']).toBe(3);
+        expect(component['selectedMonth']).toBe(4);
+        expect(component['updateModel']).toHaveBeenCalledWith(4);
+      });
+
+      it('should set selectedIndexMonth, selectedMonth and call updateModel on Space key', () => {
+        spyOn(component as any, 'updateModel');
+        const event = new KeyboardEvent('keydown', { code: 'Space' });
+
+        component.selectMonth(0, event);
+
+        expect(component['selectedIndexMonth']).toBe(0);
+        expect(component['selectedMonth']).toBe(1);
+        expect(component['updateModel']).toHaveBeenCalledWith(1);
+      });
+
+      it('should set selectedIndexMonth, selectedMonth and call updateModel when selected=true', () => {
+        spyOn(component as any, 'updateModel');
+
+        component.selectMonth(5, undefined, true);
+
+        expect(component['selectedIndexMonth']).toBe(5);
+        expect(component['selectedMonth']).toBe(6);
+        expect(component['updateModel']).toHaveBeenCalledWith(6);
+      });
+
+      it('should not call updateModel when event is not a select action', () => {
+        spyOn(component as any, 'updateModel');
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+
+        component.selectMonth(3, event);
+
+        expect(component['updateModel']).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('selectYear:', () => {
+      beforeEach(() => {
+        component.mode = PoCalendarMode.Year;
+        component.ngOnInit();
+        fixture.detectChanges();
+      });
+
+      it('should use default selected=false and call updateModel only on Enter key', () => {
+        spyOn(component as any, 'updateModel');
+        const event = new KeyboardEvent('keydown', { key: 'Enter' });
+
+        component.selectYear(2, event, undefined, 2022);
+
+        expect(component['selectedIndexYear']).toBe(2);
+        expect(component['selectedYear']).toBe(2022);
+        expect(component['updateModel']).toHaveBeenCalledWith(2022);
+      });
+
+      it('should set selectedIndexYear, selectedYear and call updateModel on Enter key', () => {
+        spyOn(component as any, 'updateModel');
+        const event = new KeyboardEvent('keydown', { key: 'Enter' });
+
+        component.selectYear(10, event, false, 2025);
+
+        expect(component['selectedIndexYear']).toBe(10);
+        expect(component['selectedYear']).toBe(2025);
+        expect(component['updateModel']).toHaveBeenCalledWith(2025);
+      });
+
+      it('should set selectedIndexYear, selectedYear and call updateModel on Space key', () => {
+        spyOn(component as any, 'updateModel');
+        const event = new KeyboardEvent('keydown', { code: 'Space' });
+
+        component.selectYear(5, event, false, 2020);
+
+        expect(component['selectedIndexYear']).toBe(5);
+        expect(component['selectedYear']).toBe(2020);
+        expect(component['updateModel']).toHaveBeenCalledWith(2020);
+      });
+
+      it('should set selectedIndexYear, selectedYear and call updateModel when selected=true', () => {
+        spyOn(component as any, 'updateModel');
+
+        component.selectYear(8, undefined, true, 2030);
+
+        expect(component['selectedIndexYear']).toBe(8);
+        expect(component['selectedYear']).toBe(2030);
+        expect(component['updateModel']).toHaveBeenCalledWith(2030);
+      });
+
+      it('should not call updateModel when event is not a select action', () => {
+        spyOn(component as any, 'updateModel');
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+
+        component.selectYear(3, event, false, 2025);
+
+        expect(component['updateModel']).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('onKeydownMonth:', () => {
+      beforeEach(() => {
+        component.mode = PoCalendarMode.MonthYear;
+        component.ngOnInit();
+        fixture.detectChanges();
+      });
+
+      it('should call selectMonth on Enter key', () => {
+        spyOn(component, 'selectMonth');
+        spyOn<any>(component, 'getMonthOptions').and.returnValue(new Array(12).fill(null));
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { key: 'Enter' });
+
+        component.onKeydownMonth(event, 3);
+
+        expect(component.selectMonth).toHaveBeenCalledWith(3, event);
+      });
+
+      it('should call selectMonth on Space key', () => {
+        spyOn(component, 'selectMonth');
+        spyOn<any>(component, 'getMonthOptions').and.returnValue(new Array(12).fill(null));
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { code: 'Space' });
+
+        component.onKeydownMonth(event, 5);
+
+        expect(component.selectMonth).toHaveBeenCalledWith(5, event);
+      });
+
+      it('should navigate down on ArrowDown key', () => {
+        spyOn(component, 'selectMonth');
+        spyOn<any>(component, 'getMonthOptions').and.returnValue(new Array(12).fill(null));
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+
+        component.onKeydownMonth(event, 3);
+
+        expect(component.selectMonth).toHaveBeenCalledWith(4, event);
+      });
+
+      it('should not exceed max index on ArrowDown key', () => {
+        spyOn(component, 'selectMonth');
+        spyOn<any>(component, 'getMonthOptions').and.returnValue(new Array(12).fill(null));
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+
+        component.onKeydownMonth(event, 11);
+
+        expect(component.selectMonth).toHaveBeenCalledWith(11, event);
+      });
+
+      it('should navigate up on ArrowUp key', () => {
+        spyOn(component, 'selectMonth');
+        spyOn<any>(component, 'getMonthOptions').and.returnValue(new Array(12).fill(null));
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { key: 'ArrowUp' });
+
+        component.onKeydownMonth(event, 5);
+
+        expect(component.selectMonth).toHaveBeenCalledWith(4, event);
+      });
+
+      it('should not go below 0 on ArrowUp key', () => {
+        spyOn(component, 'selectMonth');
+        spyOn<any>(component, 'getMonthOptions').and.returnValue(new Array(12).fill(null));
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { key: 'ArrowUp' });
+
+        component.onKeydownMonth(event, 0);
+
+        expect(component.selectMonth).toHaveBeenCalledWith(0, event);
+      });
+
+      it('should emit close on Shift+Tab', () => {
+        spyOn(component.close, 'emit');
+        const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true });
+
+        component.onKeydownMonth(event, 0);
+
+        expect(component.close.emit).toHaveBeenCalled();
+        expect(component['focusedIndex']).toBe(0);
+      });
+
+      it('should focus year list on Tab (no shift)', () => {
+        const mockYearBtn = { focus: jasmine.createSpy('focus'), disabled: false } as any;
+        spyOn<any>(component, 'getYearOptions').and.returnValue([mockYearBtn]);
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+        component['selectedIndexYear'] = 0;
+
+        const event = new KeyboardEvent('keydown', { key: 'Tab' });
+        component.onKeydownMonth(event, 0);
+
+        expect(mockYearBtn.focus).toHaveBeenCalled();
+      });
+
+      it('should focus first enabled year option on Tab when no selected year', () => {
+        const mockYearBtn = { focus: jasmine.createSpy('focus'), disabled: false } as any;
+        spyOn<any>(component, 'getYearOptions').and.returnValue([mockYearBtn]);
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+        component['selectedIndexYear'] = undefined;
+
+        const event = new KeyboardEvent('keydown', { key: 'Tab' });
+        component.onKeydownMonth(event, 0);
+
+        expect(mockYearBtn.focus).toHaveBeenCalled();
+      });
+    });
+
+    describe('onKeydownYear:', () => {
+      beforeEach(() => {
+        component.mode = PoCalendarMode.Year;
+        component.ngOnInit();
+        fixture.detectChanges();
+      });
+
+      it('should call selectYear on Enter key', () => {
+        spyOn(component, 'selectYear');
+        spyOn<any>(component, 'getYearOptions').and.returnValue(new Array(301).fill(null));
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { key: 'Enter' });
+
+        component.onKeydownYear(event, 3);
+
+        expect(component.selectYear).toHaveBeenCalledWith(3, event);
+      });
+
+      it('should call selectYear on Space key', () => {
+        spyOn(component, 'selectYear');
+        spyOn<any>(component, 'getYearOptions').and.returnValue(new Array(301).fill(null));
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { code: 'Space' });
+
+        component.onKeydownYear(event, 5);
+
+        expect(component.selectYear).toHaveBeenCalledWith(5, event);
+      });
+
+      it('should navigate down on ArrowDown key', () => {
+        spyOn(component, 'selectYear');
+        spyOn<any>(component, 'getYearOptions').and.returnValue(new Array(301).fill(null));
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+
+        component.onKeydownYear(event, 3);
+
+        expect(component.selectYear).toHaveBeenCalledWith(4, event);
+      });
+
+      it('should navigate up on ArrowUp key', () => {
+        spyOn(component, 'selectYear');
+        spyOn<any>(component, 'getYearOptions').and.returnValue(new Array(301).fill(null));
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+        const event = new KeyboardEvent('keydown', { key: 'ArrowUp' });
+
+        component.onKeydownYear(event, 5);
+
+        expect(component.selectYear).toHaveBeenCalledWith(4, event);
+      });
+
+      it('should not go below 0 on ArrowUp key', () => {
+        spyOn(component, 'selectYear');
+        const event = new KeyboardEvent('keydown', { key: 'ArrowUp' });
+
+        component.onKeydownYear(event, 0);
+
+        expect(component.selectYear).toHaveBeenCalledWith(0, event);
+      });
+
+      it('should emit close on Tab key (no shift)', () => {
+        spyOn(component.close, 'emit');
+        const event = new KeyboardEvent('keydown', { key: 'Tab' });
+
+        component.onKeydownYear(event, 3);
+
+        expect(component.close.emit).toHaveBeenCalled();
+        expect(component['focusedIndex']).toBe(0);
+      });
+
+      it('should emit close on Shift+Tab in year mode', () => {
+        component.mode = PoCalendarMode.Year;
+        spyOn(component.close, 'emit');
+        const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true });
+
+        component.onKeydownYear(event, 0);
+
+        expect(component.close.emit).toHaveBeenCalled();
+      });
+
+      it('should focus month list on Shift+Tab in month-year mode', () => {
+        component.mode = PoCalendarMode.MonthYear;
+        const mockMonthBtn = { focus: jasmine.createSpy('focus') } as any;
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([mockMonthBtn]);
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        component['selectedIndexMonth'] = 0;
+
+        const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true });
+        component.onKeydownYear(event, 0);
+
+        expect(mockMonthBtn.focus).toHaveBeenCalled();
+      });
+
+      it('should focus first month option on Shift+Tab when no selected month', () => {
+        component.mode = PoCalendarMode.MonthYear;
+        const mockMonthBtn = { focus: jasmine.createSpy('focus') } as any;
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([mockMonthBtn]);
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        component['selectedIndexMonth'] = undefined;
+
+        const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true });
+        component.onKeydownYear(event, 0);
+
+        expect(mockMonthBtn.focus).toHaveBeenCalled();
+      });
+
+      it('should not exceed max index on ArrowDown key', () => {
+        spyOn(component, 'selectYear');
+        spyOn<any>(component, 'getYearOptions').and.returnValue(new Array(301));
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+        component.onKeydownYear(event, 300);
+
+        expect(component.selectYear).toHaveBeenCalledWith(300, event);
+      });
+    });
+
+    describe('updateModel for month-year mode:', () => {
+      it('should emit Date with month and year when both selected in month-year mode', () => {
+        component.mode = PoCalendarMode.MonthYear;
+        component['selectedMonth'] = 6;
+        component['selectedYear'] = 2025;
+
+        spyOn(component.change, 'emit');
+
+        component['updateModel'](6);
+
+        expect(component.change.emit).toHaveBeenCalled();
+        const emittedValue = (component.change.emit as jasmine.Spy).calls.mostRecent().args[0];
+        expect(emittedValue instanceof Date).toBeTrue();
+        expect(emittedValue.getFullYear()).toBe(2025);
+        expect(emittedValue.getMonth()).toBe(5);
+      });
+
+      it('should return early when selectedMonth is missing in month-year mode', () => {
+        component.mode = PoCalendarMode.MonthYear;
+        component['selectedMonth'] = null;
+        component['selectedYear'] = 2025;
+
+        spyOn(component.change, 'emit');
+
+        component['updateModel'](null);
+
+        expect(component.change.emit).not.toHaveBeenCalled();
+      });
+
+      it('should emit Date with year when selectedYear exists in year mode', () => {
+        component.mode = PoCalendarMode.Year;
+        component['selectedYear'] = 2025;
+
+        spyOn(component.change, 'emit');
+
+        component['updateModel'](2025);
+
+        expect(component.change.emit).toHaveBeenCalled();
+        const emittedValue = (component.change.emit as jasmine.Spy).calls.mostRecent().args[0];
+        expect(emittedValue instanceof Date).toBeTrue();
+        expect(emittedValue.getFullYear()).toBe(2025);
+        expect(emittedValue.getMonth()).toBe(0);
+      });
+
+      it('should return early when selectedYear is missing in year mode', () => {
+        component.mode = PoCalendarMode.Year;
+        component['selectedYear'] = null;
+
+        spyOn(component.change, 'emit');
+
+        component['updateModel'](null);
+
+        expect(component.change.emit).not.toHaveBeenCalled();
+      });
+
+      it('should call propagateChange with finalValue', () => {
+        component.mode = PoCalendarMode.Year;
+        component['selectedYear'] = 2025;
+        component['propagateChange'] = jasmine.createSpy('propagateChange');
+
+        component['updateModel'](2025);
+
+        expect(component['propagateChange']).toHaveBeenCalled();
+      });
+    });
+
+    describe('writeDate for month-year/year modes:', () => {
+      beforeEach(() => {
+        component.mode = PoCalendarMode.MonthYear;
+        component.ngOnInit();
+        fixture.detectChanges();
+      });
+
+      it('should set month and year when mode is month-year', () => {
+        const date = new Date(2025, 5, 1);
+        const mockYearBtns = component.displayYears.map((y: number) => ({ label: () => String(y) }));
+        spyOn<any>(component, 'getYearOptions').and.returnValue(mockYearBtns);
+
+        component['writeDate'](date);
+
+        expect(component['selectedMonth']).toBe(6);
+        expect(component['selectedIndexMonth']).toBe(5);
+        expect(component['selectedYear']).toBe(2025);
+      });
+
+      it('should set year when mode is year', () => {
+        component.mode = PoCalendarMode.Year;
+        component.ngOnInit();
+        fixture.detectChanges();
+        const date = new Date(2025, 0, 1);
+        const mockYearBtns = component.displayYears.map((y: number) => ({ label: () => String(y) }));
+        spyOn<any>(component, 'getYearOptions').and.returnValue(mockYearBtns);
+
+        component['writeDate'](date);
+
+        expect(component['selectedYear']).toBe(2025);
+      });
+
+      it('should set selectedIndexYear correctly via findIndex callback in month-year mode', () => {
+        const targetYear = new Date().getFullYear();
+        const date = new Date(targetYear, 3, 1);
+        const mockYearBtns = component.displayYears.map((y: number) => ({ label: () => String(y) }));
+        spyOn<any>(component, 'getYearOptions').and.returnValue(mockYearBtns);
+
+        component['writeDate'](date);
+
+        const expectedIndex = component.displayYears.indexOf(targetYear);
+        expect(component['selectedIndexYear']).toBe(expectedIndex);
+      });
+
+      it('should set selectedIndexYear correctly via findIndex callback in year mode', () => {
+        component.mode = PoCalendarMode.Year;
+        component.ngOnInit();
+        fixture.detectChanges();
+        const targetYear = new Date().getFullYear();
+        const date = new Date(targetYear, 0, 1);
+        const mockYearBtns = component.displayYears.map((y: number) => ({ label: () => String(y) }));
+        spyOn<any>(component, 'getYearOptions').and.returnValue(mockYearBtns);
+
+        component['writeDate'](date);
+
+        const expectedIndex = component.displayYears.indexOf(targetYear);
+        expect(component['selectedIndexYear']).toBe(expectedIndex);
+      });
+    });
+
+    describe('writeValue for month-year/year modes:', () => {
+      it('should clear selectedMonth, selectedYear, selectedIndexMonth, selectedIndexYear when value is falsy', () => {
+        component['selectedMonth'] = 6;
+        component['selectedYear'] = 2025;
+        component['selectedIndexMonth'] = 5;
+        component['selectedIndexYear'] = 10;
+
+        component.writeValue(null);
+
+        expect(component['selectedMonth']).toBeNull();
+        expect(component['selectedYear']).toBeNull();
+        expect(component['selectedIndexMonth']).toBeNull();
+        expect(component['selectedIndexYear']).toBeNull();
+      });
+    });
+
+    describe('isMonthDisabled when selectedYear is undefined:', () => {
+      it('should return false when selectedYear is not set', () => {
+        component['selectedYear'] = undefined;
+        component.minDate = new Date(2025, 0, 1);
+
+        expect(component.isMonthDisabled(0)).toBeFalse();
+      });
+    });
+
+    describe('selectMonth with DOM focus:', () => {
+      beforeEach(() => {
+        component.mode = PoCalendarMode.MonthYear;
+        component.ngOnInit();
+        fixture.detectChanges();
+      });
+
+      it('should set focusedIndex and call focus when monthOptions[index] exists', () => {
+        const mockBtn = { focus: jasmine.createSpy('focus') } as any;
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([mockBtn]);
+        spyOn<any>(component, 'updateModel');
+
+        component.selectMonth(0, undefined, true);
+
+        expect(component['focusedIndex']).toBe(0);
+        expect(mockBtn.focus).toHaveBeenCalled();
+      });
+
+      it('should not call focus when monthOptions[index] does not exist', () => {
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+        spyOn<any>(component, 'updateModel');
+
+        component.selectMonth(5, undefined, true);
+
+        expect(component['focusedIndex']).not.toBe(5);
+      });
+    });
+
+    describe('selectYear with DOM focus:', () => {
+      beforeEach(() => {
+        component.mode = PoCalendarMode.Year;
+        component.ngOnInit();
+        fixture.detectChanges();
+      });
+
+      it('should set focusedIndex and call focus when yearOptions[index] exists', () => {
+        const mockBtn = { focus: jasmine.createSpy('focus') } as any;
+        spyOn<any>(component, 'getYearOptions').and.returnValue([mockBtn]);
+        spyOn<any>(component, 'updateModel');
+
+        component.selectYear(0, undefined, true, 2025);
+
+        expect(component['focusedIndex']).toBe(0);
+        expect(mockBtn.focus).toHaveBeenCalled();
+      });
+
+      it('should not call focus when yearOptions[index] does not exist', () => {
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        spyOn<any>(component, 'updateModel');
+
+        component.selectYear(5, undefined, true, 2025);
+
+        expect(component['focusedIndex']).not.toBe(5);
+      });
+    });
+
+    describe('onKeydownYear ArrowDown at boundary:', () => {
+      it('should increment index when not at last position', () => {
+        component.mode = PoCalendarMode.Year;
+        component.ngOnInit();
+        fixture.detectChanges();
+
+        const mockBtns = new Array(5).fill(null);
+        spyOn<any>(component, 'getYearOptions').and.returnValue(mockBtns);
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+        spyOn(component, 'selectYear');
+
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+        component.onKeydownYear(event, 2);
+
+        expect(component.selectYear).toHaveBeenCalledWith(3, event);
+      });
+
+      it('should stay at max index on ArrowDown at last position', () => {
+        component.mode = PoCalendarMode.Year;
+        component.ngOnInit();
+        fixture.detectChanges();
+
+        const mockBtns = new Array(5).fill(null);
+        spyOn<any>(component, 'getYearOptions').and.returnValue(mockBtns);
+        spyOn<any>(component, 'getMonthOptions').and.returnValue([]);
+        spyOn(component, 'selectYear');
+
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+        component.onKeydownYear(event, 4);
+
+        expect(component.selectYear).toHaveBeenCalledWith(4, event);
+      });
+    });
+
+    describe('onKeydownMonth ArrowDown at boundary:', () => {
+      it('should increment index when not at last position', () => {
+        component.mode = PoCalendarMode.MonthYear;
+        component.ngOnInit();
+        fixture.detectChanges();
+
+        const mockBtns = new Array(12).fill(null);
+        spyOn<any>(component, 'getMonthOptions').and.returnValue(mockBtns);
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        spyOn(component, 'selectMonth');
+
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+        component.onKeydownMonth(event, 5);
+
+        expect(component.selectMonth).toHaveBeenCalledWith(6, event);
+      });
+
+      it('should stay at max index on ArrowDown at last position', () => {
+        component.mode = PoCalendarMode.MonthYear;
+        component.ngOnInit();
+        fixture.detectChanges();
+
+        const mockBtns = new Array(12).fill(null);
+        spyOn<any>(component, 'getMonthOptions').and.returnValue(mockBtns);
+        spyOn<any>(component, 'getYearOptions').and.returnValue([]);
+        spyOn(component, 'selectMonth');
+
+        const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+        component.onKeydownMonth(event, 11);
+
+        expect(component.selectMonth).toHaveBeenCalledWith(11, event);
+      });
+    });
+
+    describe('ngOnInit for month-year mode:', () => {
+      it('should initialize displayMonths and displayYears for month-year mode', () => {
+        component.mode = PoCalendarMode.MonthYear;
+
+        component.ngOnInit();
+
+        expect(component.displayMonths).toBeDefined();
+        expect(component.displayMonths.length).toBe(12);
+        expect(component.displayYears).toBeDefined();
+        expect(component.displayYears.length).toBe(301);
+      });
+
+      it('should initialize displayMonths and displayYears for year mode', () => {
+        component.mode = PoCalendarMode.Year;
+
+        component.ngOnInit();
+
+        expect(component.displayMonths).toBeDefined();
+        expect(component.displayYears).toBeDefined();
+        expect(component.displayYears.length).toBe(301);
+      });
+
+      it('should not initialize displayYears for default mode', () => {
+        component.mode = undefined;
+        component.displayYears = [];
+
+        component.ngOnInit();
+
+        expect(component.displayYears.length).toBe(0);
+      });
+
+      it('should initialize displayYears with 301 items when yearRangeLimit is undefined', () => {
+        component.mode = PoCalendarMode.MonthYear;
+        component.yearRangeLimit = undefined;
+
+        component.ngOnInit();
+
+        expect(component.displayYears.length).toBe(301);
+      });
+
+      it('should initialize displayYears with 301 items when yearRangeLimit is null', () => {
+        component.mode = PoCalendarMode.Year;
+        component.yearRangeLimit = null;
+
+        component.ngOnInit();
+
+        expect(component.displayYears.length).toBe(301);
+      });
+
+      it('should fallback to 150 when internal _yearRangeLimit is bypassed as undefined', () => {
+        component.mode = PoCalendarMode.MonthYear;
+        component['_yearRangeLimit'] = undefined;
+
+        component.ngOnInit();
+
+        expect(component.displayYears.length).toBe(301);
+      });
+
+      it('should fallback to 150 when internal _yearRangeLimit is bypassed as null', () => {
+        component.mode = PoCalendarMode.Year;
+        component['_yearRangeLimit'] = null;
+
+        component.ngOnInit();
+
+        expect(component.displayYears.length).toBe(301);
+      });
+
+      it('should initialize displayYears respecting custom yearRangeLimit', () => {
+        component.mode = PoCalendarMode.Year;
+        component.yearRangeLimit = 10;
+
+        component.ngOnInit();
+
+        expect(component.displayYears.length).toBe(21);
+      });
     });
   });
 
   describe('Templates:', () => {
-    describe('Day visible:', () => {
-      it('should show `po-calendar-content-list-day`', () => {
-        component.dayVisible = true;
-        fixture.detectChanges();
-        expect(nativeElement.querySelector('.po-calendar-content-list-day')).toBeTruthy();
-      });
+    it('should show `po-calendar` if mode is range', () => {
+      component.mode = PoCalendarMode.Range;
 
-      it('should call `onPreviousMonth` on `po-calendar-nav-left` click', () => {
-        component.dayVisible = true;
-        spyOn(component, 'onPreviousMonth');
+      fixture.detectChanges();
 
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-nav-left');
-        calendarNav.click();
-
-        expect(component.onPreviousMonth).toHaveBeenCalled();
-      });
-
-      it('should call `selectMonth` on `.po-calendar-nav-title > .po-clickable` click and show `displayMonth`', () => {
-        component.dayVisible = true;
-        spyOn(component, 'selectMonth');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-nav-title > .po-clickable');
-        calendarNav.click();
-
-        expect(component.selectMonth).toHaveBeenCalled();
-        expect(calendarNav.innerHTML).toContain(component.displayMonth);
-      });
-
-      it('should call `selectYear` on `.po-calendar-nav-title > .po-clickable:nth-of-type(2)` click and show `displayYear`', () => {
-        component.dayVisible = true;
-        spyOn(component, 'selectYear');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector(
-          '.po-calendar-nav-title > .po-clickable:nth-of-type(2)'
-        );
-        calendarNav.click();
-
-        expect(component.selectYear).toHaveBeenCalled();
-        expect(calendarNav.innerHTML).toContain(component.displayYear);
-      });
-
-      it('should call `onNextMonth` on `.po-calendar-nav-right` click', () => {
-        component.dayVisible = true;
-        spyOn(component, 'onNextMonth');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-nav-right');
-        calendarNav.click();
-
-        expect(component.onNextMonth).toHaveBeenCalled();
-      });
-
-      it('should show `po-calendar-label` for each day of `displayWeekDays`', () => {
-        component.dayVisible = true;
-        component.displayWeekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-
-        fixture.detectChanges();
-
-        expect(nativeElement.querySelectorAll('.po-calendar-label').length).toBe(7);
-      });
-
-      it('should show `po-calendar-day` for each day of `displayDays`, call `getDayBackgroundColor` and `getDayForegroundColor`', () => {
-        spyOn(component, 'getDayBackgroundColor');
-        spyOn(component, 'getDayForegroundColor');
-
-        const calendarArray = component['poCalendarService'].monthDays(2018, 10);
-        component.displayDays = [].concat.apply([], calendarArray);
-        component.dayVisible = true;
-
-        fixture.detectChanges();
-
-        expect(component.getDayBackgroundColor).toHaveBeenCalled();
-        expect(component.getDayForegroundColor).toHaveBeenCalled();
-        expect(nativeElement.querySelectorAll('.po-calendar-day').length).toBe(35); // 31 days and 4 empty days
-      });
-
-      it('should call `onSelectDate` on `.po-calendar-day` click', () => {
-        component.dayVisible = true;
-        spyOn(component, 'onSelectDate');
-
-        fixture.detectChanges();
-
-        const calendarDay = fixture.debugElement.nativeElement.querySelector('.po-calendar-day');
-        calendarDay.click();
-
-        expect(component.onSelectDate).toHaveBeenCalled();
-      });
+      expect(fixture.debugElement.nativeElement.querySelector('.po-calendar')).toBeTruthy();
     });
 
-    describe('Month visible:', () => {
-      it('should show `po-calendar-content-list-month`', () => {
-        component.dayVisible = false;
-        component.monthVisible = true;
+    it('should show `po-calendar` if mode is not set', () => {
+      component.mode = undefined;
 
-        fixture.detectChanges();
+      fixture.detectChanges();
 
-        expect(nativeElement.querySelector('.po-calendar-content-list-month')).toBeTruthy();
-      });
-
-      it('should call `updateYear` with -1 on `po-calendar-nav-left` click', () => {
-        component.dayVisible = false;
-        component.monthVisible = true;
-
-        spyOn(component, 'updateYear');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-nav-left');
-        calendarNav.click();
-
-        expect(component.updateYear).toHaveBeenCalledWith(-1);
-      });
-
-      it('should call `selectYear` on `.po-calendar-nav-title > .po-clickable` click and show `displayYear`', () => {
-        component.dayVisible = false;
-        component.monthVisible = true;
-
-        spyOn(component, 'selectYear');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-nav-title > .po-clickable');
-        calendarNav.click();
-
-        expect(component.selectYear).toHaveBeenCalled();
-        expect(calendarNav.innerHTML).toContain(component.displayYear);
-      });
-
-      it('should call `updateYear` with 1 on `.po-calendar-nav-right` click', () => {
-        component.dayVisible = false;
-        component.monthVisible = true;
-
-        spyOn(component, 'updateYear');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-nav-right');
-        calendarNav.click();
-
-        expect(component.updateYear).toHaveBeenCalledWith(1);
-      });
-
-      it('should show `po-calendar-label` for `getMonthLabel`', () => {
-        component.dayVisible = false;
-        component.monthVisible = true;
-        const month = 'July';
-
-        spyOn(component, 'getMonthLabel').and.returnValue(month);
-
-        fixture.detectChanges();
-
-        expect(component.getMonthLabel).toHaveBeenCalled();
-        expect(nativeElement.querySelector('.po-calendar-label').innerHTML).toContain(month);
-      });
-
-      it('should show `po-calendar-month` for each month of `displayMonths`, call `getBackgroundColor` and `getForegroundColor`', () => {
-        spyOn(component, 'getBackgroundColor');
-        spyOn(component, 'getForegroundColor');
-
-        component.dayVisible = false;
-        component.monthVisible = true;
-
-        fixture.detectChanges();
-
-        expect(component.getBackgroundColor).toHaveBeenCalled();
-        expect(component.getForegroundColor).toHaveBeenCalled();
-        expect(nativeElement.querySelectorAll('.po-calendar-month').length).toBe(12);
-      });
-
-      it('should call `onSelectMonth` on `.po-calendar-month` click', () => {
-        component.dayVisible = false;
-        component.monthVisible = true;
-
-        spyOn(component, 'onSelectMonth');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-month');
-        calendarNav.click();
-
-        expect(component.onSelectMonth).toHaveBeenCalled();
-      });
+      expect(fixture.debugElement.nativeElement.querySelector('.po-calendar')).toBeTruthy();
     });
 
-    describe('Year visible:', () => {
-      it('po-calendar-content-list-year`', () => {
-        component.dayVisible = false;
-        component.monthVisible = false;
-        component.yearVisible = true;
+    it('should show po-calendar container when mode is range', () => {
+      component.mode = PoCalendarMode.Range;
 
-        fixture.detectChanges();
-        expect(nativeElement.querySelector('.po-calendar-content-list-year')).toBeTruthy();
-      });
+      fixture.detectChanges();
 
-      it('should call `updateYear` with -10 on `po-calendar-nav-left` click', () => {
-        component.dayVisible = false;
-        component.monthVisible = false;
-        component.yearVisible = true;
-
-        spyOn(component, 'updateYear');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-nav-left');
-        calendarNav.click();
-
-        expect(component.updateYear).toHaveBeenCalledWith(-10);
-      });
-
-      it('should show `displayStartDecade` - `displayFinalDecade` on `.po-calendar-nav-title`', () => {
-        component.dayVisible = false;
-        component.monthVisible = false;
-        component.yearVisible = true;
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-nav-title');
-
-        expect(calendarNav.innerHTML).toContain(`${component.displayStartDecade} - ${component.displayFinalDecade}`);
-      });
-
-      it('should call `updateYear` with 10 on `.po-calendar-nav-right` click', () => {
-        component.dayVisible = false;
-        component.monthVisible = false;
-        component.yearVisible = true;
-
-        spyOn(component, 'updateYear');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-nav-right');
-        calendarNav.click();
-
-        expect(component.updateYear).toHaveBeenCalledWith(10);
-      });
-
-      it('should show `po-calendar-label` for `getYearLabel`', () => {
-        component.dayVisible = false;
-        component.monthVisible = false;
-        component.yearVisible = true;
-
-        const year = '2018';
-
-        spyOn(component, 'getYearLabel').and.returnValue(year);
-
-        fixture.detectChanges();
-
-        expect(component.getYearLabel).toHaveBeenCalled();
-        expect(nativeElement.querySelector('.po-calendar-label').innerHTML).toContain(year);
-      });
-
-      it('should show `po-calendar-year` for each year of `displayDecade`, call `getBackgroundColor` and `getForegroundColor`', () => {
-        spyOn(component, 'getBackgroundColor');
-        spyOn(component, 'getForegroundColor');
-
-        component['updateDisplay'](2018, 7);
-
-        component.dayVisible = false;
-        component.monthVisible = false;
-        component.yearVisible = true;
-
-        fixture.detectChanges();
-
-        expect(component.getBackgroundColor).toHaveBeenCalled();
-        expect(component.getForegroundColor).toHaveBeenCalled();
-        expect(nativeElement.querySelectorAll('.po-calendar-year').length).toBe(10);
-      });
-
-      it('should call `onSelectYear` on `.po-calendar-year` click', () => {
-        component.dayVisible = false;
-        component.monthVisible = false;
-        component.yearVisible = true;
-
-        spyOn(component, 'onSelectYear');
-
-        fixture.detectChanges();
-
-        const calendarNav = fixture.debugElement.nativeElement.querySelector('.po-calendar-year');
-        calendarNav.click();
-
-        expect(component.onSelectYear).toHaveBeenCalled();
-      });
+      const calendarDiv = fixture.debugElement.nativeElement.querySelector('.po-calendar');
+      expect(calendarDiv).toBeTruthy();
+      expect(component.isRange).toBeTrue();
+      expect(component.isMonthYear).toBeFalse();
+      expect(component.isYear).toBeFalse();
     });
   });
 });

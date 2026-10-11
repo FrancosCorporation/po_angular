@@ -1,7 +1,7 @@
 <div class="po-row">
   <po-widget class="po-md-6 po-lg-4" p-title="Order Summary">
     <form #f="ngForm">
-      <po-table [p-columns]="columns" [p-items]="items"> </po-table>
+      <po-table [p-columns]="columns" [p-items]="items" [p-hide-table-search]="false"> </po-table>
 
       <po-switch
         name="serviceFee"
@@ -23,9 +23,9 @@
       <div class="po-row">
         <po-button
           class="po-md-12"
-          p-icon="po-icon po-icon-ok"
+          p-icon="po-icon an an-check"
           p-label="Confirm"
-          p-type="primary"
+          p-kind="primary"
           (p-click)="confirm()"
         >
         </po-button>

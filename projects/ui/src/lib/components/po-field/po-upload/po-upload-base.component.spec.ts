@@ -1,26 +1,32 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Component } from '@angular/core';
-import { FormControl, FormsModule } from '@angular/forms';
 import { HttpClient, HttpHandler } from '@angular/common/http';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { FormsModule, UntypedFormControl } from '@angular/forms';
 
-import { expectPropertiesValues, configureTestSuite } from '../../../util-test/util-expect.spec';
+import { expectPropertiesValues } from '../../../util-test/util-expect.spec';
 
-import * as utilsFunctions from '../../../utils/util';
-import * as ValidatorsFunctions from '../validators';
-import { PoLanguageService } from '../../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { PoUtils as utilsFunctions } from '../../../utils/util';
+import { PoValidators as ValidatorsFunctions } from '../validators';
 
+import { PoThemeA11yEnum } from '../../../services';
+import { PoProgressAction } from '../../po-progress';
 import { PoUploadBaseComponent, poUploadLiteralsDefault } from './po-upload-base.component';
 import { PoUploadFile } from './po-upload-file';
 import { PoUploadService } from './po-upload.service';
 
 @Component({
   selector: 'po-upload',
-  template: ` <input type="file" class="po-upload" name="upload" /> `
+  template: ` <input type="file" class="po-upload" name="upload" /> `,
+  standalone: false
 })
 class PoUploadComponent extends PoUploadBaseComponent {
-  constructor(uploadService: PoUploadService) {
-    super(uploadService, new PoLanguageService());
+  constructor() {
+    const uploadService = inject(PoUploadService);
+    const cd = inject(ChangeDetectorRef);
+
+    super(uploadService, new PoLanguageService(), cd);
   }
 
   sendFeedback() {}
@@ -40,15 +46,13 @@ describe('PoUploadBaseComponent:', () => {
     webkitRelativePath: ''
   };
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       declarations: [PoUploadComponent],
       providers: [HttpClient, HttpHandler, PoUploadService, PoLanguageService],
       imports: [FormsModule]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoUploadComponent);
     component = fixture.componentInstance;
 
@@ -106,7 +110,7 @@ describe('PoUploadBaseComponent:', () => {
       const registerOnTouchedFn = () => {};
 
       component.registerOnTouched(registerOnTouchedFn);
-      expect(component.onModelTouched).toBe(registerOnTouchedFn);
+      expect(component['onModelTouched']).toBe(registerOnTouchedFn);
     });
 
     it('registerOnValidatorChange: should register validatorChange function', () => {
@@ -125,14 +129,14 @@ describe('PoUploadBaseComponent:', () => {
 
       spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(true);
 
-      expect(component.validate(new FormControl([]))).toEqual(validObj);
+      expect(component.validate(new UntypedFormControl([]))).toEqual(validObj);
       expect(ValidatorsFunctions.requiredFailed).toHaveBeenCalled();
     });
 
     it('validate: should return undefined when `requiredFailed` is false', () => {
       spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(false);
 
-      expect(component.validate(new FormControl(null))).toBeUndefined();
+      expect(component.validate(new UntypedFormControl(null))).toBeUndefined();
       expect(ValidatorsFunctions.requiredFailed).toHaveBeenCalled();
     });
 
@@ -221,26 +225,27 @@ describe('PoUploadBaseComponent:', () => {
     });
 
     describe('parseFiles:', () => {
-      it('should call `insertFileInFiles` and return array of PoUploadFile', () => {
-        const files = [new PoUploadFile({})];
+      it('should call `convertImageToBase64` and set `thumbnailUrl` when showThumbnail is true', fakeAsync(() => {
+        const mockBase64 = 'data:image/png;base64,mockValue';
+        const mockFile = new File(['mock-content'], 'mock.png', { type: 'image/png' });
 
-        const checkRestritions = spyOn(component, <any>'checkRestrictions').and.returnValue(true);
-        spyOn(component, <any>'insertFileInFiles').and.returnValue(files);
+        const files = [new PoUploadFile(mockFile)];
 
-        expect(component['parseFiles']([fileMock])).toEqual(files);
+        spyOn(component as any, 'checkRestrictions').and.returnValue(true);
+        spyOn(component as any, 'insertFileInFiles').and.returnValue(files);
+        spyOn(utilsFunctions, 'convertImageToBase64').and.returnValue(Promise.resolve(mockBase64));
+        spyOn(component['cd'], 'detectChanges');
 
-        expect(checkRestritions).toHaveBeenCalled();
-        expect(component['insertFileInFiles']).toHaveBeenCalled();
-      });
+        component.showThumbnail = true;
 
-      it('should not call `insertFileInFiles`', () => {
-        const checkRestritions = spyOn(component, <any>'checkRestrictions').and.returnValue(false);
-        spyOn(component, <any>'insertFileInFiles');
+        const result = component['parseFiles']([mockFile]);
 
-        expect(component['parseFiles']([fileMock])).toBeTruthy();
-        expect(checkRestritions).toHaveBeenCalled();
-        expect(component['insertFileInFiles']).not.toHaveBeenCalled();
-      });
+        tick();
+
+        expect(utilsFunctions.convertImageToBase64).toHaveBeenCalledWith(mockFile);
+        expect(component['cd'].detectChanges).toHaveBeenCalled();
+        expect(result).toEqual(files);
+      }));
 
       it('should return three files if upload limit is three', () => {
         const files = [
@@ -306,11 +311,48 @@ describe('PoUploadBaseComponent:', () => {
       });
     });
 
+    it('parseFiles: should create currentFile with status 2 when checkRestrictions returns false', () => {
+      const mockFile = new File(['content'], 'test.jpg', { type: 'image/jpeg' });
+
+      const poUploadFileInstance = { uid: 1, name: 'test.jpg', displayName: 'test.jpg', extension: 'jpg', size: 1000 };
+
+      const spyCheckRestrictions = spyOn(component as any, 'checkRestrictions').and.returnValue(false);
+      const spyInsertFileInFiles = spyOn(component as any, 'insertFileInFiles').and.callFake((file, files) => [
+        ...files,
+        file
+      ]);
+      const spySendFeedback = spyOn(component as any, 'sendFeedback');
+
+      component.currentFiles = [];
+      component.showThumbnail = false;
+      component.fileRestrictions = { maxFiles: 10 };
+
+      const result = component['parseFiles']([mockFile]);
+
+      expect(spyCheckRestrictions).toHaveBeenCalled();
+      expect(spyInsertFileInFiles).toHaveBeenCalled();
+      expect(spySendFeedback).toHaveBeenCalled();
+
+      expect(result.length).toBe(1);
+      expect(result[0].status).toBe(2);
+
+      expect(result[0]).toEqual(
+        jasmine.objectContaining({
+          uid: result[0].uid,
+          displayName: 'test.jpg - 1 KB',
+          name: poUploadFileInstance.name,
+          extension: '.jpg',
+          size: 7,
+          status: 2,
+          errorMessage: ''
+        })
+      );
+    });
+
     it('checkRestrictions: should be check restrictions', () => {
-      let fakeThis;
       let isTruthy;
 
-      fakeThis = {
+      const fakeThis = {
         fileRestrictions: { minFileSize: 10, maxFileSize: 100, allowedExtensions: ['.png'] }
       };
 
@@ -360,6 +402,21 @@ describe('PoUploadBaseComponent:', () => {
       component['checkRestrictions'](<any>mockFile);
 
       expect(component['sizeNotAllowed']).toBe(3);
+    });
+
+    it('checkRestrictions: should sum `extensionNotAllowed ` if `isAccept` is `false`', () => {
+      const mockFile = {
+        size: 2,
+        extension: '.pdf'
+      };
+
+      spyOn(component, <any>'isAllowedExtension').and.returnValue(false);
+      component['fileRestrictions'] = { maxFileSize: 2, allowedExtensions: ['.png'] };
+      component['sizeNotAllowed'] = 2;
+
+      const response = component['checkRestrictions'](<any>mockFile);
+
+      expect(response).toBeFalse();
     });
 
     it('checkRestrictions: shouldn`t sum `sizeNotAllowed` if `isAcceptSize` is `true`', () => {
@@ -504,19 +561,37 @@ describe('PoUploadBaseComponent:', () => {
 
       expect(files.splice).not.toHaveBeenCalled();
     });
+
+    it('callCustomAction: should emit customActionClick event with the provided file', () => {
+      const mockFile = { name: 'mock-file.txt', size: 12345 } as PoUploadFile;
+      spyOn(component.customActionClick, 'emit');
+
+      component.customActionClick.emit(mockFile);
+
+      expect(component.customActionClick.emit).toHaveBeenCalledWith(mockFile);
+    });
   });
 
   describe('Properties:', () => {
-    it('p-drag-drop: should set `dragDrop` with valid values', () => {
-      const validValues = ['', true, 1, [], {}, 'true'];
+    it('p-compact-label: should update property with `true` when input is true', () => {
+      fixture.componentRef.setInput('p-compact-label', true);
+      fixture.detectChanges();
 
-      expectPropertiesValues(component, 'dragDrop', validValues, true);
+      expect(component.compactLabel()).toBe(true);
     });
 
-    it('p-drag-drop: should set `dragDrop` to false with invalid values', () => {
-      const invalidValues = [null, undefined, NaN, false, 0, 'false', 'teste'];
+    it('p-compact-label: should have default value as false', () => {
+      expect(component.compactLabel()).toBe(false);
+    });
 
-      expectPropertiesValues(component, 'dragDrop', invalidValues, false);
+    it('p-drag-drop: should set `dragDrop` to true', () => {
+      component.dragDrop = true;
+      expect(component.dragDrop).toBeTrue();
+    });
+
+    it('p-drag-drop: should set `dragDrop` to false', () => {
+      component.dragDrop = false;
+      expect(component.dragDrop).toBeFalse();
     });
 
     it('formField: should set `formField` with valid values', () => {
@@ -531,16 +606,20 @@ describe('PoUploadBaseComponent:', () => {
       expectPropertiesValues(component, 'formField', invalidValues, 'files');
     });
 
-    it('disabled: should set `disabled` with valid values', () => {
-      const validValues = ['', true, 1, [], {}, 'true'];
-
-      expectPropertiesValues(component, 'disabled', validValues, true);
+    it('disabled: should set `disabled` to true', () => {
+      component.disabled = true;
+      expect(component.disabled).toBeTrue();
     });
 
-    it('disabled: should set `disabled` to false with invalid values', () => {
-      const invalidValues = [null, undefined, NaN, false, 0, 'false', 'teste'];
+    it('disabled: should set `disabled` to false', () => {
+      component.disabled = false;
+      expect(component.disabled).toBeFalse();
+    });
 
-      expectPropertiesValues(component, 'disabled', invalidValues, false);
+    it('disabled: should coerce empty string to true via Angular transform', () => {
+      fixture.componentRef.setInput('p-disabled', '');
+      fixture.detectChanges();
+      expect(component.disabled).toBeTrue();
     });
 
     it('fileRestrictions: should set `fileRestrictions` calling `initRestrictions` and call `setAllowedExtensions`', () => {
@@ -557,20 +636,18 @@ describe('PoUploadBaseComponent:', () => {
       expect(component['setAllowedExtensions']).toHaveBeenCalled();
     });
 
-    it('hideRestrictionsInfo: should set `hideRestrictionsInfo` with valid values', () => {
-      const validValues = ['', true, 1, [], {}, 'true'];
-
-      expectPropertiesValues(component, 'hideRestrictionsInfo', validValues, true);
+    it('hideRestrictionsInfo: should set `hideRestrictionsInfo` to true', () => {
+      component.hideRestrictionsInfo = true;
+      expect(component.hideRestrictionsInfo).toBeTrue();
     });
 
-    it('hideRestrictionsInfo: should set `hideRestrictionsInfo` to false with invalid values', () => {
-      const invalidValues = [null, undefined, NaN, false, 0, 'false', 'teste'];
-
-      expectPropertiesValues(component, 'hideRestrictionsInfo', invalidValues, false);
+    it('hideRestrictionsInfo: should set `hideRestrictionsInfo` to false', () => {
+      component.hideRestrictionsInfo = false;
+      expect(component.hideRestrictionsInfo).toBeFalse();
     });
 
     it('p-literals: should be in portuguese if browser is setted with an unsupported language', () => {
-      component['language'] = 'zw';
+      Object.defineProperty(component, 'language', { value: 'zw', configurable: true });
 
       component.literals = {};
 
@@ -578,7 +655,7 @@ describe('PoUploadBaseComponent:', () => {
     });
 
     it('p-literals: should be in portuguese if browser is setted with `pt`', () => {
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component.literals = {};
 
@@ -586,7 +663,7 @@ describe('PoUploadBaseComponent:', () => {
     });
 
     it('p-literals: should be in english if browser is setted with `en`', () => {
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       component.literals = {};
 
@@ -594,7 +671,7 @@ describe('PoUploadBaseComponent:', () => {
     });
 
     it('p-literals: should be in spanish if browser is setted with `es`', () => {
-      component['language'] = 'es';
+      Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
       component.literals = {};
 
@@ -602,7 +679,7 @@ describe('PoUploadBaseComponent:', () => {
     });
 
     it('p-literals: should be in russian if browser is setted with `ru`', () => {
-      component['language'] = 'ru';
+      Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
 
       component.literals = {};
 
@@ -610,7 +687,7 @@ describe('PoUploadBaseComponent:', () => {
     });
 
     it('p-literals: should accept custom literals', () => {
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       const customLiterals = Object.assign({}, poUploadLiteralsDefault[poLocaleDefault]);
 
@@ -625,63 +702,69 @@ describe('PoUploadBaseComponent:', () => {
     it('p-literals: should update property with default literals if is setted with invalid values', () => {
       const invalidValues = [null, undefined, false, true, '', 'literals', 0, 10, [], [1, 2], () => {}];
 
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       expectPropertiesValues(component, 'literals', invalidValues, poUploadLiteralsDefault[poLocaleDefault]);
     });
 
-    it('required: should set `required` with valid values', () => {
-      const validValues = ['', true, 1, [], {}, 'true'];
-
+    it('required: should set `required` to true', () => {
       spyOn(component, <any>'validateModel');
 
-      expectPropertiesValues(component, 'required', validValues, true);
+      component.required = true;
+
+      expect(component.required).toBeTrue();
       expect(component['validateModel']).toHaveBeenCalled();
     });
 
-    it('required: should set `required` to false with invalid values', () => {
-      const invalidValues = [null, undefined, NaN, false, 0, 'false', 'teste'];
-
+    it('required: should set `required` to false', () => {
       spyOn(component, <any>'validateModel');
 
-      expectPropertiesValues(component, 'required', invalidValues, false);
+      component.required = false;
+
+      expect(component.required).toBeFalse();
       expect(component['validateModel']).toHaveBeenCalled();
     });
 
-    it('hideSelectButton: should set `hideSelectButton` with valid values', () => {
-      const validValues = ['', true, 1, [], {}, 'true'];
-
-      expectPropertiesValues(component, 'hideSelectButton', validValues, true);
+    it('hideSelectButton: should set `hideSelectButton` to true', () => {
+      component.hideSelectButton = true;
+      expect(component.hideSelectButton).toBeTrue();
     });
 
-    it('hideSelectButton: should set `hideSelectButton` to false with invalid values', () => {
-      const invalidValues = [null, undefined, NaN, false, 0, 'false', 'teste'];
-
-      expectPropertiesValues(component, 'hideSelectButton', invalidValues, false);
+    it('hideSelectButton: should set `hideSelectButton` to false', () => {
+      component.hideSelectButton = false;
+      expect(component.hideSelectButton).toBeFalse();
     });
 
-    it('hideSendButton: should set `hideSendButton` with valid values', () => {
-      const validValues = ['', true, 1, [], {}, 'true'];
-
-      expectPropertiesValues(component, 'hideSendButton', validValues, true);
+    it('hideSendButton: should set `hideSendButton` to true', () => {
+      component.hideSendButton = true;
+      expect(component.hideSendButton).toBeTrue();
     });
 
-    it('hideSendButton: should set `hideSendButton` to false with invalid values', () => {
-      const invalidValues = [null, undefined, NaN, false, 0, 'false', 'teste'];
-
-      expectPropertiesValues(component, 'hideSendButton', invalidValues, false);
+    it('hideSendButton: should set `hideSendButton` to false', () => {
+      component.hideSendButton = false;
+      expect(component.hideSendButton).toBeFalse();
     });
 
-    it('directory: should set `directory` with valid values', () => {
-      const validValues = ['', true, 1, [], {}, 'true'];
-
-      expectPropertiesValues(component, 'directory', validValues, true);
+    it('directory: should set `directory` to true', () => {
+      component.directory = true;
+      expect(component.directory).toBeTrue();
     });
 
-    it('directory: should set `directory` to false with invalid values', () => {
-      const invalidValues = [null, undefined, NaN, false, 0, 'false', 'teste'];
+    it('directory: should set `directory` to false', () => {
+      component.directory = false;
+      expect(component.directory).toBeFalse();
+    });
 
-      expectPropertiesValues(component, 'directory', invalidValues, false);
+    it('disabledRemoveFile: should set `disabledRemoveFile` with valid values', () => {
+      component.disabledRemoveFile = utilsFunctions.convertToBoolean(1);
+
+      expect(component.disabledRemoveFile).toBe(true);
+    });
+
+    it('disabledRemoveFile: should set `disabledRemoveFile` to false with invalid values', () => {
+      component.disabledRemoveFile = utilsFunctions.convertToBoolean(3);
+
+      expect(component.disabledRemoveFile).toBe(false);
     });
 
     it('directory: should apply true to `canHandleDirectory` if directory is true and `isIE` plus `isMobile` return false', () => {
@@ -744,22 +827,183 @@ describe('PoUploadBaseComponent:', () => {
       expect(component.setDirectoryAttribute).toHaveBeenCalledWith(false);
     });
 
-    it('isMultiple: should set `isMultiple` with `true` if valid values', () => {
-      const validValues = ['', true, 1, [], {}, 'true'];
-
-      expectPropertiesValues(component, 'isMultiple', validValues, true);
+    it('isMultiple: should set `isMultiple` to true', () => {
+      component.isMultiple = true;
+      expect(component.isMultiple).toBeTrue();
     });
 
-    it('isMultiple: should set `isMultiple` with `false` if invalid values', () => {
-      const invalidValues = [null, undefined, NaN, false, 0, 'false', 'teste'];
-
-      expectPropertiesValues(component, 'isMultiple', invalidValues, false);
+    it('isMultiple: should set `isMultiple` to false', () => {
+      component.isMultiple = false;
+      expect(component.isMultiple).toBeFalse();
     });
 
     it('isMultiple: should return true if `diretory` is true', () => {
       component.directory = true;
 
       expect(component.isMultiple).toBe(true);
+    });
+
+    it('p-custom-action: should assign a valid PoProgressAction object', () => {
+      const validAction: PoProgressAction = {
+        label: 'Download',
+        icon: 'an-download',
+        type: 'default',
+        disabled: false,
+        visible: true
+      };
+
+      component.customAction = validAction;
+
+      expect(component.customAction).toEqual(validAction);
+    });
+
+    it('p-custom-action: should handle undefined or null values for customAction', () => {
+      const invalidValues = [null, undefined];
+      invalidValues.forEach(value => {
+        component.customAction = value;
+        fixture.detectChanges();
+
+        expect(component.customAction).toBeFalsy();
+      });
+    });
+
+    it('p-custom-action: should handle partial PoProgressAction objects', () => {
+      const partialAction: PoProgressAction = { label: 'Partial Action' };
+      component.customAction = partialAction;
+
+      expect(component.customAction).toEqual(partialAction);
+    });
+
+    it('p-custom-action-click: should emit event when called', () => {
+      const mockFile = { name: 'mock-file.txt', size: 12345 } as PoUploadFile;
+      spyOn(component.customActionClick, 'emit');
+
+      component.customActionClick.emit(mockFile);
+
+      expect(component.customActionClick.emit).toHaveBeenCalledWith(mockFile);
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
+    describe('p-loading:', () => {
+      it('should set loading=true and call cd.markForCheck', () => {
+        spyOn(component['cd'], 'markForCheck');
+
+        component.loading = true;
+
+        expect(component.loading).toBeTrue();
+        expect(component['cd'].markForCheck).toHaveBeenCalled();
+      });
+
+      it('should set loading=false and call cd.markForCheck', () => {
+        spyOn(component['cd'], 'markForCheck');
+
+        component.loading = false;
+
+        expect(component.loading).toBeFalse();
+        expect(component['cd'].markForCheck).toHaveBeenCalled();
+      });
+
+      it('should not throw when cd is undefined', () => {
+        component['cd'] = undefined;
+
+        expect(() => (component.loading = true)).not.toThrow();
+      });
+
+      it('loading should not mutate disabled input', () => {
+        component.disabled = false;
+        component.loading = true;
+
+        expect(component.disabled).toBeFalse();
+      });
+    });
+
+    describe('isDisabled:', () => {
+      it('should return false when disabled and loading are false', () => {
+        component.disabled = false;
+        component.loading = false;
+
+        expect(component.isDisabled).toBeFalse();
+      });
+
+      it('should return true when disabled is true and loading is false', () => {
+        component.disabled = true;
+        component.loading = false;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+
+      it('should return true when disabled is false and loading is true', () => {
+        component.disabled = false;
+        component.loading = true;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+
+      it('should return true when both disabled and loading are true', () => {
+        component.disabled = true;
+        component.loading = true;
+
+        expect(component.isDisabled).toBeTrue();
+      });
     });
   });
 });

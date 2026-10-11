@@ -4,11 +4,11 @@ import { fakeAsync, tick } from '@angular/core/testing';
 
 import { expectPropertiesValues } from '../../../util-test/util-expect.spec';
 import { poLocaleDefault } from './../../../services/po-language/po-language.constant';
-import * as UtilFunctions from './../../../utils/util';
 import { PoLanguageService } from './../../../services/po-language/po-language.service';
 
 import { PoDisclaimer } from '../../po-disclaimer/po-disclaimer.interface';
 
+import { PoThemeA11yEnum } from '../../../services';
 import { PoPageListBaseComponent, poPageListLiteralsDefault } from './po-page-list-base.component';
 
 @Directive()
@@ -72,8 +72,6 @@ describe('PoPageListBaseComponent:', () => {
       });
 
       it('should accept custom literals.', () => {
-        spyOn(UtilFunctions, <any>'browserLanguage').and.returnValue(poLocaleDefault);
-
         const customLiterals = poPageListLiteralsDefault[poLocaleDefault];
 
         // Custom some literals
@@ -126,6 +124,66 @@ describe('PoPageListBaseComponent:', () => {
       const validValues = [[{ label: 'Share', icon: 'po-icon-share' }]];
 
       expectPropertiesValues(component, 'actions', validValues, validValues);
+    });
+
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
     });
 
     it('p-title: should call recalculateHeaderSize', fakeAsync(() => {

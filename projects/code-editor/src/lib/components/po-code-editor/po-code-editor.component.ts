@@ -11,14 +11,14 @@ let loadedMonaco: boolean = false;
 let loadPromise: Promise<void>;
 
 declare const monaco: any;
-// tslint:disable-next-line
+// eslint-disable-next-line
 declare const require: any;
 
 /* istanbul ignore next */
 const providers: Array<Provider> = [
   {
     provide: NG_VALUE_ACCESSOR,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoCodeEditorComponent),
     multi: true
   }
@@ -59,18 +59,19 @@ const providers: Array<Provider> = [
 @Component({
   selector: 'po-code-editor',
   templateUrl: './po-code-editor.component.html',
-  providers
+  providers,
+  standalone: false
 })
 export class PoCodeEditorComponent extends PoCodeEditorBaseComponent implements AfterViewInit, DoCheck {
-  canLoad = false;
-
   @ViewChild('editorContainer', { static: true }) editorContainer: ElementRef;
 
+  canLoad = false;
+
   constructor(
-    private zone: NgZone,
-    private el: ElementRef,
-    private poCodeEditorSuggestionService: PoCodeEditorSuggestionService,
-    private codeEditorRegister?: PoCodeEditorRegister
+    private readonly zone: NgZone,
+    private readonly el: ElementRef,
+    private readonly poCodeEditorSuggestionService: PoCodeEditorSuggestionService,
+    private readonly codeEditorRegister?: PoCodeEditorRegister
   ) {
     super();
   }

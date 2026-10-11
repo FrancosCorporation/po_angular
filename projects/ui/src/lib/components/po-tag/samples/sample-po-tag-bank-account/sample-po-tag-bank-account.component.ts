@@ -1,10 +1,9 @@
-import { Component, ViewChild } from '@angular/core';
-
-import { PoModalComponent } from '@po-ui/ng-components';
+import { Component } from '@angular/core';
 
 @Component({
   selector: 'sample-po-tag-bank-account',
-  templateUrl: './sample-po-tag-bank-account.component.html'
+  templateUrl: './sample-po-tag-bank-account.component.html',
+  standalone: false
 })
 export class SamplePoTagBankAccountComponent {
   investiments = [
@@ -66,10 +65,4 @@ export class SamplePoTagBankAccountComponent {
     'email': 'natasha.romanova@po-ui.com.br',
     'photo': 'avatar2.png'
   };
-
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
-
-  openModal() {
-    this.poModal.open();
-  }
 }

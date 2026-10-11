@@ -1,7 +1,7 @@
 import { ComponentFixture, fakeAsync, TestBed, tick, waitForAsync } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHandler } from '@angular/common/http';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { NO_ERRORS_SCHEMA, provideNgReflectAttributes } from '@angular/core';
 import { RouterTestingModule } from '@angular/router/testing';
 
 import {
@@ -27,6 +27,7 @@ import { PoPageLoginComponent } from './po-page-login.component';
 import { PoPageLoginCustomField } from './interfaces/po-page-login-custom-field.interface';
 import { PoPageLoginLiterals } from './interfaces/po-page-login-literals.interface';
 import { PoPageLoginService } from './po-page-login.service';
+import { OverlayModule } from '@angular/cdk/overlay';
 
 describe('PoPageLoginComponent: ', () => {
   let component: PoPageLoginComponent;
@@ -34,25 +35,23 @@ describe('PoPageLoginComponent: ', () => {
 
   let nativeElement: any;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [FormsModule, RouterTestingModule.withRoutes([])],
-        declarations: [
-          PoButtonComponent,
-          PoComboComponent,
-          PoInputComponent,
-          PoLoginComponent,
-          PoPasswordComponent,
-          PoPageLoginComponent,
-          PoSelectComponent,
-          PoSwitchComponent
-        ],
-        providers: [HttpClient, HttpHandler, PoPageLoginService],
-        schemas: [NO_ERRORS_SCHEMA]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      imports: [FormsModule, OverlayModule, RouterTestingModule.withRoutes([])],
+      declarations: [
+        PoButtonComponent,
+        PoComboComponent,
+        PoInputComponent,
+        PoLoginComponent,
+        PoPasswordComponent,
+        PoPageLoginComponent,
+        PoSelectComponent,
+        PoSwitchComponent
+      ],
+      providers: [HttpClient, HttpHandler, PoPageLoginService, provideNgReflectAttributes()],
+      schemas: [NO_ERRORS_SCHEMA]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoPageLoginComponent);
@@ -72,7 +71,7 @@ describe('PoPageLoginComponent: ', () => {
     expect(nativeElement.querySelector('po-login')).toBeTruthy();
     expect(nativeElement.querySelector('po-password')).toBeTruthy();
     expect(nativeElement.querySelector('po-switch')).toBeTruthy();
-    expect(nativeElement.querySelector('po-button[p-type="primary"]')).toBeTruthy();
+    expect(nativeElement.querySelector('po-button[p-kind="primary"]')).toBeTruthy();
 
     expect(nativeElement.querySelector('div.po-page-login-password-link')).toBeFalsy();
 
@@ -93,7 +92,7 @@ describe('PoPageLoginComponent: ', () => {
 
     expect(nativeElement.querySelector('po-switch').innerHTML).toContain(component.literals.rememberUser);
 
-    expect(nativeElement.querySelector('po-button[p-type="primary"]').innerHTML).toContain(
+    expect(nativeElement.querySelector('po-button[p-kind="primary"]').innerHTML).toContain(
       component.literals.submitLabel
     );
 
@@ -123,7 +122,7 @@ describe('PoPageLoginComponent: ', () => {
     expect(nativeElement.querySelector('po-password').innerHTML).toContain(customLiterals.passwordPlaceholder);
 
     expect(nativeElement.querySelector('po-switch').innerHTML).toContain(customLiterals.rememberUser);
-    expect(nativeElement.querySelector('po-button[p-type="primary"]').innerHTML).toContain(customLiterals.submitLabel);
+    expect(nativeElement.querySelector('po-button[p-kind="primary"]').innerHTML).toContain(customLiterals.submitLabel);
     expect(nativeElement.querySelector('.po-page-login-recovery-link').innerHTML).toContain(
       customLiterals.forgotPassword
     );
@@ -160,6 +159,100 @@ describe('PoPageLoginComponent: ', () => {
 
     expect(divRegisterUrl).toBeTruthy();
     expect(divRegisterUrl.innerHTML).toContain(component.pageLoginLiterals.registerUrl);
+  });
+
+  it('Should show a icon if not send literals', () => {
+    fixture.detectChanges();
+
+    const iconLoginHints = nativeElement.querySelectorAll('po-icon');
+    const iconInfoElement = Array.from(iconLoginHints).find(element => {
+      if (element instanceof HTMLElement) {
+        return element.getAttribute('p-icon') === 'ICON_INFO';
+      }
+      return false;
+    });
+
+    expect(iconInfoElement).not.toBeNull();
+  });
+
+  it('Should show a icon if send literals', () => {
+    component.literals = {
+      loginHint: 'test'
+    };
+
+    fixture.detectChanges();
+
+    const iconLoginHints = nativeElement.querySelectorAll('po-icon');
+    const iconInfoElement = Array.from(iconLoginHints).find(element => {
+      if (element instanceof HTMLElement) {
+        return element.getAttribute('p-icon') === 'ICON_INFO';
+      }
+      return false;
+    });
+
+    expect(iconInfoElement).not.toBeNull();
+  });
+
+  it('shouldn`t show a icon if literals is empty', () => {
+    component.literals = {
+      loginHint: '',
+      rememberUserHint: ''
+    };
+
+    fixture.detectChanges();
+
+    const iconLoginHints = nativeElement.querySelectorAll('po-icon');
+    const iconInfoElement = Array.from(iconLoginHints).find(element => {
+      if (element instanceof HTMLElement) {
+        return element.getAttribute('p-icon') === 'ICON_INFO';
+      }
+      return false;
+    });
+
+    expect(iconInfoElement).toBeUndefined();
+  });
+
+  it('Should contain dynamic class in login and password fields if literals is empty', () => {
+    component.literals = {
+      loginHint: '',
+      rememberUserHint: ''
+    };
+
+    fixture.detectChanges();
+
+    const loginField = nativeElement.querySelector('po-login.po-page-login-info-field');
+    const passwordHint = nativeElement.querySelector('po-password.po-page-login-field-size');
+
+    expect(loginField).toHaveClass('po-page-login-info-field-dynamic');
+    expect(passwordHint).toHaveClass('po-page-login-field-size-dynamic');
+  });
+
+  it('shouldn`t contain dynamic class in login and password fields if contain literals', () => {
+    component.literals = {
+      loginHint: 'test',
+      rememberUserHint: 'test'
+    };
+
+    fixture.detectChanges();
+
+    const loginField = nativeElement.querySelector('po-login.po-page-login-info-field');
+    const passwordHint = nativeElement.querySelector('po-password.po-page-login-field-size');
+
+    expect(loginField).not.toHaveClass('po-page-login-info-field-dynamic');
+    expect(passwordHint).not.toHaveClass('po-page-login-field-size-dynamic');
+  });
+
+  it('Should contain dynamic class in `remember-user` field if `literals.loginHint` not is empty', () => {
+    component.literals = {
+      loginHint: 'test',
+      rememberUserHint: ''
+    };
+
+    fixture.detectChanges();
+
+    const divRememberUser = nativeElement.querySelector('div.po-page-login-info-icon-remember-user');
+
+    expect(divRememberUser).toHaveClass('po-page-login-info-icon-container-dynamic');
   });
 
   describe('Methods:', () => {
@@ -858,27 +951,6 @@ describe('PoPageLoginComponent: ', () => {
       component.literals = poPageLoginLiteralsDefault.en;
     });
 
-    it('Loading: should disabled button when property is `true`.', () => {
-      switchLoading(true);
-      const button = fixture.debugElement.nativeElement.querySelector('.po-button-primary');
-
-      expect(button.getAttribute('disabled')).not.toBeNull();
-    });
-
-    it('Label: should have label equal Enter on loading when `p-loading` is `false`.', () => {
-      switchLoading(false);
-      const button = fixture.debugElement.nativeElement.querySelector('.po-button-primary');
-
-      expect(button.innerHTML).toContain(poPageLoginLiteralsDefault.en.submitLabel);
-    });
-
-    it('Label: should set alternative label on loading when `p-loading` is `true`.', () => {
-      switchLoading(true);
-      const button = fixture.debugElement.nativeElement.querySelector('.po-button-primary');
-
-      expect(button.innerHTML).toContain(poPageLoginLiteralsDefault.en.submittedLabel);
-    });
-
     it('should contain productName and welcome if productName and welcome are defined', () => {
       const productName = 'custom product name';
       const welcome = 'custom welcome';
@@ -967,7 +1039,7 @@ describe('PoPageLoginComponent: ', () => {
       const loginLabel = 'Login label';
       const passwordLabel = 'Password label';
 
-      component.literals = <PoPageLoginLiterals>{ loginLabel, passwordLabel };
+      component.literals = { loginLabel, passwordLabel };
 
       fixture.detectChanges();
 
@@ -976,13 +1048,13 @@ describe('PoPageLoginComponent: ', () => {
     });
 
     it('should add 2 information icons with tooltip directive', () => {
-      const infoIcons = nativeElement.querySelectorAll('.po-icon.po-field-icon.po-icon-info');
+      const divs = nativeElement.querySelectorAll('.po-page-login-info-icon-container');
 
-      expect(infoIcons.length).toBe(2);
-      expect(infoIcons[0].outerHTML).toContain('p-tooltip');
-      expect(infoIcons[1].outerHTML).toContain('p-tooltip');
-
-      expect(nativeElement.querySelectorAll('.po-page-login-info-icon-container').length).toBe(2);
+      expect(divs.length).toBe(2);
+      divs.forEach(div => {
+        expect(div.outerHTML).toContain('ICON_INFO');
+        expect(div.outerHTML).toContain('p-tooltip');
+      });
     });
 
     it('should add 2 errors `div` with icons and text', () => {
@@ -992,8 +1064,8 @@ describe('PoPageLoginComponent: ', () => {
 
       expect(divs.length).toBe(2);
       divs.forEach(div => {
-        expect(div.outerHTML).toContain('po-icon po-icon-exclamation');
-        expect(div.outerHTML).toContain('po-field-container-error-text');
+        expect(div.outerHTML).toContain('ICON_EXCLAMATION');
+        expect(div.outerHTML).toContain('po-field-error-message');
       });
     });
 
@@ -1038,6 +1110,52 @@ describe('PoPageLoginComponent: ', () => {
       expect(nativeElement.querySelector('.po-page-login-recovery-link').innerHTML).toContain(
         component.literals.forgotPassword
       );
+    });
+
+    it('should contain class `po-page-login-field-size-dynamic` in `po-combo` if literals is empty and `customField` is combo', () => {
+      customField = {
+        property: 'domain',
+        placeholder: 'Enter your domain',
+        url: 'https://po-ui.io/sample/api/comboOption/heroes',
+        fieldValue: 'nickname'
+      };
+      component.customField = customField;
+
+      component.literals = {
+        loginHint: '',
+        rememberUserHint: ''
+      };
+
+      fixture.detectChanges();
+
+      const poCombo = nativeElement.querySelector('po-combo');
+
+      expect(poCombo).toHaveClass('po-page-login-field-size-dynamic');
+    });
+
+    it('should contain class `po-page-login-field-size-dynamic` in `po-select` if literals is empty and `customField` is select', () => {
+      customField = {
+        property: 'domain',
+        placeholder: 'Enter your domain',
+        options: [
+          { label: 'Option 1', value: '1' },
+          { label: 'Option 2', value: '2' }
+        ],
+        url: 'https://po-ui.io/sample/api/comboOption/heroes',
+        fieldValue: 'nickname'
+      };
+      component.customField = customField;
+
+      component.literals = {
+        loginHint: '',
+        rememberUserHint: ''
+      };
+
+      fixture.detectChanges();
+
+      const poSelect = nativeElement.querySelector('po-select');
+
+      expect(poSelect).toHaveClass('po-page-login-field-size-dynamic');
     });
   });
 

@@ -1,6 +1,6 @@
-<div class="po-font-text-large">PO UI Library</div>
+<div class="po-font-text-large po-text-color-neutral-dark-40">PO UI Library</div>
 
-<hr />
+<po-divider />
 
 <po-table
   p-container="shadow"
@@ -12,14 +12,16 @@
   (p-show-more)="showMore($event)"
   (p-sort-by)="sort($event)"
 >
-  <ng-template p-table-column-template [p-property]="'type'" let-value>
+  <ng-template p-table-column-template [p-property]="'component.type'" let-value>
     <div class="badge {{ value }}">{{ value | uppercase }}</div>
   </ng-template>
 </po-table>
 
 <po-modal p-click-out="true" p-size="sm" p-title="{{ title }} - {{ extraInformation?.component }}">
-  <ul *ngFor="let extra of extraInformation?.extras">
-    <li class="po-font-text">{{ extra }}</li>
-    <hr />
-  </ul>
+  @for (extra of extraInformation?.extras; track extra) {
+    <ul>
+      <li class="po-font-text">{{ extra }}</li>
+      <po-divider />
+    </ul>
+  }
 </po-modal>

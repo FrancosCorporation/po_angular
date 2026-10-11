@@ -1,5 +1,8 @@
-import { ViewContainerRef } from '@angular/core';
-import { handleThrowError, changeChromeProperties } from './../util-test/util-expect.spec';
+import { ElementRef } from '@angular/core';
+import { PoDensityMode } from '../enums/po-density-mode.enum';
+import { PoFieldSize } from '../enums/po-field-size.enum';
+import { PoThemeA11yEnum, PoThemeService } from '../services';
+import { handleThrowError } from './../util-test/util-expect.spec';
 
 import {
   callFunction,
@@ -7,22 +10,29 @@ import {
   clearObject,
   convertDateToISODate,
   convertDateToISOExtended,
-  convertIsoToDate,
   convertImageToBase64,
+  convertIsoToDate,
   convertNumberToDecimal,
   convertToBoolean,
   convertToInt,
   formatYear,
+  getDensityMode,
   getFormattedLink,
   isEquals,
-  isKeyCodeEnter,
   isExternalLink,
+  isKeyCodeEnter,
+  isKeyCodeSpace,
   isTypeof,
+  isValidImageBase64,
+  isValidUrl,
   mapArrayByProperties,
+  mapInputSizeToLoadingIcon,
   mapObjectByProperties,
   openExternalLink,
   removeDuplicatedOptions,
+  removeDuplicatedOptionsWithFieldValue,
   removeUndefinedAndNullOptions,
+  removeUndefinedAndNullOptionsWithFieldValue,
   setYearFrom0To100,
   sortOptionsByProperty,
   sortValues,
@@ -36,45 +46,23 @@ import * as UtilFunctions from './util';
 
 describe('Language:', () => {
   let navigatorLanguageSpy;
+  let navigatorUserLanguageSpy;
+
+  Object.defineProperty(navigator, 'userLanguage', {
+    get: function () {
+      return undefined;
+    },
+    configurable: true
+  });
 
   beforeEach(() => {
     navigatorLanguageSpy = spyOnProperty(window.navigator, 'language', 'get');
+    navigatorUserLanguageSpy = spyOnProperty(window.navigator, <any>'userLanguage', 'get');
   });
 
   afterEach(() => {
     navigatorLanguageSpy.calls.reset();
-  });
-
-  describe('Function browserLanguage:', () => {
-    it('should return `pt` as default language if language is undefined', () => {
-      navigatorLanguageSpy.and.returnValue(undefined);
-
-      expect(UtilFunctions.browserLanguage()).toBe('pt');
-    });
-
-    it('should return `pt` as default language if language is invalid', () => {
-      navigatorLanguageSpy.and.returnValue('wz');
-
-      expect(UtilFunctions.browserLanguage()).toBe('pt');
-    });
-
-    it('should return `en` if browser language is `en-US`', () => {
-      navigatorLanguageSpy.and.returnValue('en-US');
-
-      expect(UtilFunctions.browserLanguage()).toBe('en');
-    });
-
-    it('should return `es` if browser language is `es`', () => {
-      navigatorLanguageSpy.and.returnValue('es');
-
-      expect(UtilFunctions.browserLanguage()).toBe('es');
-    });
-
-    it('should return `ru` if browser language is `ru`', () => {
-      navigatorLanguageSpy.and.returnValue('ru');
-
-      expect(UtilFunctions.browserLanguage()).toBe('ru');
-    });
+    navigatorUserLanguageSpy.calls.reset();
   });
 
   describe('Function getBrowserLanguage:', () => {
@@ -86,18 +74,14 @@ describe('Language:', () => {
 
     it('should return the value of `navigator.userLanguage` if it`s defined and `navigator.language` is undefined', () => {
       navigatorLanguageSpy.and.returnValue(undefined);
-
-      changeChromeProperties(navigator, 'userLanguage', 'en');
+      navigatorUserLanguageSpy.and.returnValue('en');
 
       expect(UtilFunctions.getShortBrowserLanguage()).toBe('en');
-
-      changeChromeProperties(navigator, 'userLanguage', undefined);
     });
 
     it('should return undefined if `navigator.language` and `navigator.userLanguage` are undefined', () => {
       navigatorLanguageSpy.and.returnValue(undefined);
-
-      changeChromeProperties(navigator, 'userLanguage', undefined);
+      navigatorUserLanguageSpy.and.returnValue(undefined);
 
       expect(UtilFunctions.getBrowserLanguage()).toBe(undefined);
     });
@@ -183,6 +167,25 @@ describe('Function isLanguage:', () => {
     expect(UtilFunctions.isLanguage('pt PT')).toBe(false);
     expect(UtilFunctions.isLanguage(123)).toBe(false);
     expect(UtilFunctions.isLanguage(undefined)).toBe(false);
+  });
+});
+
+describe('isValidUrl', () => {
+  it('should return true for the current page URL', () => {
+    const mockLocation = { origin: 'http://localhost', pathname: '/current-path' } as Location;
+    const currentUrl = 'http://localhost/current-path';
+    expect(isValidUrl(currentUrl, mockLocation)).toBe(true);
+  });
+
+  it('should return false for a different URL', () => {
+    const mockLocation = { origin: 'http://localhost', pathname: '/current-path' } as Location;
+    const differentUrl = 'http://localhost/different-path';
+    expect(isValidUrl(differentUrl, mockLocation)).toBe(false);
+  });
+
+  it('should use window.location as the default location', () => {
+    const currentUrl = window.location.origin + window.location.pathname;
+    expect(isValidUrl(currentUrl)).toBe(true);
   });
 });
 
@@ -502,6 +505,20 @@ describe('Function removeDuplicatedOptions:', () => {
   });
 });
 
+describe('Function removeDuplicatedOptionsWithFieldValue:', () => {
+  it('should return items not duplicated ', () => {
+    const options = [
+      { value: 1, label: 1 },
+      { value: 2, label: 2 },
+      { value: 2, label: 2 },
+      { value: 1, label: 1 },
+      { value: 3, label: 3 }
+    ];
+    removeDuplicatedOptionsWithFieldValue(options, 'value');
+    expect(options.length).toBe(3);
+  });
+});
+
 describe('Function removeUndefinedAndNullOptions:', () => {
   it('should return items not undefined and null ', () => {
     const options = [
@@ -512,6 +529,20 @@ describe('Function removeUndefinedAndNullOptions:', () => {
       { value: 3, label: 3 }
     ];
     removeUndefinedAndNullOptions(options);
+    expect(options.length).toBe(3);
+  });
+});
+
+describe('Function removeUndefinedAndNullOptionsWithFielValue:', () => {
+  it('should return items not undefined and null ', () => {
+    const options = [
+      { value: 1, label: 1 },
+      { value: 2, label: 2 },
+      { value: <any>undefined, label: 'teste' },
+      { value: null, label: 'teste2' },
+      { value: 3, label: 3 }
+    ];
+    removeUndefinedAndNullOptionsWithFieldValue(options, 'value');
     expect(options.length).toBe(3);
   });
 });
@@ -635,6 +666,19 @@ describe('Function isKeyCodeEnter:', () => {
 
   it(`isEnterKey: should return false if event keyCode is not enter.`, () => {
     expect(isKeyCodeEnter(eventDeleteKey)).toBe(false);
+  });
+});
+
+describe('Function isKeyCodeSpace:', () => {
+  const eventSpaceKey = { keyCode: 32, which: 32 };
+  const eventDeleteKey = { keyCode: 46, which: 46 };
+
+  it(`isKeyCodeSpace: should return true if event keyCode is space.`, () => {
+    expect(isKeyCodeSpace(eventSpaceKey)).toBe(true);
+  });
+
+  it(`isKeyCodeSpace: should return false if event keyCode is not space.`, () => {
+    expect(isKeyCodeSpace(eventDeleteKey)).toBe(false);
   });
 });
 
@@ -1356,8 +1400,8 @@ describe('Function convertNumberToDecimals:', () => {
   it('should convert number to float', () => {
     expect(convertNumberToDecimal(12.567, 2)).toBe(12.57);
     expect(convertNumberToDecimal(12.56, 2)).toBe(12.56);
-    expect(convertNumberToDecimal(12.5649584958748574897, 2)).toBe(12.56);
-    expect(convertNumberToDecimal(12.5649584958748574897, 4)).toBe(12.565);
+    expect(convertNumberToDecimal(12.564958495874857, 2)).toBe(12.56);
+    expect(convertNumberToDecimal(12.564958495874857, 4)).toBe(12.565);
     expect(convertNumberToDecimal(12.56, 1)).toBe(12.6);
     expect(convertNumberToDecimal('12.56', 1)).toBe(12.6);
     expect(convertNumberToDecimal('12', 1)).toBe(12);
@@ -1549,5 +1593,610 @@ describe('sortFields:', () => {
     const result = UtilFunctions.sortFields(fields);
 
     expect(result).toEqual(expectedFields);
+  });
+
+  it('returns true for valid image base64 string', () => {
+    const validBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD';
+    expect(isValidImageBase64(validBase64)).toBe(true);
+  });
+
+  it('returns false for invalid image base64 string', () => {
+    const invalidBase64 = 'not a valid base64 string';
+    expect(isValidImageBase64(invalidBase64)).toBe(false);
+  });
+});
+
+describe('replaceFormatSeparator: ', () => {
+  it('should show date separator as . according to russian locale selected', () => {
+    const separator = '.';
+    const format = 'dd/mm/yyyy';
+    const expectedFormat = 'dd.mm.yyyy';
+    const newFormat = UtilFunctions.replaceFormatSeparator(format, separator);
+    expect(newFormat).toBe(expectedFormat);
+  });
+
+  it('should show date separator as / according to portuguese locale selected', () => {
+    const separator = '/';
+    const format = 'dd/mm/yyyy';
+    const expectedFormat = 'dd/mm/yyyy';
+    const newFormat = UtilFunctions.replaceFormatSeparator(format, separator);
+    expect(newFormat).toBe(expectedFormat);
+  });
+
+  it('should sort the array of objects in ascending order based on the country key', () => {
+    const items = [{ country: 'japao' }, { country: 'brasil' }, { country: 'china' }];
+    const sortedItems = UtilFunctions.sortArrayOfObjects(items, 'country', true);
+
+    expect(sortedItems).toEqual([{ country: 'brasil' }, { country: 'china' }, { country: 'japao' }]);
+  });
+
+  it('should sort the array of objects in descending order based on the country key', () => {
+    const items = [{ country: 'japao' }, { country: 'brasil' }, { country: 'china' }];
+    const sortedItems = UtilFunctions.sortArrayOfObjects(items, 'country', false);
+
+    expect(sortedItems).toEqual([{ country: 'japao' }, { country: 'china' }, { country: 'brasil' }]);
+  });
+
+  it('should sort the array of objects in ascending order based on the country id', () => {
+    const items = [
+      { country: 'japao', id: 1 },
+      { country: 'brasil', id: 3 },
+      { country: 'china', id: 2 }
+    ];
+    const sortedItems = UtilFunctions.sortArrayOfObjects(items, 'id', true);
+
+    expect(sortedItems).toEqual([
+      { country: 'japao', id: 1 },
+      { country: 'china', id: 2 },
+      { country: 'brasil', id: 3 }
+    ]);
+  });
+
+  it('should sort the array of objects in descending order based on the country id', () => {
+    const items = [
+      { country: 'japao', id: 1 },
+      { country: 'brasil', id: 3 },
+      { country: 'china', id: 2 }
+    ];
+    const sortedItems = UtilFunctions.sortArrayOfObjects(items, 'id', false);
+
+    expect(sortedItems).toEqual([
+      { country: 'brasil', id: 3 },
+      { country: 'china', id: 2 },
+      { country: 'japao', id: 1 }
+    ]);
+  });
+});
+
+describe('accessibility level: ', () => {
+  describe('getDefaultSize', () => {
+    let poThemeServiceMock: jasmine.SpyObj<PoThemeService>;
+
+    beforeEach(() => {
+      poThemeServiceMock = jasmine.createSpyObj('PoThemeService', ['getA11yLevel', 'getA11yDefaultSize']);
+    });
+
+    beforeEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    afterEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    it('should return `small` when the default component size is `small` in accessibility level AA (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AA);
+      poThemeServiceMock.getA11yDefaultSize.and.returnValue('small');
+
+      expect(UtilFunctions.getDefaultSize(poThemeServiceMock, PoFieldSize)).toBe(PoFieldSize.Small);
+    });
+
+    it('should return `small` when the default component size is `small` in accessibility level AA', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+      localStorage.setItem('po-default-size', 'small');
+
+      expect(UtilFunctions.getDefaultSizeFn(PoFieldSize)).toBe(PoFieldSize.Small);
+    });
+
+    it('should return `medium` if accessibility AA and default size is not set (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AA);
+
+      expect(UtilFunctions.getDefaultSize(poThemeServiceMock, PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` if accessibility AA and default size is not set', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+      localStorage.removeItem('po-default-size');
+
+      expect(UtilFunctions.getDefaultSizeFn(PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` when the accessibility level is AAA (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AAA);
+
+      expect(UtilFunctions.getDefaultSize(poThemeServiceMock, PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` when the accessibility level is AAA', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+      expect(UtilFunctions.getDefaultSizeFn(PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+  });
+
+  describe('validateSize', () => {
+    let poThemeServiceMock: jasmine.SpyObj<PoThemeService>;
+
+    beforeEach(() => {
+      poThemeServiceMock = jasmine.createSpyObj('PoThemeService', ['getA11yLevel', 'getA11yDefaultSize']);
+    });
+
+    beforeEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    afterEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    it('should return valid values based on accessibility level (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AA);
+
+      expect(UtilFunctions.validateSize(PoFieldSize.Small, poThemeServiceMock, PoFieldSize)).toBe(PoFieldSize.Small);
+      expect(UtilFunctions.validateSize(PoFieldSize.Medium, poThemeServiceMock, PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return valid values based on accessibility level', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+      expect(UtilFunctions.validateSizeFn(PoFieldSize.Small, PoFieldSize)).toBe(PoFieldSize.Small);
+      expect(UtilFunctions.validateSizeFn(PoFieldSize.Medium, PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` when the value is `small` but the accessibility level is not AA (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AAA);
+
+      expect(UtilFunctions.validateSize(PoFieldSize.Small, poThemeServiceMock, PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` when the value is `small` but the accessibility level is not AA', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+      expect(UtilFunctions.validateSizeFn(PoFieldSize.Small, PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return the default size when an invalid value is provided (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AA);
+
+      expect(UtilFunctions.validateSize('xxg', poThemeServiceMock, PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return the default size when an invalid value is provided', () => {
+      expect(UtilFunctions.validateSizeFn('xxg', PoFieldSize)).toBe(PoFieldSize.Medium);
+    });
+  });
+});
+
+describe('setHelperSettings', () => {
+  it('should return helperSettings with tooltip when label and additionalHelpTooltip are provided and poHelperComponent is not', () => {
+    const label = 'Label';
+    const tooltip = 'Tooltip';
+    const size = 'small';
+
+    const result = UtilFunctions.setHelperSettings(label, tooltip, undefined, size);
+
+    expect(result.hideAdditionalHelp).toBeTrue();
+    expect(result.helperSettings).toEqual({
+      content: tooltip,
+      type: 'help',
+      size: size
+    });
+  });
+
+  it('should return helperSettings with poHelperComponent when label and poHelperComponent are provided', () => {
+    const label = 'Label';
+    const tooltip = 'Tooltip';
+    const poHelperComponent = { content: 'custom', type: 'custom', size: 'medium' };
+
+    const result = UtilFunctions.setHelperSettings(label, tooltip, poHelperComponent);
+
+    expect(result.hideAdditionalHelp).toBeTrue();
+    expect(result.helperSettings).toEqual(poHelperComponent);
+  });
+
+  it('should return hideAdditionalHelp false when additionalHelpTooltip is missing', () => {
+    const result = UtilFunctions.setHelperSettings('Label', undefined);
+    expect(result.hideAdditionalHelp).toBeFalse();
+    expect(result.helperSettings).toBeNull();
+  });
+
+  it('should return hideAdditionalHelp false when neither label nor additionalHelpTooltip nor poHelperComponent are provided', () => {
+    const result = UtilFunctions.setHelperSettings(undefined, undefined);
+    expect(result.hideAdditionalHelp).toBeFalse();
+    expect(result.helperSettings).toBeNull();
+  });
+
+  it('should replace size "large" with "medium"', () => {
+    const label = 'Label';
+    const tooltip = 'Tooltip';
+    const size = 'large';
+
+    const result = UtilFunctions.setHelperSettings(label, tooltip, undefined, size);
+
+    expect(result.hideAdditionalHelp).toBeTrue();
+    expect(result.helperSettings).toEqual({
+      content: tooltip,
+      type: 'help',
+      size: 'medium'
+    });
+  });
+
+  it('should return helperSettings with eventOnClick when onClick is provided', () => {
+    const label = 'Label';
+    const tooltip = 'Tooltip';
+    const onClick = jasmine.createSpy('onClick');
+
+    const result = UtilFunctions.setHelperSettings(label, tooltip, undefined, undefined, onClick);
+
+    expect(result.hideAdditionalHelp).toBeTrue();
+    expect(result.helperSettings).toEqual({
+      type: 'help',
+      eventOnClick: onClick,
+      size: 'medium'
+    });
+  });
+
+  it('should return helperSettings with eventOnClick and default size "medium" when poHelperComponent.eventOnClick is provided without size', () => {
+    const label = 'Label';
+    const poHelperComponent = { eventOnClick: jasmine.createSpy('onClick') };
+
+    const result = UtilFunctions.setHelperSettings(label, undefined, poHelperComponent);
+
+    expect(result.hideAdditionalHelp).toBeTrue();
+    expect(result.helperSettings).toEqual({
+      type: 'help',
+      eventOnClick: poHelperComponent.eventOnClick,
+      size: 'medium'
+    });
+  });
+
+  it('should return helperSettings with content when poHelperComponent is a non-empty string', () => {
+    const label = 'Label';
+    const poHelperComponent = 'Custom helper';
+
+    const result = UtilFunctions.setHelperSettings(label, undefined, poHelperComponent);
+
+    expect(result.hideAdditionalHelp).toBeTrue();
+    expect(result.helperSettings).toEqual({
+      content: poHelperComponent,
+      size: 'medium'
+    });
+  });
+});
+
+describe('updateTooltip', () => {
+  function createElementRef(
+    scrollWidth: number,
+    clientWidth: number,
+    opts?: { inner?: { scrollWidth: number; clientWidth: number } }
+  ): ElementRef<HTMLElement> {
+    const inner = opts?.inner
+      ? ({
+          scrollWidth: opts.inner.scrollWidth,
+          clientWidth: opts.inner.clientWidth
+        } as unknown as HTMLElement)
+      : null;
+
+    const host = {
+      scrollWidth,
+      clientWidth,
+      querySelector: jasmine.createSpy('querySelector').and.returnValue(inner)
+    } as unknown as HTMLElement;
+
+    return { nativeElement: host };
+  }
+
+  it('should return false when measurable element is not available', () => {
+    const labelEl = { nativeElement: null } as unknown as ElementRef<HTMLElement>;
+    const result = UtilFunctions.updateTooltip(false, labelEl);
+
+    expect(result).toBeFalse();
+  });
+
+  it('should activate tooltip when text is ellipsed and it was previously inactive', () => {
+    const labelEl = createElementRef(120, 100);
+    const result = UtilFunctions.updateTooltip(false, labelEl);
+    expect(result).toBeTrue();
+  });
+
+  it('should keep tooltip active when text remains ellipsed and it was already active', () => {
+    const labelEl = createElementRef(200, 150);
+    const result = UtilFunctions.updateTooltip(true, labelEl);
+    expect(result).toBeTrue();
+  });
+
+  it('should deactivate tooltip when text is not ellipsed and it was previously active', () => {
+    const labelEl = createElementRef(100, 120);
+    const result = UtilFunctions.updateTooltip(true, labelEl);
+    expect(result).toBeFalse();
+  });
+
+  it('should keep tooltip inactive when text is not ellipsed and it was already inactive', () => {
+    const labelEl = createElementRef(80, 80);
+    const result = UtilFunctions.updateTooltip(false, labelEl);
+    expect(result).toBeFalse();
+  });
+
+  it('should measure inner element when available (prefers inner over host)', () => {
+    const labelEl = createElementRef(80, 120, { inner: { scrollWidth: 150, clientWidth: 100 } });
+    const result = UtilFunctions.updateTooltip(false, labelEl);
+    expect(result).toBeTrue();
+  });
+
+  it('should return previous state when there is no state change needed (ellipsed + already active)', () => {
+    const labelEl = createElementRef(300, 100);
+    const result = UtilFunctions.updateTooltip(true, labelEl);
+    expect(result).toBeTrue();
+  });
+
+  it('should return previous state when there is no state change needed (not ellipsed + already inactive)', () => {
+    const labelEl = createElementRef(90, 120);
+    const result = UtilFunctions.updateTooltip(false, labelEl);
+    expect(result).toBeFalse();
+  });
+});
+
+describe('density mode: ', () => {
+  afterEach(() => {
+    document.documentElement.removeAttribute('po-density-mode');
+  });
+
+  it('should return `small` when density mode is set to `small`', () => {
+    document.documentElement.setAttribute('po-density-mode', PoDensityMode.Small);
+
+    expect(getDensityMode()).toBe(PoDensityMode.Small);
+  });
+
+  it('should return `medium` when density mode is set to `medium`', () => {
+    document.documentElement.setAttribute('po-density-mode', PoDensityMode.Medium);
+
+    expect(getDensityMode()).toBe(PoDensityMode.Medium);
+  });
+
+  it('should return `medium` when density mode is not set', () => {
+    expect(getDensityMode()).toBe(PoDensityMode.Medium);
+  });
+
+  it('should return `medium` when density mode has an invalid value', () => {
+    document.documentElement.setAttribute('po-density-mode', 'invalid');
+
+    expect(getDensityMode()).toBe(PoDensityMode.Medium);
+  });
+});
+
+describe('getTextColor:', () => {
+  let getComputedStyleSpy: jasmine.Spy;
+
+  beforeEach(() => {
+    getComputedStyleSpy = spyOn(window, 'getComputedStyle').and.returnValue({
+      getPropertyValue: (token: string) => {
+        const tokens = {
+          '--color-neutral-light-00': '#ffffff',
+          '--color-neutral-dark-95': '#1a1a1a'
+        };
+        return tokens[token] || '';
+      }
+    } as CSSStyleDeclaration);
+  });
+
+  afterEach(() => {
+    document.documentElement.className = '';
+  });
+
+  it('should return lightest color token for light theme when type is "lightest"', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColor('lightest');
+
+    expect(result).toBe('#ffffff');
+    expect(getComputedStyleSpy).toHaveBeenCalledWith(document.documentElement);
+  });
+
+  it('should return darkest color token for light theme when type is "darkest"', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColor('darkest');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  it('should return darkest color token for dark theme when type is "darkest"', () => {
+    document.documentElement.className = 'potheme-dark-AA';
+
+    const result = UtilFunctions.getTextColor('darkest');
+
+    expect(result).toBe('#ffffff');
+  });
+
+  it('should return lightest color token for dark theme when type is "lightest"', () => {
+    document.documentElement.className = 'potheme-dark-AA';
+
+    const result = UtilFunctions.getTextColor('lightest');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  it('should detect light theme when className does not include "-dark-"', () => {
+    document.documentElement.className = 'po-theme-default';
+
+    const result = UtilFunctions.getTextColor('lightest');
+
+    expect(result).toBe('#ffffff');
+  });
+
+  it('should detect dark theme when className includes "-dark-"', () => {
+    document.documentElement.className = 'potheme-dark-AA';
+
+    const result = UtilFunctions.getTextColor('lightest');
+
+    expect(result).toBe('#1a1a1a');
+  });
+});
+
+describe('getTextColorFromBackgroundColor:', () => {
+  beforeEach(() => {
+    spyOn(window, 'getComputedStyle').and.returnValue({
+      getPropertyValue: (token: string) => {
+        const tokens = {
+          '--color-neutral-light-00': '#ffffff',
+          '--color-neutral-dark-95': '#1a1a1a'
+        };
+        return tokens[token] || '';
+      }
+    } as CSSStyleDeclaration);
+  });
+
+  afterEach(() => {
+    document.documentElement.className = '';
+  });
+
+  it('should return darkest color for light background (white)', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(255, 255, 255)');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  it('should return lightest color for dark background (black)', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(0, 0, 0)');
+
+    expect(result).toBe('#ffffff');
+  });
+
+  it('should return darkest color for light gray background', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(200, 200, 200)');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  it('should return lightest color for dark gray background', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(50, 50, 50)');
+
+    expect(result).toBe('#ffffff');
+  });
+
+  it('should return darkest color for yellow background (high luminance)', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(255, 255, 0)');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  it('should return lightest color for blue background (low luminance)', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(0, 0, 255)');
+
+    expect(result).toBe('#ffffff');
+  });
+
+  it('should return darkest color for cyan background (high luminance)', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(0, 255, 255)');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  it('should return lightest color for red background (low luminance)', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(255, 0, 0)');
+
+    expect(result).toBe('#ffffff');
+  });
+
+  it('should handle rgba format ignoring alpha channel', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgba(255, 255, 255, 0.5)');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  it('should handle rgb format with spaces', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb( 255 , 255 , 255 )');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  it('should return lightest color for background at YIQ threshold (127)', () => {
+    document.documentElement.className = 'po-theme-light';
+    // YIQ = (127 * 299 + 127 * 587 + 127 * 114) / 1000 = 127
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(127, 127, 127)');
+
+    expect(result).toBe('#ffffff');
+  });
+
+  it('should return darkest color for background just above YIQ threshold (128)', () => {
+    document.documentElement.className = 'po-theme-light';
+    // YIQ = (128 * 299 + 128 * 587 + 128 * 114) / 1000 = 128
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(128, 128, 128)');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  it('should handle green background correctly (high YIQ due to green weight)', () => {
+    document.documentElement.className = 'po-theme-light';
+
+    const result = UtilFunctions.getTextColorFromBackgroundColor('rgb(0, 255, 0)');
+
+    expect(result).toBe('#1a1a1a');
+  });
+
+  describe('mapInputSizeToLoadingIcon', () => {
+    it('should map small to xs', () => {
+      expect(mapInputSizeToLoadingIcon('small')).toBe('xs');
+    });
+
+    it('should map medium to sm', () => {
+      expect(mapInputSizeToLoadingIcon('medium')).toBe('sm');
+    });
+
+    it('should return sm for invalid values', () => {
+      expect(mapInputSizeToLoadingIcon('large')).toBe('sm');
+      expect(mapInputSizeToLoadingIcon()).toBe('sm');
+    });
+  });
+});
+
+describe('mapInputSizeToLoadingIcon', () => {
+  it('should map small to xs', () => {
+    expect(mapInputSizeToLoadingIcon('small')).toBe('xs');
+  });
+
+  it('should map medium to sm', () => {
+    expect(mapInputSizeToLoadingIcon('medium')).toBe('sm');
+  });
+
+  it('should return sm for invalid values', () => {
+    expect(mapInputSizeToLoadingIcon('large')).toBe('sm');
+    expect(mapInputSizeToLoadingIcon(undefined)).toBe('sm');
   });
 });

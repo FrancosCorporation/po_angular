@@ -1,4 +1,4 @@
-import { Directive, EventEmitter, HostListener, Input, Output } from '@angular/core';
+import { Directive, EventEmitter, HostListener, Input, Output, inject } from '@angular/core';
 
 import { PoI18nPipe } from '../../../../services/po-i18n/po-i18n.pipe';
 import { PoNotificationService } from '../../../../services/po-notification/po-notification.service';
@@ -6,13 +6,12 @@ import { PoUploadLiterals } from '../interfaces/po-upload-literals.interface';
 
 @Directive({
   selector: '[p-upload-drag-drop]',
-  providers: [PoI18nPipe]
+  providers: [PoI18nPipe],
+  standalone: false
 })
 export class PoUploadDragDropDirective {
-  timeout: any;
-
-  private files: Array<File>;
-  private invalidFileType: number;
+  private readonly i18nPipe = inject(PoI18nPipe);
+  private readonly notification = inject(PoNotificationService);
 
   @Input('p-area-element') areaElement: HTMLElement;
 
@@ -28,7 +27,10 @@ export class PoUploadDragDropDirective {
 
   @Output('p-file-change') fileChange: EventEmitter<any> = new EventEmitter<any>();
 
-  constructor(private i18nPipe: PoI18nPipe, private notification: PoNotificationService) {}
+  timeout: any;
+
+  private files: Array<File>;
+  private invalidFileType: number;
 
   @HostListener('document:dragleave', ['$event']) onDragLeave(event) {
     event.preventDefault();
@@ -64,7 +66,7 @@ export class PoUploadDragDropDirective {
           this.sendFiles(event, this.files);
         });
       } else {
-        const files = this.getOnlyFiles(event.dataTransfer.files);
+        const files = this.getOnlyFiles(event.dataTransfer);
         this.sendFiles(event, files);
       }
     }
@@ -100,9 +102,14 @@ export class PoUploadDragDropDirective {
   }
 
   // return only files. If it is a directory, invalidFileType counts.
-  private getOnlyFiles(fileList: FileList): Array<File> {
-    return Array.from(fileList).reduce((newFiles, file) => {
-      if (file.type) {
+  private getOnlyFiles(dataTransfer: DataTransfer): Array<File> {
+    const fileList: Array<File> = Array.from(dataTransfer.files);
+    const entriesFiles: Array<any> = Array.from(dataTransfer.items).map(item => item.webkitGetAsEntry());
+
+    return fileList.reduce((newFiles, file) => {
+      const entryFile = entriesFiles.find(entry => entry.name === file.name);
+
+      if (entryFile.isFile) {
         return newFiles.concat(file);
       } else {
         this.invalidFileType++;
@@ -122,9 +129,8 @@ export class PoUploadDragDropDirective {
   private async readDirectory(entry) {
     const dirReader = entry.createReader();
     let files = [];
-    let newFiles;
 
-    newFiles = await this.readDirectoryEntries(dirReader);
+    const newFiles = await this.readDirectoryEntries(dirReader);
     files = files.concat(newFiles);
     return files;
   }

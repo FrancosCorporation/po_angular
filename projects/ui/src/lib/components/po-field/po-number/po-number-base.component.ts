@@ -1,4 +1,4 @@
-import { ElementRef, Directive } from '@angular/core';
+import { ChangeDetectorRef, Directive, ElementRef } from '@angular/core';
 
 import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 
@@ -9,8 +9,8 @@ export abstract class PoNumberBaseComponent extends PoInputGeneric {
   protected invalidInputValueOnBlur = false;
 
   /* istanbul ignore next */
-  constructor(elementRef: ElementRef) {
-    super(elementRef);
+  constructor(elementRef: ElementRef, cd: ChangeDetectorRef) {
+    super(elementRef, cd);
   }
 
   eventOnInput(e: any) {
@@ -26,6 +26,9 @@ export abstract class PoNumberBaseComponent extends PoInputGeneric {
       }
 
       this.callOnChange(this.formatNumber(value));
+      if (this.errorAsyncProperties?.triggerMode === 'changeModel') {
+        this.verifyErrorAsync();
+      }
     }
   }
 
@@ -41,9 +44,15 @@ export abstract class PoNumberBaseComponent extends PoInputGeneric {
   }
 
   onKeyDown(event) {
+    const isFieldFocused = document.activeElement === this.inputEl.nativeElement;
+
     if (!this.isKeyAllowed(event)) {
       event.stopPropagation();
       event.preventDefault();
+    }
+
+    if (isFieldFocused) {
+      this.keydown.emit(event);
     }
   }
 
@@ -83,6 +92,7 @@ export abstract class PoNumberBaseComponent extends PoInputGeneric {
     // Emite evento quando o model é atualizado, inclusive a primeira vez
 
     this.changeModel.emit(value);
+    this.verifyErrorAsync();
   }
 
   private isEndWithDot(value: string) {
@@ -125,7 +135,10 @@ export abstract class PoNumberBaseComponent extends PoInputGeneric {
       'Up',
       'Down',
       'Tab',
-      'Delete'
+      'Delete',
+      'Home',
+      'End',
+      'Enter'
     ];
 
     return controlKeys.indexOf(event.key) !== -1;

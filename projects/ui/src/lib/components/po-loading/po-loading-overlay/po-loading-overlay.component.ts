@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef } from '@angular/core';
+import { Component, ChangeDetectorRef, inject } from '@angular/core';
 
 import { PoLanguageService } from './../../../services/po-language/po-language.service';
 
@@ -13,11 +13,13 @@ import { PoLoadingOverlayBaseComponent } from './po-loading-overlay-base.compone
  * <example name="po-loading-overlay-basic" title="PO Loading Overlay Basic">
  *  <file name="sample-po-loading-overlay-basic/sample-po-loading-overlay-basic.component.html"> </file>
  *  <file name="sample-po-loading-overlay-basic/sample-po-loading-overlay-basic.component.ts"> </file>
+ *  <file name="sample-po-loading-overlay-basic/sample-po-loading-overlay-basic.component.css"> </file>
  * </example>
  *
  * <example name="po-loading-overlay-labs" title="PO Loading Overlay Labs">
  *  <file name="sample-po-loading-overlay-labs/sample-po-loading-overlay-labs.component.html"> </file>
  *  <file name="sample-po-loading-overlay-labs/sample-po-loading-overlay-labs.component.ts"> </file>
+ *  <file name="sample-po-loading-overlay-labs/sample-po-loading-overlay-labs.component.css"> </file>
  * </example>
  *
  * <example name="po-loading-overlay-connection-test" title="PO Loading Overlay - Connection Test">
@@ -27,10 +29,15 @@ import { PoLoadingOverlayBaseComponent } from './po-loading-overlay-base.compone
  */
 @Component({
   selector: 'po-loading-overlay',
-  templateUrl: 'po-loading-overlay.component.html'
+  templateUrl: 'po-loading-overlay.component.html',
+  standalone: false
 })
 export class PoLoadingOverlayComponent extends PoLoadingOverlayBaseComponent {
-  constructor(public changeDetector: ChangeDetectorRef, languageService: PoLanguageService) {
+  changeDetector = inject(ChangeDetectorRef);
+
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     super(languageService);
   }
 }

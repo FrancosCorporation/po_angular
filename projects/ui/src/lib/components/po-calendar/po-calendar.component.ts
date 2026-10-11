@@ -1,25 +1,42 @@
-import { Component, forwardRef, OnInit } from '@angular/core';
+import {
+  OnInit,
+  signal,
+  inject,
+  DoCheck,
+  computed,
+  Component,
+  OnChanges,
+  QueryList,
+  ViewChild,
+  forwardRef,
+  ViewChildren,
+  SimpleChanges,
+  ChangeDetectorRef,
+  ChangeDetectionStrategy
+} from '@angular/core';
 import { AbstractControl, NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
+import { isMobile } from '../../utils/util';
+import { PoButtonComponent } from '../po-button';
+import { PoTimerComponent } from '../po-timer/po-timer.component';
+import { PoCalendarLangService, PoCalendarService } from './services';
 import { PoCalendarBaseComponent } from './po-calendar-base.component';
-import { PoCalendarLangService } from './services/po-calendar.lang.service';
-import { PoCalendarService } from './services/po-calendar.service';
 import { PoDateService } from '../../services/po-date/po-date.service';
 import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { PoCalendarRangePreset } from './interfaces/po-calendar-range-preset.interface';
+import { PO_CALENDAR_DEFAULT_RANGE_PRESETS } from './constants/po-calendar-range-presets.constant';
 
 /* istanbul ignore next */
 const providers = [
-  PoCalendarService,
-  PoCalendarLangService,
   {
     provide: NG_VALUE_ACCESSOR,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoCalendarComponent),
     multi: true
   },
   {
     provide: NG_VALIDATORS,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoCalendarComponent),
     multi: true
   }
@@ -35,6 +52,11 @@ const providers = [
  *  <file name="sample-po-calendar-basic/sample-po-calendar-basic.component.ts"> </file>
  * </example>
  *
+ * <example name="po-calendar-range-presets" title="PO Calendar - Range and Presets" >
+ *  <file name="sample-po-calendar-range-presets/sample-po-calendar-range-presets.component.html"> </file>
+ *  <file name="sample-po-calendar-range-presets/sample-po-calendar-range-presets.component.ts"> </file>
+ * </example>
+ *
  * <example name="po-calendar-labs" title="PO Calendar Labs" >
  *  <file name="sample-po-calendar-labs/sample-po-calendar-labs.component.html"> </file>
  *  <file name="sample-po-calendar-labs/sample-po-calendar-labs.component.ts"> </file>
@@ -48,81 +70,374 @@ const providers = [
 @Component({
   selector: 'po-calendar',
   templateUrl: './po-calendar.component.html',
-  providers
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  providers,
+  standalone: false
 })
-export class PoCalendarComponent extends PoCalendarBaseComponent implements OnInit {
-  constructor(
-    private poCalendarService: PoCalendarService,
-    poCalendarLangService: PoCalendarLangService,
-    poDate: PoDateService,
-    languageService: PoLanguageService
-  ) {
-    super(poDate, poCalendarLangService, languageService);
+export class PoCalendarComponent extends PoCalendarBaseComponent implements OnInit, OnChanges, DoCheck {
+  @ViewChild('timer') timerComponent: PoTimerComponent;
+
+  @ViewChildren('yearOption') yearOptions: QueryList<PoButtonComponent>;
+  @ViewChildren('monthOption') monthOptions: QueryList<PoButtonComponent>;
+
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly poCalendarService = inject(PoCalendarService);
+  private readonly poCalendarLangService = inject(PoCalendarLangService);
+
+  hoverValue: Date;
+  displayToClean: string;
+  displayMonths: Array<string> = [];
+  displayYears: Array<number> = [];
+  focusedIndex: number = 0;
+  selectedIndexMonth: number | null = null;
+  selectedIndexYear: number | null = null;
+  selectedMonth: number | null;
+  selectedYear: number | null;
+
+  private isTodayPresetSelection = false;
+
+  private readonly _isRange = signal(false);
+  private readonly _rangePresetsValue = signal<boolean | Array<string>>(false);
+  private readonly _rangePresetOptionsValue = signal<Array<PoCalendarRangePreset> | undefined>(undefined);
+  private readonly _rangePresetsOrderValue = signal<'asc' | 'desc'>('asc');
+  private readonly _minDateValue = signal<Date | undefined>(undefined);
+  private readonly _maxDateValue = signal<Date | undefined>(undefined);
+
+  readonly effectivePresets = computed<Array<PoCalendarRangePreset>>(() => {
+    const isRange = this._isRange();
+    const rangePresets = this._rangePresetsValue();
+    const rangePresetOptions = this._rangePresetOptionsValue();
+    const rangePresetsOrder = this._rangePresetsOrderValue();
+    const minDate = this._minDateValue();
+    const maxDate = this._maxDateValue();
+
+    if (!isRange) {
+      return [];
+    }
+
+    const hasCustomPresets = rangePresetOptions !== undefined && rangePresetOptions.length > 0;
+    let defaultPresets: Array<PoCalendarRangePreset> = [];
+
+    if (Array.isArray(rangePresets)) {
+      const allowedKeys = new Set(rangePresets.map(k => k.toLowerCase()));
+      allowedKeys.add('today');
+      defaultPresets = PO_CALENDAR_DEFAULT_RANGE_PRESETS.filter(p => allowedKeys.has(p.label.toLowerCase()));
+    } else if (rangePresets) {
+      defaultPresets = [...PO_CALENDAR_DEFAULT_RANGE_PRESETS];
+    }
+
+    const customPresets = hasCustomPresets ? rangePresetOptions : [];
+    const combined = [...defaultPresets, ...customPresets];
+
+    if (combined.length > 0 && !combined.some(p => p.label.toLowerCase() === 'today')) {
+      const todayPreset = PO_CALENDAR_DEFAULT_RANGE_PRESETS.find(p => p.label === 'today');
+      if (todayPreset) {
+        combined.unshift(todayPreset);
+      }
+    }
+
+    if (combined.length === 0) {
+      return [];
+    }
+
+    const sorted = this.sortPresetsByTemporality(combined, rangePresetsOrder);
+    return this.enrichPresetsWithDisabledState(sorted, minDate, maxDate);
+  });
+
+  constructor() {
+    const poDate = inject(PoDateService);
+    const languageService = inject(PoLanguageService);
+
+    super(poDate, languageService);
+  }
+
+  get isResponsive() {
+    return isMobile();
   }
 
   ngOnInit() {
-    this.init();
-  }
+    this.setActivateDate();
+    this.displayToClean = this.poCalendarLangService.getToCleanLabel();
 
-  getBackgroundColor(displayValue: number, propertyValue: number) {
-    return displayValue === propertyValue ? 'po-calendar-box-background-selected' : 'po-calendar-box-background';
-  }
-
-  getDayBackgroundColor(date: Date) {
-    return this.getDayColor(date, 'background');
-  }
-
-  getDayForegroundColor(date: Date) {
-    return this.getDayColor(date, 'foreground');
-  }
-
-  getForegroundColor(displayValue: number, propertyValue: number) {
-    return displayValue === propertyValue ? 'po-calendar-box-foreground-selected' : 'po-calendar-box-foreground';
-  }
-
-  getMonthLabel() {
-    return this.poCalendarLangService.getMonthLabel();
-  }
-
-  getYearLabel() {
-    return this.poCalendarLangService.getYearLabel();
-  }
-
-  onNextMonth() {
-    this.displayMonthNumber < 11
-      ? this.updateDisplay(this.displayYear, this.displayMonthNumber + 1)
-      : this.updateDisplay(this.displayYear + 1, 0);
-  }
-
-  onPreviousMonth() {
-    this.displayMonthNumber > 0
-      ? this.updateDisplay(this.displayYear, this.displayMonthNumber - 1)
-      : this.updateDisplay(this.displayYear - 1, 11);
-  }
-
-  // Ao selecionar uma data
-  onSelectDate(date: Date) {
-    this.date = date;
-    this.dateIso = this.poDate.convertDateToISO(date);
-    if (this.propagateChange) {
-      this.propagateChange(this.dateIso);
+    if (this.mode === 'month-year' || this.mode === 'year') {
+      this.initializeYearAndMonthMode();
     }
-    this.change.emit(this.dateIso);
   }
 
-  // Ao selecionar um mês
-  onSelectMonth(year: number, month: number) {
-    this.selectDay();
-    this.updateDisplay(year, month);
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.minDate || changes.maxDate) {
+      this.setActivateDate();
+    }
   }
 
-  // Ao selecionar um ano
-  onSelectYear(year: number, month: number) {
-    // Se veio da tela de seleção de mês
-    this.lastDisplay === 'month' ? this.selectMonth() : this.selectDay();
+  ngDoCheck(): void {
+    this._isRange.set(this.isRange);
+    this._rangePresetsValue.set(this.rangePresets);
+    this._rangePresetOptionsValue.set(this.rangePresetOptions);
+    this._rangePresetsOrderValue.set(this.rangePresetsOrder);
+    this._minDateValue.set(this.minDate);
+    this._maxDateValue.set(this.maxDate);
+  }
 
-    this.currentYear = year;
-    this.updateDisplay(year, month);
+  isMonthDisabled(monthIndex: number): boolean {
+    if (!this.selectedYear) return false;
+
+    const year = this.selectedYear;
+    const month = monthIndex + 1;
+
+    if (this.minDate) {
+      const minYear = this.minDate.getFullYear();
+      const minMonth = this.minDate.getMonth() + 1;
+
+      if (year < minYear || (year === minYear && month < minMonth)) {
+        return true;
+      }
+    }
+
+    if (this.maxDate) {
+      const maxYear = this.maxDate.getFullYear();
+      const maxMonth = this.maxDate.getMonth() + 1;
+
+      if (year > maxYear || (year === maxYear && month > maxMonth)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  isYearDisabled(year: number): boolean {
+    const selectedMonth = this.selectedMonth;
+
+    const minYear = this.minDate?.getFullYear();
+    const minMonth = this.minDate?.getMonth() + 1;
+
+    const maxYear = this.maxDate?.getFullYear();
+    const maxMonth = this.maxDate?.getMonth() + 1;
+
+    if (selectedMonth !== undefined && selectedMonth !== null) {
+      const month = selectedMonth;
+
+      if (minYear && (year < minYear || (year === minYear && month < minMonth))) {
+        return true;
+      }
+
+      if (maxYear !== undefined && (year > maxYear || (year === maxYear && month > maxMonth))) {
+        return true;
+      }
+
+      return false;
+    }
+
+    if (minYear !== undefined && year < minYear) return true;
+    if (maxYear !== undefined && year > maxYear) return true;
+
+    return false;
+  }
+
+  onKeydownMonth(event: KeyboardEvent, index: number): void {
+    const monthOptions = this.getMonthOptions();
+    const yearOptions = this.getYearOptions();
+
+    if (event.key === 'Enter' || event.code === 'Space') {
+      this.selectMonth(index, event);
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const nextIndex = index < monthOptions.length - 1 ? index + 1 : index;
+      this.selectMonth(nextIndex, event);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const prevIndex = index > 0 ? index - 1 : index;
+      this.selectMonth(prevIndex, event);
+    } else if (event.key === 'Tab' && !event.shiftKey) {
+      event.preventDefault();
+      const selected = yearOptions[this.selectedIndexYear];
+      const enabledOptions = yearOptions.filter(btn => !btn.disabled);
+
+      (selected || enabledOptions[0])?.focus();
+    } else if (event.key === 'Tab' && event.shiftKey) {
+      this.focusedIndex = 0;
+      this.close.emit();
+    }
+  }
+
+  onKeydownYear(event: KeyboardEvent, index: number): void {
+    const monthOptions = this.getMonthOptions();
+    const yearOptions = this.getYearOptions();
+
+    if (event.key === 'Enter' || event.code === 'Space') {
+      this.selectYear(index, event);
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const nextIndex = index < yearOptions.length - 1 ? index + 1 : index;
+      this.selectYear(nextIndex, event);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const prevIndex = index > 0 ? index - 1 : index;
+      this.selectYear(prevIndex, event);
+    } else if (event.key === 'Tab' && !event.shiftKey) {
+      this.focusedIndex = 0;
+      this.close.emit();
+    } else if (event.key === 'Tab' && event.shiftKey && this.mode === 'month-year') {
+      event.preventDefault();
+      const selected = monthOptions[this.selectedIndexMonth];
+      selected ? selected.focus() : monthOptions[0].focus();
+    } else if (event.key === 'Tab' && event.shiftKey && this.mode === 'year') {
+      this.close.emit();
+    }
+  }
+
+  selectMonth(index: number, event?: KeyboardEvent, selected = false): void {
+    const monthOptions = this.getMonthOptions();
+
+    const isSelectAction = event?.key === 'Enter' || event?.code === 'Space' || selected;
+
+    if (isSelectAction) {
+      this.selectedIndexMonth = index;
+      this.selectedMonth = index + 1;
+
+      this.updateModel(this.selectedMonth);
+    }
+
+    if (monthOptions[index]) {
+      this.focusedIndex = index;
+      monthOptions[index].focus();
+    }
+  }
+
+  selectYear(index: number, event?: KeyboardEvent, selected = false, year?): void {
+    const yearOptions = this.getYearOptions();
+
+    const isSelectAction = event?.key === 'Enter' || event?.code === 'Space' || selected;
+
+    if (isSelectAction) {
+      this.selectedIndexYear = index;
+      this.selectedYear = year;
+
+      this.updateModel(this.selectedYear);
+    }
+
+    if (yearOptions[index]) {
+      this.focusedIndex = index;
+      yearOptions[index].focus();
+    }
+  }
+
+  private getMonthOptions(): Array<PoButtonComponent> {
+    return this.monthOptions.toArray();
+  }
+
+  private getYearOptions(): Array<PoButtonComponent> {
+    return this.yearOptions.toArray();
+  }
+
+  private initializeYearAndMonthMode(): void {
+    this.displayMonths = this.poCalendarLangService.getMonthsArray();
+
+    const currentYear = new Date().getFullYear();
+    const rangeLimit = this.yearRangeLimit ?? 150;
+
+    this.displayYears = Array.from({ length: rangeLimit * 2 + 1 }, (_, i) => currentYear - rangeLimit + i);
+  }
+
+  getActivateDate(partType) {
+    if (this.isRange && this.activateDate) {
+      return this.activateDate.start;
+    } else {
+      return this.activateDate;
+    }
+  }
+
+  getValue(partType) {
+    if (this.isRange && this.value) {
+      return this.value.start;
+    } else {
+      return this.value;
+    }
+  }
+
+  onSelectDate(selectedDate, partType?) {
+    this.selectedPresetLabel = null;
+
+    if (selectedDate === '' || selectedDate === undefined) {
+      this.value = null;
+      this.updateModel('');
+      this.change.emit('');
+
+      // Em modo date-time, limpar também reseta o timer
+      if (this.isDateTime && this.timerComponent) {
+        this.timerComponent.writeValue(null);
+        this.changeTime.emit('');
+      }
+
+      this.changeDetector.markForCheck();
+      return;
+    }
+
+    let newValue;
+
+    if (this.isRange) {
+      newValue = this.getValueFromSelectedDate(selectedDate);
+      this.activateDate = { start: newValue.start, end: newValue.end || newValue.start };
+    } else {
+      newValue = selectedDate;
+      this.setActivateDate(selectedDate);
+    }
+
+    this.value = newValue;
+    const newModel = this.convertDateToISO(this.value);
+    this.updateModel(newModel);
+
+    if (this.isDateTime && this.timerComponent && this.isTodayPresetSelection) {
+      this.close.emit();
+      this.change.emit(newModel);
+
+      const now = new Date();
+      const hours = ('0' + now.getHours()).slice(-2);
+      const minutes = ('0' + now.getMinutes()).slice(-2);
+      const seconds = ('0' + now.getSeconds()).slice(-2);
+      const currentTime = this.showSeconds ? `${hours}:${minutes}:${seconds}` : `${hours}:${minutes}`;
+
+      this.timerComponent.writeValue(currentTime);
+      this.changeTime.emit(currentTime);
+      this.isTodayPresetSelection = false;
+    } else {
+      this.change.emit(newModel);
+    }
+  }
+
+  onHoverDate(date) {
+    this.hoverValue = date;
+  }
+
+  onSelectTodayPreset(): void {
+    this.isTodayPresetSelection = true;
+  }
+
+  onHeaderChange({ month, year }, partType) {
+    this.updateActivateDateFromHeaderChange(month, year, partType);
+
+    this.changeMonthYear.emit({ month, year });
+  }
+
+  onCloseCalendar() {
+    if (this.isDateTime) {
+      return;
+    }
+    this.change.emit(this.value);
+    this.close.emit();
+  }
+
+  onTimeChange(time: string) {
+    this.changeTime.emit(time);
+  }
+
+  onTimerBoundaryTab(event: any) {
+    this.timerBoundaryTab.emit(event);
   }
 
   registerOnChange(fn: any): void {
@@ -133,40 +448,6 @@ export class PoCalendarComponent extends PoCalendarBaseComponent implements OnIn
     this.onTouched = func;
   }
 
-  registerOnValidatorChange(fn: () => void) {
-    this.validatorChange = fn;
-  }
-
-  selectDay() {
-    this.dayVisible = true;
-    this.monthVisible = false;
-    this.yearVisible = false;
-    this.lastDisplay = 'day';
-  }
-
-  selectMonth() {
-    this.dayVisible = false;
-    this.monthVisible = true;
-    this.yearVisible = false;
-    this.lastDisplay = 'month';
-  }
-
-  selectYear() {
-    this.dayVisible = false;
-    this.monthVisible = false;
-    this.yearVisible = true;
-  }
-
-  updateYear(value: number) {
-    this.updateDisplay(this.displayYear + value, this.displayMonthNumber);
-  }
-
-  validateModel(model: any) {
-    if (this.validatorChange) {
-      this.validatorChange(model);
-    }
-  }
-
   validate(c: AbstractControl): { [key: string]: any } {
     return null;
   }
@@ -175,120 +456,258 @@ export class PoCalendarComponent extends PoCalendarBaseComponent implements OnIn
     if (value) {
       this.writeDate(value);
     } else {
-      this.date = undefined;
-      this.updateDate(this.today);
+      this.value = null;
+      this.selectedMonth = null;
+      this.selectedYear = null;
+      this.selectedIndexMonth = null;
+      this.selectedIndexYear = null;
+    }
+
+    const activateDate = this.getValidateStartDate(value);
+    this.setActivateDate(activateDate);
+
+    this.changeDetector.markForCheck();
+  }
+
+  onPresetSelected(event: { label: string; start: Date; end: Date }): void {
+    const start = this.clampDate(event.start, this.minDate, this.maxDate);
+    const end = this.clampDate(event.end, this.minDate, this.maxDate);
+
+    if (start > end) {
+      return;
+    }
+
+    this.selectedPresetLabel = event.label;
+    this.value = { start, end };
+    this.activateDate = { start, end };
+
+    const newModel = this.convertDateToISO(this.value);
+    this.updateModel(newModel);
+    this.change.emit(newModel);
+    this.changeDetector.markForCheck();
+  }
+
+  private sortPresetsByTemporality(
+    presets: Array<PoCalendarRangePreset>,
+    order?: 'asc' | 'desc'
+  ): Array<PoCalendarRangePreset> {
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const todayTime = todayStart.getTime();
+    const getGroup = (startDate: Date): number => {
+      const startTime = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+        0,
+        0,
+        0,
+        0
+      ).getTime();
+      if (startTime > todayTime) {
+        return 0; // Futuro
+      }
+      if (startTime < todayTime) {
+        return 2; // Passado
+      }
+      return 1; // Presente
+    };
+
+    const sorted = [...presets].sort((a, b) => {
+      const rangeA = a.dateRange(today);
+      const rangeB = b.dateRange(today);
+      const startA = new Date(rangeA.start);
+      const startB = new Date(rangeB.start);
+      const groupA = getGroup(startA);
+      const groupB = getGroup(startB);
+      if (groupA !== groupB) {
+        return groupA - groupB;
+      }
+      const distA = Math.abs(startA.getTime() - todayTime);
+      const distB = Math.abs(startB.getTime() - todayTime);
+      return distA - distB;
+    });
+
+    const resolvedOrder = order ?? this.rangePresetsOrder;
+    return resolvedOrder === 'desc' ? sorted.reverse() : sorted;
+  }
+
+  private normalizeDate(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  private enrichPresetsWithDisabledState(
+    presets: Array<PoCalendarRangePreset>,
+    minDateInput?: Date,
+    maxDateInput?: Date
+  ): Array<PoCalendarRangePreset> {
+    const today = new Date();
+
+    const resolvedMinDate = minDateInput ?? this.minDate;
+    const resolvedMaxDate = maxDateInput ?? this.maxDate;
+
+    const minDate = resolvedMinDate ? this.normalizeDate(resolvedMinDate) : undefined;
+    const maxDate = resolvedMaxDate ? this.normalizeDate(resolvedMaxDate) : undefined;
+
+    return presets.map(preset => {
+      const range = preset.dateRange(today);
+
+      const start = this.normalizeDate(new Date(range.start));
+      const end = this.normalizeDate(new Date(range.end));
+
+      const isBeforeMin = minDate ? start < minDate : false;
+      const isAfterMax = maxDate ? end > maxDate : false;
+
+      const isDisabled = isBeforeMin || isAfterMax;
+
+      return { ...preset, isDisabled };
+    });
+  }
+
+  private clampDate(date: Date, min?: Date, max?: Date): Date {
+    let result = new Date(date);
+    if (min && result < min) {
+      result = new Date(min);
+    }
+    if (max && result > max) {
+      result = new Date(max);
+    }
+    return result;
+  }
+
+  private getValidateStartDate(value) {
+    if (this.isRange) {
+      return value?.start || null;
+    } else if (value instanceof Date || typeof value === 'string') {
+      return value;
+    }
+
+    return null;
+  }
+
+  private getValueFromSelectedDate(selectedDate: Date): { start: Date; end?: Date } {
+    if (!this.value?.start || this.value.start > selectedDate || (this.value.end && this.value.start)) {
+      return { start: new Date(selectedDate), end: null };
+    }
+
+    return { start: new Date(this.value.start), end: new Date(selectedDate) };
+  }
+
+  private updateActivateDateFromHeaderChange(month: number, year: number, partType: string): void {
+    if (!this.isRange || !this.activateDate) {
+      return;
+    }
+
+    if (partType === 'start') {
+      const currentStart = this.activateDate.start instanceof Date ? this.activateDate.start : new Date();
+      const newStart = this.buildDateWithMonthYear(currentStart, month - 1, year);
+
+      this.activateDate = { start: newStart, end: this.activateDate.end };
+      return;
+    }
+
+    if (partType === 'end') {
+      const currentEnd = this.activateDate.end instanceof Date ? this.activateDate.end : new Date();
+      const newEnd = this.buildDateWithMonthYear(currentEnd, month - 1, year);
+
+      this.activateDate = { start: this.activateDate.start, end: newEnd };
     }
   }
 
-  private addAllYearsInDecade(year: number) {
-    let i;
-    for (i = year; i < year + 10; i++) {
-      this.displayDecade.push(i);
+  private buildDateWithMonthYear(baseDate: Date, month: number, year: number): Date {
+    const day = baseDate instanceof Date ? baseDate.getDate() : 1;
+    const daysInTargetMonth = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(day, daysInTargetMonth));
+  }
+
+  private convertDateToISO(date) {
+    if (this.isRange) {
+      const start = date?.start instanceof Date ? this.poDate.convertDateToISO(date.start) : null;
+      const end = date?.end instanceof Date ? this.poDate.convertDateToISO(date.end) : null;
+
+      return { start, end };
+    } else {
+      return this.poDate.convertDateToISO(date);
     }
   }
 
-  private equalsDate(date1: Date, date2: Date): boolean {
-    try {
-      return (
-        date1.getFullYear() === date2.getFullYear() &&
-        date1.getMonth() === date2.getMonth() &&
-        date1.getDate() === date2.getDate()
-      );
-    } catch (error) {
-      return false;
+  private convertDateFromIso(stringDate: string) {
+    if (stringDate && typeof stringDate === 'string') {
+      const { year, month, day } = this.poDate.getDateFromIso(stringDate);
+      const date = new Date(year, month - 1, day);
+      this.poDate.setYearFrom0To100(date, year);
+
+      return date;
     }
+
+    return null;
   }
 
-  // Obtém um array de todos os anos desta década
-  private getDecadeArray(year) {
-    this.displayDecade = Array();
+  private updateModel(value) {
+    const MODE_YEAR = this.mode === 'year';
+    const MODE_MONTH_YEAR = this.mode === 'month-year';
 
-    if (year % 10 !== 0) {
-      while (year % 10 !== 0) {
-        year--;
+    let finalValue = value;
+
+    if (MODE_MONTH_YEAR) {
+      if (this.selectedMonth && this.selectedYear) {
+        finalValue = new Date(this.selectedYear, this.selectedMonth - 1, 1);
+        this.change.emit(finalValue);
+      } else {
+        return;
+      }
+    } else if (MODE_YEAR) {
+      if (this.selectedYear) {
+        finalValue = new Date(this.selectedYear, 0, 1);
+        this.change.emit(finalValue);
+      } else {
+        return;
       }
     }
-    this.updateDecade(year);
-  }
 
-  private getColorForDate(date: Date, local: string) {
-    return this.poDate.validateDateRange(date, this.minDate, this.maxDate)
-      ? `po-calendar-box-${local}-selected`
-      : `po-calendar-box-${local}-selected-disabled`;
-  }
-
-  private getColorForDateRange(date: Date, local: string) {
-    return this.poDate.validateDateRange(date, this.minDate, this.maxDate)
-      ? `po-calendar-box-${local}`
-      : `po-calendar-box-${local}-disabled`;
-  }
-
-  private getColorForToday(date: Date, local: string) {
-    return this.poDate.validateDateRange(date, this.minDate, this.maxDate)
-      ? `po-calendar-box-${local}-today`
-      : `po-calendar-box-${local}-today-disabled`;
-  }
-
-  private getDayColor(date: Date, local: string) {
-    if (this.equalsDate(date, this.date)) {
-      return this.getColorForDate(date, local);
-    } else if (this.equalsDate(date, this.today)) {
-      return this.getColorForToday(date, local);
-    } else {
-      return this.getColorForDateRange(date, local);
+    if (this.propagateChange) {
+      this.propagateChange(finalValue);
     }
   }
 
-  private init() {
-    this.date && this.poDate.isValidIso(this.poDate.convertDateToISO(this.date))
-      ? this.updateDate(this.date)
-      : this.updateDate(this.today);
-    this.initializeLanguage();
-    this.selectDay();
+  private setMonth(index: number) {
+    this.selectedIndexMonth = index;
+    this.selectedMonth = index + 1;
   }
 
-  private selectDateFromDate(date: Date) {
-    this.date = date;
-    this.onSelectDate(this.date);
-  }
-
-  private selectDateFromIso(stringDate: string) {
-    const { year, month, day } = this.poDate.getDateFromIso(stringDate);
-    const date = new Date(year, month - 1, day);
-    this.poDate.setYearFrom0To100(date, year);
-    this.date = date;
-    this.onSelectDate(this.date);
-  }
-
-  private updateDate(date: Date) {
-    if (date) {
-      this.currentMonthNumber = date.getMonth();
-      this.currentYear = date.getFullYear();
-      this.updateDisplay(this.currentYear, this.currentMonthNumber);
-    }
-  }
-
-  private updateDecade(year: number) {
-    this.addAllYearsInDecade(year);
-    this.displayStartDecade = year;
-    this.displayFinalDecade = year + 9;
-  }
-
-  private updateDisplay(year: number, month: number) {
-    const calendarArray = this.poCalendarService.monthDays(year, month);
-    this.displayDays = [].concat.apply([], calendarArray);
-    this.displayMonthNumber = month;
-    this.displayMonth = this.displayMonths[month];
-    this.displayYear = year;
-    this.getDecadeArray(year);
+  private setYear(index: number, year: number) {
+    this.selectedIndexYear = index;
+    this.selectedYear = year;
   }
 
   private writeDate(value: any) {
-    value instanceof Date ? this.selectDateFromDate(value) : this.writeDateIso(value);
-    this.updateDate(this.date);
-  }
+    if (this.mode === 'month-year') {
+      const date = new Date(value);
+      const monthIndex = date.getMonth();
+      const year = date.getFullYear();
+      const yearOptions = this.getYearOptions();
 
-  private writeDateIso(value: any) {
-    this.poDate.isValidIso(value) ? this.selectDateFromIso(value) : (this.date = undefined);
+      const yearIndex = yearOptions.findIndex(btn => Number(btn.label()) === year);
+
+      this.setMonth(monthIndex);
+      this.setYear(yearIndex, year);
+    } else if (this.mode === 'year') {
+      const year = new Date(value).getFullYear();
+      const yearOptions = this.getYearOptions();
+
+      const yearIndex = yearOptions.findIndex(btn => Number(btn.label()) === year);
+
+      this.setYear(yearIndex, year);
+    } else if (this.isRange) {
+      const start = value?.start;
+      const end = value?.end;
+
+      const newStart = start instanceof Date ? new Date(start) : this.convertDateFromIso(start);
+      const newEnd = end instanceof Date ? new Date(end) : this.convertDateFromIso(end);
+
+      this.value = { start: newStart, end: newEnd };
+    } else {
+      this.value = value instanceof Date ? new Date(value) : this.convertDateFromIso(value);
+    }
   }
 }

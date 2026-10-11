@@ -1,8 +1,8 @@
-import { Component, Input, OnInit, ViewChild, OnDestroy } from '@angular/core';
+import { Component, HostBinding, HostListener, Input, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 
-import { Observable, concat, of, Subscription, EMPTY, throwError } from 'rxjs';
-import { tap, catchError, map, switchMap } from 'rxjs/operators';
+import { concat, EMPTY, Observable, of, Subscription, throwError } from 'rxjs';
+import { catchError, map, switchMap, tap } from 'rxjs/operators';
 
 import {
   PoBreadcrumb,
@@ -11,67 +11,82 @@ import {
   PoGridComponent,
   PoGridRowActions,
   PoLanguageService,
+  poLocaleDefault,
   PoNotificationService,
-  PoPageAction,
-  poLocaleDefault
+  PoPageAction
 } from '@po-ui/ng-components';
 
-import { convertToBoolean, mapObjectByProperties, valuesFromObject, removeKeysProperties } from './../../utils/util';
+import {
+  convertToBoolean,
+  getDefaultSizeFn,
+  removeKeysProperties,
+  validateSizeFn,
+  valuesFromObject,
+  PoUtils
+} from './../../utils/util';
 
-import { PoPageDynamicEditActions } from './interfaces/po-page-dynamic-edit-actions.interface';
-import { PoPageDynamicEditField } from './interfaces/po-page-dynamic-edit-field.interface';
-import { PoPageDynamicService } from '../../services/po-page-dynamic/po-page-dynamic.service';
-import { PoPageDynamicEditOptions } from './interfaces/po-page-dynamic-edit-options.interface';
 import { PoPageCustomizationService } from '../../services/po-page-customization/po-page-customization.service';
-import { PoPageDynamicEditMetadata } from './interfaces/po-page-dynamic-edit-metadata.interface';
 import { PoPageDynamicOptionsSchema } from '../../services/po-page-customization/po-page-dynamic-options.interface';
-import { PoPageDynamicEditActionsService } from './po-page-dynamic-edit-actions.service';
+import { PoPageDynamicService } from '../../services/po-page-dynamic/po-page-dynamic.service';
+import { PoPageDynamicEditActions } from './interfaces/po-page-dynamic-edit-actions.interface';
 import { PoPageDynamicEditBeforeCancel } from './interfaces/po-page-dynamic-edit-before-cancel.interface';
+import { PoPageDynamicEditField } from './interfaces/po-page-dynamic-edit-field.interface';
+import { PoPageDynamicEditLiterals } from './interfaces/po-page-dynamic-edit-literals.interface';
+import { PoPageDynamicEditMetadata } from './interfaces/po-page-dynamic-edit-metadata.interface';
+import { PoPageDynamicEditOptions } from './interfaces/po-page-dynamic-edit-options.interface';
+import { PoPageDynamicEditActionsService } from './po-page-dynamic-edit-actions.service';
 
 type UrlOrPoCustomizationFunction = string | (() => PoPageDynamicEditOptions);
 type SaveAction = PoPageDynamicEditActions['save'] | PoPageDynamicEditActions['saveNew'];
 
+export const poNotificationType = ['error', 'warning'];
+export const poNotificationTypeDefault = 'warning';
+
 export const poPageDynamicEditLiteralsDefault = {
-  en: {
+  en: <PoPageDynamicEditLiterals>{
     cancelConfirmMessage: 'Are you sure you want to cancel this operation?',
     detailActionNew: 'New',
     pageActionCancel: 'Cancel',
     pageActionSave: 'Save',
     pageActionSaveNew: 'Save and new',
     registerNotFound: 'Register not found.',
+    saveNotificationError: 'Mandatory field(s) not filled.',
     saveNotificationSuccessSave: 'Resource successfully saved.',
     saveNotificationSuccessUpdate: 'Resource successfully updated.',
     saveNotificationWarning: 'Form must be filled out correctly.'
   },
-  es: {
+  es: <PoPageDynamicEditLiterals>{
     cancelConfirmMessage: 'Está seguro de que desea cancelar esta operación?',
     detailActionNew: 'Nuevo',
     pageActionCancel: 'Cancelar',
     pageActionSave: 'Guardar',
     pageActionSaveNew: 'Guardar y nuevo',
     registerNotFound: 'Registro no encontrado.',
+    saveNotificationError: 'Campo(s) obligatorio(s) no completado(s).',
     saveNotificationSuccessSave: 'Recurso salvo con éxito.',
     saveNotificationSuccessUpdate: 'Recurso actualizado con éxito.',
     saveNotificationWarning: 'El formulario debe llenarse correctamente.'
   },
-  pt: {
+  pt: <PoPageDynamicEditLiterals>{
     cancelConfirmMessage: 'Tem certeza que deseja cancelar esta operação?',
     detailActionNew: 'Novo',
     pageActionCancel: 'Cancelar',
     pageActionSave: 'Salvar',
     pageActionSaveNew: 'Salvar e novo',
     registerNotFound: 'Registro não encontrado.',
+    saveNotificationError: 'Campo(s) obrigatório(s) sem preenchimento.',
     saveNotificationSuccessSave: 'Recurso salvo com sucesso.',
     saveNotificationSuccessUpdate: 'Recurso atualizado com sucesso.',
     saveNotificationWarning: 'Formulário precisa ser preenchido corretamente.'
   },
-  ru: {
+  ru: <PoPageDynamicEditLiterals>{
     cancelConfirmMessage: 'Вы уверены, что хотите отменить эту операцию?',
     detailActionNew: 'Новый',
     pageActionCancel: 'Отменить',
     pageActionSave: 'Сохранить',
     pageActionSaveNew: 'Сохранить и создать',
     registerNotFound: 'Запись не найдена.',
+    saveNotificationError: 'Обязательное поле(я) не заполнено.',
     saveNotificationSuccessSave: 'Ресурс успешно сохранен.',
     saveNotificationSuccessUpdate: 'Ресурс успешно обновлен.',
     saveNotificationWarning: 'Форма должна быть заполнена правильно.'
@@ -86,16 +101,14 @@ export const poPageDynamicEditLiteralsDefault = {
  *
  * ### Utilização via rota
  *
- * Ao utilizar as rotas para carregar o template, o `page-dynamic-edit` disponibiliza propriedades para
- * poder especificar o endpoint dos dados e dos metadados. Exemplo de utilização:
+ * Ao utilizar as rotas para inicializar o template, o `page-dynamic-edit` disponibiliza propriedades que devem ser fornecidas no arquivo de configuração de rotas da aplicação, para
+ * poder especificar o endpoint dos dados e dos metadados que serão carregados na inicialização.
  *
- * O componente primeiro irá carregar o metadado da rota definida na propriedade serviceMetadataApi
- * e depois irá buscar da rota definida na propriedade serviceLoadApi
+ * Exemplo de utilização:
  *
- * > Caso o servidor retornar um erro ao recuperar o metadados, será repassado o metadados salvo em cache,
- * se o cache não existe será disparado uma notificação.
- *
+ * Arquivo de configuração de rotas da aplicação: `app-routing.module.ts`
  * ```
+ * const routes: Routes = [
  * {
  *   path: 'people',
  *   component: PoPageDynamicEditComponent,
@@ -104,9 +117,22 @@ export const poPageDynamicEditLiteralsDefault = {
  *     serviceMetadataApi: 'http://localhost:3000/v1/metadata', // endpoint dos metadados utilizando o método HTTP Get
  *     serviceLoadApi: 'http://localhost:3000/load-metadata' // endpoint de customizações dos metadados utilizando o método HTTP Post
  *   }
- * }
+ *  },
+ *  {
+ *   path: 'home',
+ *   component: HomeExampleComponent
+ *  }
+ * ];
  *
  * ```
+ * O componente primeiro irá carregar o metadado da rota definida na propriedade serviceMetadataApi
+ * e depois irá buscar da rota definida na propriedade serviceLoadApi.
+ *
+ * A requisição dos metadados é feita na inicialização do template para buscar os metadados da página passando o
+ * tipo do metadado esperado e a versão cacheada pelo browser.
+ *
+ * > Caso o servidor retornar um erro ao recuperar os metadados, serão repassados os metadados salvos em cache,
+ * se o cache não existir será disparada uma notificação.
  *
  * Para carregar com um recurso já existente, deve-se ser incluído um parâmetro na rota chamado `id`:
  *
@@ -150,6 +176,18 @@ export const poPageDynamicEditLiteralsDefault = {
  * GET {end-point}/metadata?type=edit&version={version}
  * ```
  *
+ * #### Tokens customizáveis
+ *
+ * | Propriedade         | Descrição                                   | Valor Padrão                          |
+ * |---------------------|---------------------------------------------|---------------------------------------|
+ * | **Header**          |                                             |                                       |
+ * | `--padding`         | Espaçamento do header                       | `var(--spacing-xs) var(--spacing-md)` |
+ * | `--gap`             | Espaçamento entre os breadcrumbs e o título | `var(--spacing-md)`                   |
+ * | `--gap-actions`     | Espaçamento entre as ações                  | `var(--spacing-xs)`                   |
+ * | `--font-family`     | Família tipográfica do título               | `var(--font-family-theme)`            |
+ * | **Content**         |                                             |                                       |
+ * | `--padding-content` | Espaçamento do conteúdo                     | `var(--spacing-xs) var(--spacing-sm)` |
+ *
  * @example
  *
  * <example name="po-page-dynamic-edit-basic" title="PO Page Dynamic Edit Basic">
@@ -165,86 +203,23 @@ export const poPageDynamicEditLiteralsDefault = {
 @Component({
   selector: 'po-page-dynamic-edit',
   templateUrl: './po-page-dynamic-edit.component.html',
-  providers: [PoPageDynamicService]
+  providers: [PoPageDynamicService],
+  standalone: false
 })
 export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
-  private subscriptions: Array<Subscription> = [];
+  private readonly router = inject(Router);
+  private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly poNotification = inject(PoNotificationService);
+  private readonly poDialogService = inject(PoDialogService);
+  private readonly poPageDynamicService = inject(PoPageDynamicService);
+  private readonly poPageCustomizationService = inject(PoPageCustomizationService);
+  private readonly poPageDynamicEditActionsService = inject(PoPageDynamicEditActionsService);
 
-  private _actions: PoPageDynamicEditActions = {};
-  private _autoRouter: boolean = false;
-  private _controlFields: Array<any> = [];
-  private _detailFields: Array<any> = [];
-  private _duplicates: Array<any> = [];
-  private _fields: Array<any> = [];
-  private _keys: Array<any> = [];
-  private _pageActions: Array<PoPageAction> = [];
-
-  literals;
-  model: any = {};
-
-  // beforeSave: return boolean
-  // afterSave
-  // beforeRemove: return boolean
-  // afterRemove
-  // beforeInsert: : return boolean
-  readonly detailActions: PoGridRowActions = {};
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Ações da página.
-   */
-  @Input('p-actions') set actions(value: PoPageDynamicEditActions) {
-    this._actions = this.isObject(value) ? value : {};
-
-    this._pageActions = this.getPageActions(this._actions);
-  }
-
-  get actions() {
-    return { ...this._actions };
-  }
-
-  /**
-   * @todo Validar rotas na mão pois se existir uma rota '**' o catch do navigation não funciona.
-   *
-   * @optional
-   *
-   * @description
-   *
-   * Cria automaticamente as rotas de edição (novo/duplicate) e detalhes caso as ações
-   * estejam definidas nas ações.
-   *
-   * > Para o correto funcionamento não pode haver nenhum rota coringa (`**`) especificada.
-   *
-   * @default false
-   */
-  @Input('p-auto-router') set autoRouter(value: boolean) {
-    this._autoRouter = convertToBoolean(value);
-  }
-
-  get autoRouter(): boolean {
-    return this._autoRouter;
-  }
+  @ViewChild('dynamicForm') dynamicForm: PoDynamicFormComponent;
+  @ViewChild('gridDetail') gridDetail: PoGridComponent;
 
   /** Objeto com propriedades do breadcrumb. */
   @Input('p-breadcrumb') breadcrumb?: PoBreadcrumb = { items: [] };
-
-  /** Lista dos campos usados na tabela e busca avançada. */
-  @Input('p-fields') set fields(value: Array<PoPageDynamicEditField>) {
-    this._fields = Array.isArray(value) ? [...value] : [];
-
-    this._keys = this.getKeysByFields(this._fields);
-    this._duplicates = this.getDuplicatesByFields(this._fields);
-
-    this._controlFields = this.getControlFields(this._fields);
-    this._detailFields = this.getDetailFields(this._fields);
-  }
-
-  get fields(): Array<PoPageDynamicEditField> {
-    return this._fields;
-  }
 
   /**
    * @description
@@ -351,26 +326,222 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
    */
   @Input('p-load') onLoad: string | (() => PoPageDynamicEditOptions);
 
-  @ViewChild('dynamicForm') dynamicForm: PoDynamicFormComponent;
-  @ViewChild('gridDetail') gridDetail: PoGridComponent;
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Função que será executada após ser realizada a busca dos dados.
+   *
+   * A propriedade aceita os seguintes tipos:
+   * - `function`: Método que será executado.
+   *
+   * Esta função passa por parâmetro o model e deve recebê-lo de volta com as alterações.
+   * Também aceita o retorno de um Observable com o novo model.
+   *
+   * Por exemplo:
+   *
+   * ```
+   * onLoadCustom(model) {
+   *  return { ...model, customField: 'newValue' };
+   * }
+   *
+   * ```
+   * Para referenciar a sua função utilize a propriedade `bind`, por exemplo:
+   * ```
+   *  [p-load-data]="onLoadCustom.bind(this)"
+   * ```
+   */
+  @Input('p-load-data') onLoadData: ((model: any) => any) | ((model: any) => Observable<any>);
 
-  constructor(
-    private router: Router,
-    private activatedRoute: ActivatedRoute,
-    private poNotification: PoNotificationService,
-    private poDialogService: PoDialogService,
-    private poPageDynamicService: PoPageDynamicService,
-    private poPageCustomizationService: PoPageCustomizationService,
-    private poPageDynamicEditActionsService: PoPageDynamicEditActionsService,
-    languageService: PoLanguageService
-  ) {
-    const language = languageService.getShortLanguage();
+  model: any = {};
 
-    this.literals = {
-      ...poPageDynamicEditLiteralsDefault[poLocaleDefault],
-      ...poPageDynamicEditLiteralsDefault[language]
-    };
+  // beforeSave: return boolean
+  // afterSave
+  // beforeRemove: return boolean
+  // afterRemove
+  // beforeInsert: : return boolean
+  readonly detailActions: PoGridRowActions = {};
+
+  private indexFocus = 0;
+  private readonly language: string;
+  private readonly subscriptions: Array<Subscription> = [];
+  private _actions: PoPageDynamicEditActions = {};
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _literals: PoPageDynamicEditLiterals;
+  private _autoRouter: boolean = false;
+  private _controlFields: Array<any> = [];
+  private _detailFields: Array<any> = [];
+  private _duplicates: Array<any> = [];
+  private _fields: Array<any> = [];
+  private _keys: Array<any> = [];
+  private _pageActions: Array<PoPageAction> = [];
+  private _notificationType?: string = poNotificationTypeDefault;
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Ações da página.
+   */
+  @Input('p-actions') set actions(value: PoPageDynamicEditActions) {
+    this._actions = this.isObject(value) ? value : {};
+
+    this._pageActions = this.getPageActions(this._actions);
   }
+
+  get actions() {
+    return { ...this._actions };
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Objeto com as literais usadas no `po-page-dynamic-edit`.
+   *
+   * É possivel customizar passando um objeto com todas as literais disponíveis
+   * ou passando apenas as literais que deseja customizar
+   *
+   * ```
+   *  const customLiterals: PoPageDynamicEditLiterals = {
+   *    detailActionNew: 'Incluir',
+   *    pageActionCancel: 'Descartar',
+   *    pageActionSave: 'Gravar',
+   *    pageActionSaveNew: 'Gravar e incluir',
+   *    registerNotFound: 'Nenhum registro encontrado.',
+   *    saveNotificationError: 'Campo(s) obrigatório(s) sem preenchimento.',
+   *    saveNotificationSuccessSave: 'Item salvo com sucesso.',
+   *    saveNotificationSuccessUpdate: 'Item atualizado com sucesso.',
+   *    saveNotificationWarning: 'Necessário preencher o formulário corretamente.'
+   *  };
+   * ```
+   *
+   * E para carregar as literais customizadas, basta apenas passar o objeto para o componente.
+   *
+   * ```
+   * <po-page-dynamic-edit
+   *   [p-literals]="customLiterals">
+   * </po-page-dynamic-edit>
+   * ```
+   *
+   * > O valor padrão será traduzido de acordo com o idioma configurado no [`PoI18nService`](/documentation/po-i18n) ou *browser*.
+   */
+  @Input('p-literals') set literals(value: PoPageDynamicEditLiterals) {
+    if (value instanceof Object && !(value instanceof Array)) {
+      this._literals = {
+        ...poPageDynamicEditLiteralsDefault[poLocaleDefault],
+        ...poPageDynamicEditLiteralsDefault[this.language],
+        ...value
+      };
+    } else {
+      this._literals = poPageDynamicEditLiteralsDefault[this.language];
+    }
+
+    this._pageActions = this.getPageActions(this._actions);
+  }
+
+  get literals() {
+    return this._literals || poPageDynamicEditLiteralsDefault[this.language];
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Tipo da notificação.
+   *
+   * É possivel definir o tipo de notificação que será exibido quando houver algum campo inválido no formulário.
+   *
+   * ```
+   * <po-page-dynamic-edit
+   *   p-notification-type="warning">
+   * </po-page-dynamic-edit>
+   * ```
+   *
+   * > Os valores aceitos são 'warning' e 'error'.
+   * @default warning
+   */
+  @Input('p-notification-type') set notificationType(value: string) {
+    this._notificationType = poNotificationType.includes(value) ? value : poNotificationTypeDefault;
+  }
+
+  get notificationType() {
+    return this._notificationType;
+  }
+
+  /**
+   * @todo Validar rotas na mão pois se existir uma rota '**' o catch do navigation não funciona.
+   *
+   * @optional
+   *
+   * @description
+   *
+   * Cria automaticamente as rotas de edição (novo/duplicate) e detalhes caso as ações
+   * estejam definidas nas ações.
+   *
+   * > Para o correto funcionamento não pode haver nenhum rota coringa (`**`) especificada.
+   *
+   * @default false
+   */
+  @Input('p-auto-router') set autoRouter(value: boolean) {
+    this._autoRouter = convertToBoolean(value);
+  }
+
+  get autoRouter(): boolean {
+    return this._autoRouter;
+  }
+
+  /** Lista dos campos usados na tabela e busca avançada. */
+  @Input('p-fields') set fields(value: Array<PoPageDynamicEditField>) {
+    this._fields = Array.isArray(value) ? [...value] : [];
+
+    this._keys = this.getKeysByFields(this._fields);
+    this._duplicates = this.getDuplicatesByFields(this._fields);
+
+    this._controlFields = this.getControlFields(this._fields);
+    this._detailFields = this.getDetailFields(this._fields);
+  }
+
+  get fields(): Array<PoPageDynamicEditField> {
+    return this._fields;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
+  }
+
+  /* eslint-disable max-params */
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
+    this.language = languageService.getShortLanguage();
+  }
+  /* eslint-enable max-params */
 
   ngOnInit(): void {
     this.loadDataFromAPI();
@@ -382,6 +553,71 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
         subscription.unsubscribe();
       });
     }
+  }
+
+  detailActionNew() {
+    this.gridDetail.insertRow();
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `keydown`.
+   *
+   * ```
+   * import { PoPageDynamicEditModule } from '@po-ui/ng-templates';
+   * ...
+   * @ViewChild('dynamicEdit', { static: true }) dynamicEdit: PoPageDynamicEditComponent;
+   *
+   * fields: Array<PoPageDynamicEditField> = [
+   *  {
+   *    property: 'name',
+   *    ...
+   *    help: 'Mensagem de ajuda.',
+   *    helper: 'Mensagem de ajuda complementar com o componente po-helper implementado.',
+   *    keydown: this.onKeyDown.bind(this, 'name')
+   *  },
+   * ]
+   *
+   * onKeyDown(property: string, event: KeyboardEvent): void {
+   *  if (event.code === 'F9') {
+   *    this.dynamicEdit.showAdditionalHelp(property);
+   *  }
+   * }
+   * ```
+   *
+   * @param { string } property Identificador da coluna.
+   */
+  showAdditionalHelp(property: string) {
+    this.dynamicForm.showAdditionalHelp(property);
+  }
+
+  get duplicates() {
+    return [...this._duplicates];
+  }
+
+  get keys() {
+    return [...this._keys];
+  }
+
+  get pageActions() {
+    return [...this._pageActions];
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
+  }
+
+  get controlFields() {
+    return this._controlFields;
+  }
+
+  get detailFields() {
+    return this._detailFields;
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
   }
 
   private loadDataFromAPI() {
@@ -400,30 +636,6 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
     this.subscriptions.push(concat(metadata$, data$).subscribe());
   }
 
-  get duplicates() {
-    return [...this._duplicates];
-  }
-
-  get keys() {
-    return [...this._keys];
-  }
-
-  get pageActions() {
-    return [...this._pageActions];
-  }
-
-  get controlFields() {
-    return this._controlFields;
-  }
-
-  get detailFields() {
-    return this._detailFields;
-  }
-
-  detailActionNew() {
-    this.gridDetail.insertRow();
-  }
-
   private cancel(
     actionCancel: PoPageDynamicEditActions['cancel'],
     actionBeforeCancel: PoPageDynamicEditActions['beforeCancel']
@@ -440,7 +652,7 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
   }
 
   private formatUniqueKey(item) {
-    const keys = mapObjectByProperties(item, this.keys);
+    const keys = PoUtils.mapObjectByProperties(item, this.keys);
 
     return valuesFromObject(keys).join('|');
   }
@@ -490,7 +702,9 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
     }
 
     return this.poPageDynamicService.getResource(id).pipe(
-      tap(response => (this.model = response)),
+      tap(response => {
+        this.beforeSetModel(response);
+      }),
       catchError(error => {
         this.model = undefined;
         this.actions = undefined;
@@ -498,6 +712,25 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
         return throwError(error);
       })
     );
+  }
+
+  private beforeSetModel(response: any) {
+    if (!this.onLoadData) {
+      this.model = response;
+      return;
+    }
+
+    const onLoadDataExecution = this.onLoadData(response);
+    const onLoadData$ = onLoadDataExecution instanceof Observable ? onLoadDataExecution : of(onLoadDataExecution);
+
+    onLoadData$.subscribe({
+      next: customModel => {
+        this.model = customModel;
+      },
+      error: () => {
+        this.model = response;
+      }
+    });
   }
 
   private loadOptionsOnInitialize(onLoad: UrlOrPoCustomizationFunction) {
@@ -510,6 +743,45 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
     }
 
     return EMPTY;
+  }
+
+  private focusCheckboxInput(control: string): void {
+    const checkboxGroup = document.querySelector(`po-checkbox-group[ng-reflect-name=${control}]`);
+    if (checkboxGroup) {
+      const checkBoxComponent = checkboxGroup.querySelector('po-checkbox[ng-reflect-disabled=false]');
+      const labelInput: HTMLInputElement = checkBoxComponent?.querySelector('.po-checkbox-outline');
+      if (labelInput) {
+        labelInput.focus();
+      } else {
+        this.indexFocus--;
+      }
+    }
+  }
+
+  private focusControl(control: string): void {
+    const inputElement: HTMLInputElement = document.querySelector(`[name=${control}]`);
+    if (inputElement) {
+      if (inputElement.tagName === 'INPUT') {
+        inputElement.focus();
+      } else {
+        this.focusRadioInput(inputElement, control);
+      }
+    } else {
+      this.focusCheckboxInput(control);
+    }
+  }
+
+  private focusRadioInput(inputElement: Element, control: string): void {
+    const radioComponent = inputElement.querySelector(
+      `po-radio[ng-reflect-name=${control}][ng-reflect-disabled=false]`
+    );
+    if (radioComponent) {
+      const radioInput = radioComponent.querySelector('input');
+      radioInput.focus();
+      radioInput.parentElement.parentElement.classList.add('po-radio-focus');
+    } else {
+      this.indexFocus--;
+    }
   }
 
   private getPoDynamicPageOptions(onLoad: UrlOrPoCustomizationFunction): Observable<PoPageDynamicEditOptions> {
@@ -562,6 +834,19 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
     return this.loadOptionsOnInitialize(onLoad);
   }
 
+  private markControlsAsDirtyAndFocusFirstInvalid(): void {
+    this.indexFocus = 0;
+    const controls = Object.keys(this.dynamicForm.form.controls);
+
+    controls.forEach(control => {
+      this.dynamicForm.form.controls[control].markAsDirty();
+      if (this.dynamicForm.form.controls[control].hasError('required') && this.indexFocus === 0) {
+        this.focusControl(control);
+        this.indexFocus++;
+      }
+    });
+  }
+
   private navigateTo(path: string) {
     if (path) {
       const url = this.resolveUrl(this.model, path);
@@ -594,18 +879,32 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
   }
 
   private updateModel(newResource: any = {}) {
-    const dynamicNgForm = this.dynamicForm.form;
+    if (typeof newResource !== 'undefined' && Object.keys(newResource).length !== 0) {
+      const dynamicNgForm = this.dynamicForm.form;
 
-    removeKeysProperties(this.keys, newResource);
+      removeKeysProperties(this.keys, newResource);
 
-    this.model = { ...this.model, ...newResource };
+      this.model = { ...this.model, ...newResource };
 
-    dynamicNgForm.form.patchValue(this.model);
+      dynamicNgForm.form.patchValue(this.model);
+    }
+  }
+
+  private showNotification(type: string) {
+    switch (type) {
+      case 'warning':
+        this.poNotification.warning(this.literals.saveNotificationWarning);
+        break;
+      case 'error':
+        this.poNotification.error(this.literals.saveNotificationError);
+        break;
+    }
   }
 
   private saveOperation() {
     if (this.dynamicForm.form.invalid) {
-      this.poNotification.warning(this.literals.saveNotificationWarning);
+      this.markControlsAsDirtyAndFocusFirstInvalid();
+      this.showNotification(this._notificationType);
       return EMPTY;
     }
 
@@ -691,7 +990,9 @@ export class PoPageDynamicEditComponent implements OnInit, OnDestroy {
   }
 
   private getPageActions(actions: PoPageDynamicEditActions = {}): Array<PoPageAction> {
-    const pageActions = [{ label: this.literals.pageActionSave, action: this.save.bind(this, actions.save) }];
+    const pageActions: Array<PoPageAction> = [
+      { label: this.literals.pageActionSave, action: this.save.bind(this, actions.save) }
+    ];
 
     if (actions.saveNew) {
       pageActions.push({

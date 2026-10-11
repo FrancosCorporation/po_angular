@@ -1,15 +1,17 @@
 <po-page-list
+  #poPageList
   p-title="Hiring processes"
+  p-subtitle="Manage <b>active</b> and <i>pending</i> processes"
   [p-actions]="actions"
   [p-breadcrumb]="breadcrumb"
   [p-disclaimer-group]="disclaimerGroup"
   [p-filter]="filterSettings"
 >
   <po-table
-    p-selectable
-    p-single-select
-    p-sort="true"
-    p-striped="true"
+    [p-selectable]="true"
+    [p-single-select]="true"
+    [p-sort]="true"
+    [p-striped]="true"
     [p-columns]="hiringProcessesColumns"
     [p-items]="hiringProcessesFiltered"
   >

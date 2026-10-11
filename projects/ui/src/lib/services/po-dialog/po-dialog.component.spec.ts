@@ -1,11 +1,10 @@
 import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 
-import { configureTestSuite } from './../../util-test/util-expect.spec';
-
-import { poDialogAlertLiteralsDefault, PoDialogComponent, poDialogConfirmLiteralsDefault } from './po-dialog.component';
+import { PoThemeA11yEnum } from '../po-theme';
+import { PoDialogType } from './enums/po-dialog.enum';
 import { PoDialogAlertOptions, PoDialogConfirmOptions } from './interfaces/po-dialog.interface';
+import { poDialogAlertLiteralsDefault, PoDialogComponent, poDialogConfirmLiteralsDefault } from './po-dialog.component';
 import { PoDialogModule } from './po-dialog.module';
-import { PoDialogType } from './po-dialog.enum';
 
 describe('PoDialogComponent:', () => {
   let component: PoDialogComponent;
@@ -25,18 +24,15 @@ describe('PoDialogComponent:', () => {
     close: () => {}
   };
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      imports: [PoDialogModule]
-    });
-  });
-
   beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [PoDialogModule] // Reintroduzindo o módulo
+    }).compileComponents();
+
     fixture = TestBed.createComponent(PoDialogComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });
-
   it('should be created', () => {
     expect(component instanceof PoDialogComponent).toBeTruthy();
   });
@@ -93,30 +89,24 @@ describe('PoDialogComponent:', () => {
     expect(fakeThis.destroy).toHaveBeenCalled();
   });
 
-  it(
-    'Should call destroy if was closed with X',
-    waitForAsync(() => {
-      spyOn(component, 'destroy');
+  it('Should call destroy if was closed with X', waitForAsync(() => {
+    spyOn(component, 'destroy');
 
-      component.poModal.close(true);
-      fixture.detectChanges();
+    component.poModal.close(true);
+    fixture.detectChanges();
 
-      expect(component.destroy).toHaveBeenCalled();
-    })
-  );
+    expect(component.destroy).toHaveBeenCalled();
+  }));
 
-  it(
-    'Should call closeAction if has closeAction callback and was closed with X',
-    waitForAsync(() => {
-      component.closeAction = () => {};
-      spyOn(component, 'closeAction');
+  it('Should call closeAction if has closeAction callback and was closed with X', waitForAsync(() => {
+    component.closeAction = () => {};
+    spyOn(component, 'closeAction');
 
-      component.poModal.close(true);
-      fixture.detectChanges();
+    component.poModal.close(true);
+    fixture.detectChanges();
 
-      expect(component.closeAction).toHaveBeenCalled();
-    })
-  );
+    expect(component.closeAction).toHaveBeenCalled();
+  }));
 
   it('should set var configDialog', () => {
     const fakeThis = {
@@ -146,6 +136,66 @@ describe('PoDialogComponent:', () => {
     component.destroy();
 
     expect(sourceObject.componentRef.destroy).toHaveBeenCalled();
+  });
+
+  describe('p-components-size', () => {
+    beforeEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    afterEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    it('should set property with valid values for accessibility level is AA', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+      component.componentsSize = 'small';
+      expect(component.componentsSize).toBe('small');
+
+      component.componentsSize = 'medium';
+      expect(component.componentsSize).toBe('medium');
+    });
+
+    it('should set property with valid values for accessibility level is AAA', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+      component.componentsSize = 'small';
+      expect(component.componentsSize).toBe('medium');
+
+      component.componentsSize = 'medium';
+      expect(component.componentsSize).toBe('medium');
+    });
+
+    it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+      localStorage.setItem('po-default-size', 'small');
+
+      component['_componentsSize'] = undefined;
+      expect(component.componentsSize).toBe('small');
+    });
+
+    it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+      localStorage.setItem('po-default-size', 'medium');
+
+      component['_componentsSize'] = undefined;
+      expect(component.componentsSize).toBe('medium');
+    });
+
+    it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+      component['_componentsSize'] = undefined;
+      expect(component.componentsSize).toBe('medium');
+    });
+
+    it('onThemeChange: should call applySizeBasedOnA11y', () => {
+      spyOn<any>(component, 'applySizeBasedOnA11y');
+      component['onThemeChange']();
+      expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+    });
   });
 
   describe('Methods:', () => {
@@ -230,7 +280,7 @@ describe('PoDialogComponent:', () => {
     });
 
     it('setDialogLiterals: should set `literalsAlert` in portuguese if browser is setted with an unsupported language.', () => {
-      component['language'] = 'xx';
+      Object.defineProperty(component, 'language', { value: 'xx', configurable: true });
 
       component['setDialogLiterals'](alertOptions, PoDialogType.Alert);
 
@@ -238,7 +288,7 @@ describe('PoDialogComponent:', () => {
     });
 
     it('setDialogLiterals: should set `literalsConfirm` in portuguese if browser is setted with an unsupported language.', () => {
-      component['language'] = 'xx';
+      Object.defineProperty(component, 'language', { value: 'xx', configurable: true });
 
       component['setDialogLiterals'](confirmOptions, PoDialogType.Confirm);
 
@@ -246,7 +296,7 @@ describe('PoDialogComponent:', () => {
     });
 
     it(`setDialogLiterals: should set 'literalsAlert' in english.`, () => {
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       component['setDialogLiterals'](alertOptions, PoDialogType.Alert);
 
@@ -254,7 +304,7 @@ describe('PoDialogComponent:', () => {
     });
 
     it(`setDialogLiterals: should set 'literalsAlert' in spanish.`, () => {
-      component['language'] = 'es';
+      Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
       component['setDialogLiterals'](alertOptions, PoDialogType.Alert);
 
@@ -262,7 +312,7 @@ describe('PoDialogComponent:', () => {
     });
 
     it(`setDialogLiterals: should set 'literalsAlert' in portuguese.`, () => {
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component['setDialogLiterals'](alertOptions, PoDialogType.Alert);
 
@@ -270,7 +320,7 @@ describe('PoDialogComponent:', () => {
     });
 
     it(`setDialogLiterals: should set 'literalsConfirm' in english.`, () => {
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       component['setDialogLiterals'](confirmOptions, PoDialogType.Confirm);
 
@@ -278,7 +328,7 @@ describe('PoDialogComponent:', () => {
     });
 
     it(`setDialogLiterals: should set 'literalsConfirm' in spanish.`, () => {
-      component['language'] = 'es';
+      Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
       component['setDialogLiterals'](confirmOptions, PoDialogType.Confirm);
 
@@ -286,7 +336,7 @@ describe('PoDialogComponent:', () => {
     });
 
     it(`setDialogLiterals: should set 'literalsAlert' in russian.`, () => {
-      component['language'] = 'ru';
+      Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
 
       component['setDialogLiterals'](alertOptions, PoDialogType.Alert);
 
@@ -294,7 +344,7 @@ describe('PoDialogComponent:', () => {
     });
 
     it(`setDialogLiterals: should set 'literalsConfirm' in portuguese.`, () => {
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component['setDialogLiterals'](confirmOptions, PoDialogType.Confirm);
 
@@ -310,7 +360,7 @@ describe('PoDialogComponent:', () => {
         ok: () => {}
       };
 
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component['setDialogLiterals'](alertOptionsCustom, PoDialogType.Alert);
 
@@ -327,7 +377,7 @@ describe('PoDialogComponent:', () => {
         cancel: () => {}
       };
 
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component['setDialogLiterals'](confirmOptionsCustom, PoDialogType.Confirm);
 

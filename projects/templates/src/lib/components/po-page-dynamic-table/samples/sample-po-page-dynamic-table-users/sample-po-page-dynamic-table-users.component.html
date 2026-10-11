@@ -1,9 +1,11 @@
 <po-page-dynamic-table
-  p-auto-router
-  p-concat-filters
-  p-keep-filters
+  #dynamicTable
+  [p-auto-router]="true"
+  [p-concat-filters]="true"
+  [p-keep-filters]="true"
   p-title="Users"
   [p-actions]="actions"
+  [p-actions-right]="actionsRight"
   [p-page-custom-actions]="pageCustomActions"
   [p-table-custom-actions]="tableCustomActions"
   [p-breadcrumb]="breadcrumb"
@@ -16,4 +18,8 @@
 
 <po-modal #userDetailModal p-title="User Detail">
   <po-dynamic-view [p-fields]="detailFields" [p-value]="detailedUser"> </po-dynamic-view>
+</po-modal>
+
+<po-modal #dependentsModal p-title="Dependents">
+  <po-table [p-items]="dependents" [p-hide-table-search]="false"> </po-table>
 </po-modal>

@@ -1,32 +1,16 @@
 import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
-import { FormControl } from '@angular/forms';
+import { UntypedFormControl } from '@angular/forms';
 
 import { PoModalAction, PoModalComponent, PoPopupAction } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-popup-email',
   templateUrl: './sample-po-popup-email.component.html',
-  styles: [
-    `
-      .sample-logo-po {
-        height: 15%;
-        padding-top: 2.5%;
-      }
-
-      .sample-popup-header-template {
-        background-color: #0c9abe;
-        border-top-left-radius: 3px;
-        border-top-right-radius: 3px;
-        color: #ffffff;
-        padding-bottom: 5%;
-        padding-left: 25%;
-        padding-top: 5%;
-      }
-    `
-  ]
+  styleUrls: ['./sample-po-popup-email.component.css'],
+  standalone: false
 })
 export class SamplePoPopupEmailComponent implements OnInit {
-  @ViewChild('formEmail', { static: true }) formEmail: FormControl;
+  @ViewChild('formEmail', { static: true }) formEmail: UntypedFormControl;
 
   @ViewChild('target', { read: ElementRef, static: true }) targetRef: ElementRef;
 
@@ -42,9 +26,9 @@ export class SamplePoPopupEmailComponent implements OnInit {
 
   ngOnInit() {
     this.popupActions = [
-      { icon: 'po-icon-plus', label: 'Upper Text', type: 'default', action: this.upper.bind(this) },
-      { icon: 'po-icon-minus', label: 'Lower Text', type: 'default', action: this.lower.bind(this) },
-      { icon: 'po-icon-close', label: 'Clear', type: 'danger', action: this.clear.bind(this), separator: true }
+      { icon: 'an an-plus', label: 'Upper Text', type: 'default', action: this.upper.bind(this) },
+      { icon: 'an an-minus', label: 'Lower Text', type: 'default', action: this.lower.bind(this) },
+      { icon: 'an an-x', label: 'Clear', type: 'danger', action: this.clear.bind(this), separator: true }
     ];
 
     this.primaryAction = {

@@ -1,3 +1,4 @@
+import { provideNgReflectAttributes } from '@angular/core';
 import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 import { NavigationCancel, NavigationEnd, RouterModule } from '@angular/router';
 
@@ -11,14 +12,13 @@ describe('PoNavbarItemsComponent:', () => {
   let fixture: ComponentFixture<PoNavbarItemsComponent>;
   let nativeElement: any;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        declarations: [PoNavbarItemsComponent, PoNavbarItemComponent],
-        imports: [RouterModule.forRoot([], { relativeLinkResolution: 'legacy' })]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoNavbarItemsComponent, PoNavbarItemComponent],
+      imports: [RouterModule.forRoot([], {})],
+      providers: [provideNgReflectAttributes()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoNavbarItemsComponent);
@@ -112,6 +112,7 @@ describe('PoNavbarItemsComponent:', () => {
     });
 
     it('checkRouterChildrenFragments: should return `/` if `url` is `undefined`', () => {
+      spyOn(console, 'warn');
       spyOnProperty(component['router'], 'url').and.returnValue(undefined);
 
       const result = component['checkRouterChildrenFragments']();

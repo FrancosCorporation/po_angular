@@ -1,49 +1,74 @@
 <table class="po-table-master-detail">
-  <thead *ngIf="typeHeaderTop">
-    <tr>
-      <th class="po-table-header po-table-column-selectable" *ngIf="isSelectable"></th>
-      <th class="po-table-header po-table-header-column po-table-header-master-detail"></th>
-      <th class="po-table-header po-table-header-ellipsis" *ngFor="let detail of detail.columns">
-        {{ getColumnTitleLabel(detail) }}
-      </th>
-    </tr>
-  </thead>
+  @if (typeHeaderTop) {
+    <thead>
+      <tr>
+        @if (isSelectable) {
+          <th class="po-table-header po-table-column-selectable"></th>
+        }
+        <th class="po-table-header po-table-header-column po-table-header-master-detail"></th>
+        @for (detail of detail.columns; track $index) {
+          <th class="po-table-header po-table-header-ellipsis">
+            <div
+              class="po-table-header-flex"
+              [class.po-table-header-flex-right]="detail.type === 'currency' || detail.type === 'number'"
+            >
+              {{ getColumnTitleLabel(detail) }}
+            </div>
+          </th>
+        }
+      </tr>
+    </thead>
+  }
   <tbody>
-    <tr
-      class="po-table-detail-row"
-      [class.po-table-row-active]="item.$selected && isSelectable"
-      *ngFor="let item of items"
-    >
-      <ng-container *ngIf="isSelectable; else masterDetailSpace">
-        <td class="po-table-column-master-detail-space-checkbox"></td>
-        <td class="po-table-column po-table-column-selectable">
-          <input class="po-table-checkbox" type="checkbox" [class.po-table-checkbox-checked]="item.$selected" />
-          <label class="po-table-checkbox-label po-clickable" (click)="onSelectRow(item)"> </label>
-        </td>
-      </ng-container>
-
-      <ng-template #masterDetailSpace>
-        <td class="po-table-column-master-detail-space"></td>
-      </ng-template>
-
-      <td
-        class="po-table-column-master-detail po-table-master-detail-label"
-        (click)="isSelectable ? onSelectRow(item) : 'javascript:;'"
-        *ngFor="let detail of detailColumns"
-      >
-        <strong *ngIf="typeHeaderInline"> {{ getColumnTitleLabel(detail) }}: </strong>
-
-        <ng-container [ngSwitch]="detail.type">
-          <span *ngSwitchCase="'currency'">{{ item[detail.property] | currency: detail.format:'symbol':'1.2-2' }}</span>
-          <span *ngSwitchCase="'date'">{{ item[detail.property] | date: detail.format || 'dd/MM/yyyy' }}</span>
-          <span *ngSwitchCase="'time'">{{ item[detail.property] | po_time: detail.format || 'HH:mm:ss.ffffff' }}</span>
-          <span *ngSwitchCase="'dateTime'">
-            {{ item[detail.property] | date: detail.format || 'dd/MM/yyyy HH:mm:ss' }}
-          </span>
-          <span *ngSwitchCase="'number'">{{ formatNumberDetail(item[detail.property], detail.format) }}</span>
-          <span *ngSwitchDefault>{{ item[detail.property] }}</span>
-        </ng-container>
-      </td>
-    </tr>
+    @for (item of items; track $index) {
+      <tr class="po-table-detail-row" [class.po-table-row-active]="item.$selected && isSelectable">
+        @if (isSelectable) {
+          <td class="po-table-column-master-detail-space-checkbox"></td>
+          <td class="po-table-column po-table-column-selectable">
+            <po-checkbox
+              name="checkbox"
+              (p-change)="onSelectRow(item)"
+              [p-checkboxValue]="item.$selected"
+              [p-size]="componentsSize"
+            ></po-checkbox>
+          </td>
+        } @else {
+          <td class="po-table-column-master-detail-space"></td>
+        }
+        @for (detail of detailColumns; track $index) {
+          <td
+            class="po-table-column-master-detail po-table-master-detail-label"
+            (click)="isSelectable ? onSelectRow(item) : 'javascript:;'"
+            [class.po-table-column-right]="typeHeaderTop && (detail.type === 'currency' || detail.type === 'number')"
+          >
+            @if (typeHeaderInline) {
+              <strong> {{ getColumnTitleLabel(detail) }}: </strong>
+            }
+            @switch (detail.type) {
+              @case ('currency') {
+                <span>{{ getDetailData(item, detail) | currency: detail.format : 'symbol' : '1.2-2' }}</span>
+              }
+              @case ('date') {
+                <span>{{ getDetailData(item, detail) | date: detail.format || 'dd/MM/yyyy' }}</span>
+              }
+              @case ('time') {
+                <span>{{ getDetailData(item, detail) | po_time: detail.format || 'HH:mm:ss.ffffff' }}</span>
+              }
+              @case ('dateTime') {
+                <span>
+                  {{ getDetailData(item, detail) | date: detail.format || 'dd/MM/yyyy HH:mm:ss' }}
+                </span>
+              }
+              @case ('number') {
+                <span>{{ formatNumberDetail(getDetailData(item, detail), detail.format) }}</span>
+              }
+              @default {
+                <span>{{ getDetailData(item, detail) }}</span>
+              }
+            }
+          </td>
+        }
+      </tr>
+    }
   </tbody>
 </table>

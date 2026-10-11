@@ -1,4 +1,8 @@
+import { TemplateRef } from '@angular/core';
+
 /**
+ * @deprecated v23.x.x
+ *
  * @usedBy PoNavbarComponent
  *
  * @description
@@ -16,13 +20,36 @@ export interface PoNavbarIconAction {
   action?: Function;
 
   /**
-   * @description
-   *
    * Ícone exibido.
    *
-   * > Veja os valores válidos na [Biblioteca de ícones](/guides/icons).
+   * É possível usar qualquer um dos ícones da [Biblioteca de ícones](https://po-ui.io/icons). conforme exemplo abaixo:
+   * ```
+   * <po-navbar
+   *   [p-icon-actions]="[{ link: '/', icon: 'an an-newspaper' }]">
+   * </po-navbar>
+   * ```
+   *
+   * Também é possível utilizar outras fontes de ícones, por exemplo a biblioteca Font Awesome, da seguinte forma:
+   * ```
+   * <po-navbar
+   *   [p-icon-actions]="[{ link: '/', icon: 'fa fa-podcast' }]">
+   * </po-navbar>
+   * ```
+   *
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * component.html:
+   * ```
+   * <ng-template #iconTemplate>
+   *   <ion-icon name="heart"></ion-icon>
+   * </ng-template>
+   *
+   * <po-navbar
+   *   [p-icon-actions]="[{ link: '/', icon: iconTemplate }]">
+   * </po-navbar>
+   * ```
+   *
    */
-  icon?: string;
+  icon?: string | TemplateRef<void>;
 
   /** Rótulo da ação, será exibido quando o mesmo for aberto no popup. */
   label: string;

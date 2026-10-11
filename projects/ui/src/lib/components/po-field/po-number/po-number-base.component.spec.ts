@@ -1,9 +1,10 @@
-import { AbstractControl } from '@angular/forms';
+import { ChangeDetectorRef, Component, ElementRef, inject } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Component, ElementRef } from '@angular/core';
+import { AbstractControl } from '@angular/forms';
 
 import { configureTestSuite } from './../../../util-test/util-expect.spec';
 
+import { of } from 'rxjs';
 import { PoFieldModule } from './../po-field.module';
 import { PoNumberBaseComponent } from './po-number-base.component';
 
@@ -11,11 +12,17 @@ import { PoNumberBaseComponent } from './po-number-base.component';
   template: `
     <input type="number" #inp />
     <span #clean></span>
-  `
+  `,
+  standalone: false
 })
 class ContentProjectionComponent extends PoNumberBaseComponent {
-  constructor(el: ElementRef) {
-    super(el);
+  constructor() {
+    const el = inject(ElementRef);
+    const cd = inject(ChangeDetectorRef);
+
+    localStorage.setItem('po-default-size', 'medium');
+
+    super(el, cd);
   }
 
   extraValidation(c: AbstractControl): { [key: string]: any } {
@@ -55,60 +62,114 @@ describe('PoNumberBaseComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('onBlur: shouldn`t call `callOnChange` if event.target.value is empty and event.target.validity.valid is true', () => {
-    fakeEvent.target.value = '';
-    fakeEvent.target.validity.valid = true;
+  describe('onBlur', () => {
+    let setupTest;
+    let fakeThis;
 
-    const fakeThis = {
-      invalidInputValueOnBlur: false,
-      callOnChange: (v: any) => {},
-      eventOnBlur: e => {}
-    };
+    beforeEach(() => {
+      setupTest = (tooltip: string, displayHelp: boolean, additionalHelpEvent: any) => {
+        component.additionalHelpTooltip = tooltip;
+        component.displayAdditionalHelp = displayHelp;
+        component.additionalHelp = additionalHelpEvent;
+        spyOn(component, 'showAdditionalHelp');
+      };
 
-    spyOn(fakeThis, 'callOnChange');
-    spyOn(fakeThis, 'eventOnBlur');
+      fakeThis = {
+        invalidInputValueOnBlur: false,
+        callOnChange: (v: any) => {},
+        eventOnBlur: e => {},
+        getAdditionalHelpTooltip: () => false
+      };
 
-    component.onBlur.call(fakeThis, fakeEvent);
+      fakeEvent.target.validity.valid = true;
+    });
 
-    expect(fakeThis.callOnChange).not.toHaveBeenCalled();
-    expect(fakeThis.eventOnBlur).toHaveBeenCalledWith(fakeEvent);
+    it('should not call showAdditionalHelp when tooltip is not displayed', () => {
+      setupTest('Mensagem de apoio adicional.', false, { observed: false });
+      component.onBlur(fakeEvent);
+      expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+    });
+
+    it('should not call showAdditionalHelp when additionalHelp event is true', () => {
+      setupTest('Mensagem de apoio adicional.', true, { observed: true });
+      component.onBlur(fakeEvent);
+      expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+    });
+
+    it('shouldn`t call `callOnChange` if event.target.value is empty and event.target.validity.valid is true', () => {
+      fakeEvent.target.value = '';
+      fakeEvent.target.validity.valid = true;
+
+      spyOn(fakeThis, 'callOnChange');
+      spyOn(fakeThis, 'eventOnBlur');
+      spyOn(fakeThis, 'getAdditionalHelpTooltip').and.returnValue(false);
+
+      component.onBlur.call(fakeThis, fakeEvent);
+
+      expect(fakeThis.callOnChange).not.toHaveBeenCalled();
+      expect(fakeThis.eventOnBlur).toHaveBeenCalledWith(fakeEvent);
+    });
+
+    it('shouldn`t call `callOnChange` if event.target.value has value and event.target.validity.valid is true', () => {
+      fakeEvent.target.value = '1234567890';
+      fakeEvent.target.validity.valid = true;
+
+      spyOn(fakeThis, 'callOnChange');
+      spyOn(fakeThis, 'eventOnBlur');
+      spyOn(fakeThis, 'getAdditionalHelpTooltip').and.returnValue(false);
+
+      component.onBlur.call(fakeThis, fakeEvent);
+
+      expect(fakeThis.callOnChange).not.toHaveBeenCalled();
+      expect(fakeThis.eventOnBlur).toHaveBeenCalledWith(fakeEvent);
+    });
+
+    it('should call `callOnChange` if event.target.value is empty and event.target.validity.valid is false', () => {
+      fakeEvent.target.value = '';
+      fakeEvent.target.validity.valid = false;
+
+      spyOn(fakeThis, 'callOnChange');
+      spyOn(fakeThis, 'eventOnBlur');
+      spyOn(fakeThis, 'getAdditionalHelpTooltip').and.returnValue(false);
+
+      component.onBlur.call(fakeThis, fakeEvent);
+
+      expect(fakeThis.callOnChange).toHaveBeenCalledWith('Valor Inválido');
+      expect(fakeThis.eventOnBlur).toHaveBeenCalledWith(fakeEvent);
+    });
   });
 
-  it('onBlur: shouldn`t call `callOnChange` if event.target.value has value and event.target.validity.valid is true', () => {
-    fakeEvent.target.value = '1234567890';
-    fakeEvent.target.validity.valid = true;
+  describe('onKeyDown:', () => {
+    it('should emit event when field is focused', () => {
+      const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      component.inputEl = {
+        nativeElement: {
+          focus: () => {}
+        }
+      };
 
-    const fakeThis = {
-      invalidInputValueOnBlur: false,
-      callOnChange: (v: any) => {},
-      eventOnBlur: e => {}
-    };
+      spyOn(component.keydown, 'emit');
+      spyOnProperty(document, 'activeElement', 'get').and.returnValue(component.inputEl.nativeElement);
 
-    spyOn(fakeThis, 'callOnChange');
-    spyOn(fakeThis, 'eventOnBlur');
+      component.onKeyDown(fakeEvent);
 
-    component.onBlur.call(fakeThis, fakeEvent);
+      expect(component.keydown.emit).toHaveBeenCalledWith(fakeEvent);
+    });
 
-    expect(fakeThis.callOnChange).not.toHaveBeenCalled();
-    expect(fakeThis.eventOnBlur).toHaveBeenCalledWith(fakeEvent);
-  });
+    it('should not emit event when field is not focused', () => {
+      const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+      component.inputEl = {
+        nativeElement: {
+          focus: () => {}
+        }
+      };
 
-  it('onBlur: should call `callOnChange` if event.target.value is empty and event.target.validity.valid is false', () => {
-    fakeEvent.target.value = '';
-    fakeEvent.target.validity.valid = false;
-    const fakeThis = {
-      invalidInputValueOnBlur: false,
-      callOnChange: (v: any) => {},
-      eventOnBlur: e => {}
-    };
+      spyOn(component.keydown, 'emit');
+      spyOnProperty(document, 'activeElement', 'get').and.returnValue(document.createElement('div'));
+      component.onKeyDown(fakeEvent);
 
-    spyOn(fakeThis, 'callOnChange');
-    spyOn(fakeThis, 'eventOnBlur');
-
-    component.onBlur.call(fakeThis, fakeEvent);
-
-    expect(fakeThis.callOnChange).toHaveBeenCalledWith('Valor Inválido');
-    expect(fakeThis.eventOnBlur).toHaveBeenCalledWith(fakeEvent);
+      expect(component.keydown.emit).not.toHaveBeenCalled();
+    });
   });
 
   it('onKeyDown: shouldn`t allow invalid keys and should call `preventDefault`', () => {
@@ -229,6 +290,15 @@ describe('PoNumberBaseComponent', () => {
     expect(result).toBeTrue();
   });
 
+  it('isControlKeys: should return true if the key is Enter', () => {
+    const fakeKeyboardEvent = {
+      key: 'Enter'
+    };
+
+    const result = component['isControlKeys'](fakeKeyboardEvent);
+    expect(result).toBeTrue();
+  });
+
   it('isControlKeys: should return false if isn`t a control key', () => {
     const fakeKeyboardEvent = {
       key: 'e'
@@ -262,7 +332,12 @@ describe('PoNumberBaseComponent', () => {
       formatNumber: component['formatNumber'],
       inputEl: component.inputEl,
       invalidInputValueOnBlur: true,
-      isEndWithDot: () => {}
+      isEndWithDot: () => {},
+      errorAsyncProperties: {
+        errorAsync: value => of(true),
+        triggerMode: 'changeModel'
+      },
+      verifyErrorAsync: () => {}
     };
 
     spyOn(fakeThis, 'callOnChange');
@@ -367,7 +442,8 @@ describe('PoNumberBaseComponent', () => {
       const fakeThis = {
         inputEl: '',
         mask: '',
-        changeModel: component.changeModel
+        changeModel: component.changeModel,
+        verifyErrorAsync: () => {}
       };
       spyOn(component.changeModel, 'emit');
 
@@ -380,7 +456,8 @@ describe('PoNumberBaseComponent', () => {
       const fakeThis = {
         inputEl: component.inputEl,
         mask: '',
-        changeModel: component.change
+        changeModel: component.change,
+        verifyErrorAsync: () => {}
       };
 
       component.writeValueModel.call(fakeThis, 10);
@@ -396,7 +473,8 @@ describe('PoNumberBaseComponent', () => {
           controlFormatting: value => value + '999',
           formatModel: false
         },
-        changeModel: component.changeModel
+        changeModel: component.changeModel,
+        verifyErrorAsync: () => {}
       };
 
       component.writeValueModel.call(fakeThis, '100');
@@ -414,7 +492,8 @@ describe('PoNumberBaseComponent', () => {
           controlFormatting: value => {},
           formatModel: true
         },
-        changeModel: component.changeModel
+        changeModel: component.changeModel,
+        verifyErrorAsync: () => {}
       };
 
       component.writeValueModel.call(fakeThis, '');
@@ -433,6 +512,7 @@ describe('PoNumberBaseComponent', () => {
           formatModel: true
         },
         changeModel: component.changeModel,
+        verifyErrorAsync: () => {},
         onChangePropagate: component.onChangePropagate
       };
 

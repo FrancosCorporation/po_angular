@@ -1,24 +1,36 @@
-import { EventEmitter, Input, OnInit, Output, Directive } from '@angular/core';
-import { AbstractControl, ControlValueAccessor, Validator } from '@angular/forms';
+import {
+  ChangeDetectorRef,
+  Directive,
+  EventEmitter,
+  HostBinding,
+  HostListener,
+  input,
+  Input,
+  OnDestroy,
+  OnInit,
+  Output
+} from '@angular/core';
+import { AbstractControl, ControlValueAccessor, Validator, Validators } from '@angular/forms';
 
 import {
-  convertDateToISODate,
-  convertDateToISOExtended,
   convertIsoToDate,
   convertToBoolean,
-  formatYear,
-  getShortBrowserLanguage,
+  getDefaultSizeFn,
   isTypeof,
-  setYearFrom0To100,
-  validateDateRange
+  replaceFormatSeparator,
+  validateSizeFn,
+  PoUtils,
+  mapInputSizeToLoadingIcon
 } from '../../../utils/util';
-import { dateFailed, requiredFailed } from './../validators';
-import { InputBoolean } from '../../../decorators';
 import { PoMask } from '../po-input/po-mask';
+import { dateFailed, PoValidators } from './../validators';
 
-import { PoDatepickerIsoFormat } from './enums/po-datepicker-iso-format.enum';
-import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { Observable, Subscription, switchMap } from 'rxjs';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
 import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { PoDatepickerIsoFormat } from './enums/po-datepicker-iso-format.enum';
+import { PoHelperOptions } from '../../po-helper';
 
 const poDatepickerFormatDefault: string = 'dd/mm/yyyy';
 
@@ -63,24 +75,92 @@ const poDatepickerFormatDefault: string = 'dd/mm/yyyy';
  * ```
  *
  * > Não esqueça de importar o `FormsModule` em seu módulo, tal como para utilizar o `input default`.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS): <br>
+ * Obs: Só é possível realizar alterações ao adicionar a classe `.po-input`
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                     |
+ * |----------------------------------------|-------------------------------------------------------|--------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                  |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                       |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                       |
+ * | `--text-color-placeholder` &nbsp;      | Cor principal do texto do placeholder                 | `var(--color-neutral-light-30)`                  |
+ * | `--color`                              | Cor principal do datepicker                           | `var(--color-neutral-dark-70)`                   |
+ * | `--background`                         | Cor de background                                     | `var(--color-neutral-light-05)`                  |
+ * | `--padding`                            | Preenchimento                                         | `0 0.5rem`                                       |
+ * | `--text-color`                         | Cor do texto                                          | `var(--color-neutral-dark-90)`                   |
+ * | `--field-container-title-justify`      | Alinhamento horizontal do título (`justify-content`)  | `space-between`                                   |
+ * | `--field-container-title-flex`         | Flex do título (`flex`)                               | `1 auto`                                          |
+ * | **Hover**                              |                                                       |                                                  |
+ * | `--color-hover`                        | Cor principal no estado hover                         | `var(--color-brand-01-dark)`                     |
+ * | `--background-hover`                   | Cor de background no estado hover                     | `var(--color-brand-01-lightest)`                 |
+ * | **Focused**                            |                                                       |                                                  |
+ * | `--color-focused`                      | Cor principal no estado de focus                      | `var(--color-action-default)`                    |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                      |
+ * | **Disabled**                           |                                                       |                                                  |
+ * | `--color-disabled`                     | Cor principal no estado disabled                      | `var(--color-neutral-light-30)`                  |
+ * | `--background-disabled`                | Cor de background no estado disabled &nbsp;           | `var(--color-neutral-light-20)`                  |
+ * | `--text-color-disabled`                | Cor do texto no estado disabled                       | `var(--color-neutral-dark-70)`                   |
+ *
  */
 @Directive()
-export abstract class PoDatepickerBaseComponent implements ControlValueAccessor, OnInit, Validator {
-  private _format?: string = poDatepickerFormatDefault;
-  private _isoFormat: PoDatepickerIsoFormat;
-  private _maxDate: Date;
-  private _minDate: Date;
-  private _noAutocomplete?: boolean = false;
-  private _placeholder?: string = '';
-  private shortLanguage: string;
-  protected date: Date;
-  protected firstStart = true;
-  protected hour: string = 'T00:00:01-00:00';
-  protected isExtendedISO: boolean = false;
-  protected objMask: any;
-  protected onChangeModel: any = null;
-  protected onTouchedModel: any = null;
-  protected validatorChange: any;
+export abstract class PoDatepickerBaseComponent implements ControlValueAccessor, OnInit, OnDestroy, Validator {
+  // Propriedade interna que define se o ícone de ajuda adicional terá cursor clicável (evento) ou padrão (tooltip).
+  @Input() additionalHelpEventTrigger: string | undefined;
+
+  /** Rótulo do campo. */
+  @Input('p-label') label?: string;
+
+  /** Texto de apoio do campo. */
+  @Input('p-help') help?: string;
+
+  /**
+   * Define o modo de operação do datepicker.
+   *
+   * Permite configurar o componente para seleção de:
+   * - Mês e ano (`month-year`);
+   * - Apenas ano (`year`).
+   */
+  @Input('p-mode') mode?: 'month-year' | 'year' = undefined;
+
+  /**
+   * Define o limite de anos exibidos nas variações `month-year` e `year`,
+   * considerando a data atual como referência.
+   *
+   * O valor informado determina o intervalo de anos anterior e posterior
+   * à data corrente que será disponibilizado para seleção.
+   *
+   * @default 150
+   */
+  @Input('p-year-range-limit') set yearRangeLimit(value: number) {
+    this._yearRangeLimit = value ?? 150;
+  }
+
+  get yearRangeLimit(): number {
+    return this._yearRangeLimit;
+  }
+
+  private _yearRangeLimit: number = 150;
+
+  /**
+   *
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de ajuda adicional, com o texto desta propriedade sendo passado para o popover do componente `po-helper`.
+   * **Como boa prática, indica-se utilizar um texto com até 140 caracteres.**
+   * > Requer um recuo mínimo de 8px se o componente estiver próximo à lateral da tela.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   *
+   */
+  @Input('p-additional-help-tooltip') additionalHelpTooltip?: string;
 
   /**
    * @optional
@@ -93,10 +173,217 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
    *
    * @default `false`
    */
-  @Input('p-auto-focus') @InputBoolean() autoFocus: boolean = false;
+  @Input({ alias: 'p-auto-focus', transform: convertToBoolean }) autoFocus: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   * Define se o título do campo será exibido de forma compacta.
+   *
+   * Quando habilitado (`true`), o modo compacto afeta o conjunto composto por:
+   * - `po-label`
+   * - `p-requirement (showRequired)`
+   * - `po-helper`
+   *
+   * Ou seja, todos os elementos relacionados ao título do campo
+   * (rótulo, indicador de obrigatoriedade e componente auxiliar) passam
+   * a seguir o comportamento de layout compacto.
+   *
+   * Também é possível definir esse comportamento de forma global,
+   * uma única vez, na folha de estilo geral da aplicação, por meio
+   * da customização dos tokens CSS:
+   *
+   * - `--field-container-title-justify`
+   * - `--field-container-title-flex`
+   *
+   * Exemplo:
+   *
+   * ```
+   * :root {
+   *   --field-container-title-justify: flex-start;
+   *   --field-container-title-flex: 0 1 auto;
+   * }
+   * ```
+   *
+   * Dessa forma, o layout compacto passa a ser o padrão da aplicação,
+   * sem a necessidade de definir a propriedade individualmente em cada campo.
+   *
+   * @default `false`
+   */
+  compactLabel = input<boolean, unknown>(false, { alias: 'p-compact-label', transform: convertToBoolean });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Função executada para realizar a validação assíncrona personalizada.
+   * Executada ao disparar o output `change`.
+   *
+   * @param value Valor atual preenchido no campo.
+   *
+   * @returns Retorna Observable com o valor `true` para sinalizar o erro `false` para indicar que não há erro.
+   */
+  @Input('p-error-async') errorAsync: (value) => Observable<boolean>;
 
   /* Nome do componente datepicker. */
   @Input('name') name: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define se a indicação de campo opcional será exibida.
+   *
+   * > Não será exibida a indicação se:
+   * - O campo conter `p-required`;
+   * - Não possuir `p-help` e/ou `p-label`.
+   *
+   * @default `false`
+   */
+  @Input('p-optional') optional: boolean;
+
+  /**
+   * Mensagem apresentada quando a data for inválida ou fora do período.
+   *
+   * > Por padrão, esta mensagem não é apresentada quando o campo estiver vazio, mesmo que ele seja requerido.
+   * Para exibir a mensagem com o campo vazio, utilize a propriedade `p-required-field-error-message` em conjunto.
+   */
+  @Input('p-error-pattern') errorPattern?: string = '';
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Limita a exibição da mensagem de erro a duas linhas e exibe um tooltip com o texto completo.
+   *
+   * > Caso essa propriedade seja definida como `true`, a mensagem de erro será limitada a duas linhas
+   * e um tooltip será exibido ao passar o mouse sobre a mensagem para mostrar o conteúdo completo.
+   *
+   * @default `false`
+   */
+  @Input('p-error-limit') errorLimit: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Exibe a mensagem setada na propriedade `p-error-pattern` se o campo estiver vazio e for requerido.
+   *
+   * > Necessário que a propriedade `p-required` esteja habilitada.
+   *
+   * @default `false`
+   */
+  @Input('p-required-field-error-message') showErrorMessageRequired: boolean = false;
+
+  /**
+   * @deprecated v23.x.x use `p-helper`
+   *
+   * @optional
+   *
+   * @description
+   * Evento disparado ao clicar no ícone de ajuda adicional.
+   *
+   * > Essa propriedade está **depreciada** e será removida na versão `23.x.x`. Recomendamos utilizar a propriedade `p-helper` que oferece mais recursos e flexibilidade.
+   */
+  @Output('p-additional-help') additionalHelp: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado sempre que o valor do model é alterado, seja por interação do usuário
+   * ou por atualização programática (ex: `setValue`, `patchValue`, carregamento assíncrono).
+   *
+   * Diferentemente do `p-change`, que é disparado apenas por interação do usuário,
+   * o `p-change-model` cobre todos os cenários de alteração de valor.
+   *
+   * Não emite quando o novo valor é idêntico ao anterior (deduplicação automática).
+   */
+  @Output('p-change-model') changeModel: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao sair do campo.
+   */
+  @Output('p-blur') onblur: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao alterar valor do campo.
+   */
+  @Output('p-change') onchange: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   * Evento disparado quando uma tecla é pressionada enquanto o foco está no componente.
+   * Retorna um objeto `KeyboardEvent` com informações sobre a tecla.
+   */
+  @Output('p-keydown') keydown: EventEmitter<KeyboardEvent> = new EventEmitter<KeyboardEvent>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as opções do componente de ajuda (po-helper) que será exibido ao lado do label quando a propriedade `p-label` for definida, ou, ao lado do componente na ausência da propriedade `p-label`.
+   * > Para mais informações acesse: https://po-ui.io/documentation/po-helper.
+   *
+   * > Ao configurar esta propriedade, o antigo ícone de ajuda adicional (`p-additional-help-tooltip` e `p-additional-help`) será ignorado.
+   */
+  poHelperComponent = input<PoHelperOptions | string>(undefined, { alias: 'p-helper' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita a quebra automática do texto da propriedade `p-label`. Quando `p-label-text-wrap` for verdadeiro, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
+   *
+   * @default `false`
+   */
+  labelTextWrap = input<boolean>(false, { alias: 'p-label-text-wrap' });
+
+  modelLastUpdate: any;
+  offset: number;
+  protected firstStart = true;
+  protected hour: string = 'T00:00:00-00:00';
+  protected isExtendedISO: boolean = false;
+  protected objMask: any;
+  protected onChangeModel: any = null;
+  protected validatorChange: any;
+  protected onTouchedModel: any = null;
+  protected shortLanguage: string;
+  protected isInvalid: boolean;
+  protected hasValidatorRequired: boolean;
+
+  private _format?: string = poDatepickerFormatDefault;
+  private _isoFormat: PoDatepickerIsoFormat;
+  private _maxDate: Date;
+  private _minDate: Date;
+  private _noAutocomplete?: boolean = false;
+  private _placeholder?: string = '';
+  private _loading?: boolean = false;
+  private previousValue: any;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+  private subscription: Subscription = new Subscription();
+  private _date: Date;
 
   /**
    * @optional
@@ -107,8 +394,8 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
    *
    * @default `false`
    */
-  @Input('p-no-autocomplete') set noAutocomplete(value: boolean) {
-    this._noAutocomplete = convertToBoolean(value);
+  @Input({ alias: 'p-no-autocomplete', transform: convertToBoolean }) set noAutocomplete(value: boolean) {
+    this._noAutocomplete = value;
   }
 
   get noAutocomplete() {
@@ -130,55 +417,78 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
     return this._placeholder;
   }
 
+  /** Desabilita o campo. */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
+  disabled?: boolean = false;
+  @Input({ alias: 'p-disabled', transform: convertToBoolean }) set setDisabled(disabled: boolean) {
+    this.disabled = disabled;
+
+    this.validateModel(PoUtils.convertDateToISOExtended(this.date, this.hour));
+  }
+
+  /** Torna o elemento somente leitura. */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
+  readonly?: boolean = false;
+  @Input({ alias: 'p-readonly', transform: convertToBoolean }) set setReadonly(readonly: boolean) {
+    this.readonly = readonly;
+  }
+
   /**
    * @optional
    *
    * @description
    *
-   * Define se a indicação de campo opcional será exibida.
-   *
-   * > Não será exibida a indicação se:
-   * - O campo conter `p-required`;
-   * - Não possuir `p-help` e/ou `p-label`.
+   * Define que o campo será obrigatório.
    *
    * @default `false`
    */
-  @Input('p-optional') optional: boolean;
-
-  /** Desabilita o campo. */
-  disabled?: boolean = false;
-  @Input('p-disabled') set setDisabled(disabled: string) {
-    this.disabled = disabled === '' ? true : convertToBoolean(disabled);
-
-    this.validateModel(convertDateToISOExtended(this.date, this.hour));
-  }
-
-  /** Torna o elemento somente leitura. */
-  readonly?: boolean = false;
-  @Input('p-readonly') set setReadonly(readonly: string) {
-    this.readonly = readonly === '' ? true : convertToBoolean(readonly);
-  }
-
-  /** Faz com que o campo seja obrigatório. */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   required?: boolean = false;
-  @Input('p-required') set setRequired(required: string) {
-    this.required = required === '' ? true : convertToBoolean(required);
+  @Input({ alias: 'p-required', transform: convertToBoolean }) set setRequired(required: boolean) {
+    this.required = required;
 
-    this.validateModel(convertDateToISOExtended(this.date, this.hour));
-  }
-
-  /** Habilita ação para limpar o campo. */
-  clean?: boolean = false;
-  @Input('p-clean') set setClean(clean: string) {
-    this.clean = clean === '' ? true : convertToBoolean(clean);
+    this.validateModel(PoUtils.convertDateToISOExtended(this.date, this.hour));
   }
 
   /**
-   * Mensagem apresentada quando a data for inválida ou fora do período.
+   * Define se a indicação de campo obrigatório será exibida.
    *
-   * > Esta mensagem não é apresentada quando o campo estiver vazio, mesmo que ele seja obrigatório.
+   * > Não será exibida a indicação se:
+   * - Não possuir `p-help` e/ou `p-label`.
    */
-  @Input('p-error-pattern') errorPattern?: string = '';
+  @Input('p-show-required') showRequired: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho do componente:
+   * - `small`: altura do input como 32px (disponível apenas para acessibilidade AA).
+   * - `medium`: altura do input como 44px.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  /** Habilita ação para limpar o campo. */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
+  clean?: boolean = false;
+  @Input({ alias: 'p-clean', transform: convertToBoolean }) set setClean(clean: boolean) {
+    this.clean = clean;
+  }
 
   /**
    * @optional
@@ -192,14 +502,14 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
       const year = value.getFullYear();
 
       const date = new Date(year, value.getMonth(), value.getDate(), 0, 0, 0);
-      setYearFrom0To100(date, year);
+      PoUtils.setYearFrom0To100(date, year);
 
       this._minDate = date;
     } else {
       this._minDate = convertIsoToDate(value, true, false);
     }
 
-    this.validateModel(convertDateToISOExtended(this.date, this.hour));
+    this.validateModel(PoUtils.convertDateToISOExtended(this.date, this.hour));
   }
 
   get minDate() {
@@ -218,14 +528,14 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
       const year = value.getFullYear();
 
       const date = new Date(year, value.getMonth(), value.getDate(), 23, 59, 59);
-      setYearFrom0To100(date, year);
+      PoUtils.setYearFrom0To100(date, year);
 
       this._maxDate = date;
     } else {
       this._maxDate = convertIsoToDate(value, false, true);
     }
 
-    this.validateModel(convertDateToISOExtended(this.date, this.hour));
+    this.validateModel(PoUtils.convertDateToISOExtended(this.date, this.hour));
   }
 
   get maxDate() {
@@ -244,6 +554,8 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
    *  - `mm/dd/yyyy`
    *  - `yyyy/mm/dd`
    *
+   * Propriedade incompatível com as variações month-year e year.
+   *
    * @default `dd/mm/yyyy`
    */
   @Input('p-format') set format(value: string) {
@@ -251,13 +563,17 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
       value = value.toLowerCase();
       if (value.match(/dd/) && value.match(/mm/) && value.match(/yyyy/)) {
         this._format = value;
-        this.objMask = this.buildMask();
+        this.objMask = this.buildMask(
+          replaceFormatSeparator(this.format, this.languageService.getDateSeparator(this.locale))
+        );
         this.refreshValue(this.date);
         return;
       }
     }
     this._format = poDatepickerFormatDefault;
-    this.objMask = this.buildMask();
+    this.objMask = this.buildMask(
+      replaceFormatSeparator(this.format, this.languageService.getDateSeparator(this.locale))
+    );
   }
 
   get format() {
@@ -272,6 +588,8 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
    * Padrão de formatação para saída do *model*, independentemente do formato de entrada.
    *
    * > Veja os valores válidos no *enum* `PoDatepickerIsoFormat`.
+   *
+   * Propriedade incompatível com as variações month-year e year.
    */
   @Input('p-iso-format') set isoFormat(value: PoDatepickerIsoFormat) {
     if (Object.values(PoDatepickerIsoFormat).includes(value)) {
@@ -293,13 +611,21 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
    *
    * > O locale padrão sera recuperado com base no [`PoI18nService`](/documentation/po-i18n) ou *browser*.
    */
+  // eslint-disable-next-line @typescript-eslint/member-ordering
   _locale?: string;
   @Input('p-locale') set locale(value: string) {
     if (value) {
       this._locale = value.length >= 2 ? value : poLocaleDefault;
+      this.objMask = this.buildMask(
+        replaceFormatSeparator(this.format, this.languageService.getDateSeparator(this.locale))
+      );
     } else {
       this._locale = this.shortLanguage;
+      this.objMask = this.buildMask(
+        replaceFormatSeparator(this.format, this.languageService.getDateSeparator(this.locale))
+      );
     }
+    this.refreshValue(this.date);
   }
   get locale() {
     return this._locale || this.shortLanguage;
@@ -309,31 +635,90 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
    * @optional
    *
    * @description
+   * Exibe um ícone de carregamento no lado direito do campo para sinalizar que uma operação está em andamento.
    *
-   * Evento disparado ao sair do campo.
+   * @default `false`
    */
-  @Output('p-blur') onblur: EventEmitter<any> = new EventEmitter<any>();
+  @Input({ alias: 'p-loading', transform: convertToBoolean }) set loading(value: boolean) {
+    this._loading = value;
+    this.cd?.markForCheck();
+  }
+
+  get loading(): boolean {
+    return this._loading;
+  }
+
+  get isDisabled(): boolean {
+    return this.disabled || this.loading;
+  }
 
   /**
    * @optional
    *
    * @description
    *
-   * Evento disparado ao alterar valor do campo.
+   * Define que o `calendar` e/ou tooltip (`p-additional-help-tooltip` e/ou `p-error-limit`) serão incluídos no body da
+   * página e não dentro do componente. Essa opção pode ser necessária em cenários com containers que possuem scroll ou
+   * overflow escondido, garantindo o posicionamento correto de ambos próximo ao elemento.
+   *
+   * > Quando utilizado com `p-helper`, leitores de tela como o NVDA podem não ler o conteúdo do popover.
+   *
+   * @default `false`
    */
-  @Output('p-change') onchange: EventEmitter<any> = new EventEmitter<any>();
+  @Input({ alias: 'p-append-in-body', transform: convertToBoolean }) appendBox: boolean = false;
 
-  constructor(private languageService: PoLanguageService) {
-    this.shortLanguage = this.languageService.getShortLanguage();
+  constructor(
+    protected languageService: PoLanguageService,
+    protected cd: ChangeDetectorRef
+  ) {}
+
+  set date(value: any) {
+    if (!value) {
+      this._date = value;
+      return;
+    }
+
+    if (typeof value === 'string') {
+      if (this.mode === 'month-year') {
+        const [month, year] = value.split('/').map(Number);
+        this._date = new Date(year, month - 1, 1);
+      } else if (this.mode === 'year') {
+        this._date = new Date(Number(value), 0, 1);
+      } else {
+        this._date = convertIsoToDate(value, false, false);
+      }
+    } else {
+      this._date = value;
+    }
   }
 
-  abstract writeValue(value: any): void;
-
-  abstract refreshValue(value: Date): void;
+  get date() {
+    return this._date;
+  }
 
   ngOnInit() {
+    this.offset = new Date().getTimezoneOffset();
+    this.formatTimezoneAndHour(this.offset);
     // Classe de máscara
-    this.objMask = this.buildMask();
+    if (this.mode === 'month-year') {
+      const separator = this.languageService.getDateSeparator(this.locale);
+      this.objMask = new PoMask(`99${separator}9999`, true);
+    } else if (this.mode === 'year') {
+      this.objMask = new PoMask('9999', true);
+    } else {
+      this.objMask = this.buildMask(
+        replaceFormatSeparator(this.format, this.languageService.getDateSeparator(this.locale))
+      );
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.subscription?.unsubscribe();
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
   }
 
   // Converte um objeto string em Date
@@ -344,7 +729,7 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
 
     const date = new Date(year, month, day);
 
-    setYearFrom0To100(date, year);
+    PoUtils.setYearFrom0To100(date, year);
 
     return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day ? date : null;
   }
@@ -355,7 +740,7 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
 
     dateFormatted = dateFormatted.replace('dd', ('0' + value.getDate()).slice(-2));
     dateFormatted = dateFormatted.replace('mm', ('0' + (value.getMonth() + 1)).slice(-2));
-    dateFormatted = dateFormatted.replace('yyyy', formatYear(value.getFullYear()));
+    dateFormatted = dateFormatted.replace('yyyy', PoUtils.formatYear(value.getFullYear()));
 
     return dateFormatted;
   }
@@ -364,9 +749,9 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
   controlModel(date: Date) {
     this.date = date;
     if (date && this.isExtendedISO) {
-      this.callOnChange(convertDateToISOExtended(this.date, this.hour));
+      this.callOnChange(PoUtils.convertDateToISOExtended(this.date, this.hour));
     } else if (date && !this.isExtendedISO) {
-      this.callOnChange(convertDateToISODate(this.date));
+      this.callOnChange(PoUtils.convertDateToISODate(this.date));
     } else {
       date === undefined ? this.callOnChange('') : this.callOnChange('Data inválida');
     }
@@ -374,17 +759,32 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
 
   // Executa a função onChange
   callOnChange(value: any, retry: boolean = true) {
-    if (this.onChangeModel) {
+    if (this.onChangeModel && value !== this.previousValue) {
       this.onChangeModel(value);
+      this.previousValue = value;
+      this.controlChangeModelEmitter(value);
     } else if (retry) {
       setTimeout(() => this.callOnChange(value, false));
     }
+  }
+
+  controlChangeModelEmitter(value: any) {
+    if (this.modelLastUpdate !== value) {
+      this.changeModel.emit(value);
+      this.modelLastUpdate = value;
+    }
+  }
+
+  //Transforma o tamanho do input para o tamanho do ícone de loading correspondente
+  mapSizeToIcon(size: string): string {
+    return mapInputSizeToLoadingIcon(size);
   }
 
   // Função implementada do ControlValueAccessor
   // Usada para interceptar os estados de habilitado via forms api
   setDisabledState(isDisabled: boolean) {
     this.disabled = isDisabled;
+    this.cd.markForCheck();
   }
 
   // Função implementada do ControlValueAccessor
@@ -403,6 +803,146 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
     this.validatorChange = fn;
   }
 
+  validate(c: AbstractControl): { [key: string]: any } {
+    // Verifica se já possui algum error pattern padrão.
+    this.errorPattern =
+      this.errorPattern !== 'Data inválida' && this.errorPattern !== 'Data fora do período' ? this.errorPattern : '';
+
+    if (!this.hasValidatorRequired && this.showErrorMessageRequired && c.hasValidator(Validators.required)) {
+      this.hasValidatorRequired = true;
+    }
+
+    if (this.mode === 'month-year' || this.mode === 'year') {
+      if (this.isMonthYearOrYearInvalid(c.value)) {
+        this.errorPattern = this.errorPattern || 'Data inválida';
+
+        this.cd?.markForCheck();
+        return {
+          date: {
+            valid: false
+          }
+        };
+      }
+    } else if (dateFailed(c.value)) {
+      this.errorPattern = this.errorPattern || 'Data inválida';
+
+      this.cd?.markForCheck();
+      return {
+        date: {
+          valid: false
+        }
+      };
+    }
+
+    if (PoValidators.requiredFailed(this.required, this.disabled, c.value)) {
+      this.cd?.markForCheck();
+      return {
+        required: {
+          valid: false
+        }
+      };
+    }
+
+    if (this.date && !this.isDateRangeValidForMode()) {
+      this.errorPattern = this.errorPattern || 'Data fora do período';
+
+      this.cd?.markForCheck();
+      return {
+        date: {
+          valid: false
+        }
+      };
+    }
+
+    if (this.errorPattern !== '') {
+      this.subscription?.unsubscribe();
+      this.subscription = c.statusChanges
+        .pipe(
+          switchMap(status => {
+            if (status === 'INVALID') {
+              this.cd?.markForCheck();
+            }
+            return [];
+          })
+        )
+        .subscribe();
+    }
+
+    return null;
+  }
+
+  // Valida se o valor é inválido para modos month-year ou year
+  private isMonthYearOrYearInvalid(value: any): boolean {
+    if (!value || value === '') {
+      return false;
+    }
+
+    if (typeof value !== 'string') {
+      return true;
+    }
+
+    if (this.mode === 'month-year') {
+      const parts = value.split('/');
+      if (parts.length !== 2) {
+        return true;
+      }
+      const month = parseInt(parts[0], 10);
+      const year = parseInt(parts[1], 10);
+      return isNaN(month) || isNaN(year) || month < 1 || month > 12 || year <= 0;
+    }
+
+    if (this.mode === 'year') {
+      const year = parseInt(value, 10);
+      return isNaN(year) || year <= 0;
+    }
+
+    return false;
+  }
+
+  // Valida range de data considerando o modo
+  private isDateRangeValidForMode(): boolean {
+    if (this.mode === 'month-year') {
+      return this.validateMonthYearRange(this.date, this._minDate, this._maxDate);
+    }
+    if (this.mode === 'year') {
+      return this.validateYearRange(this.date, this._minDate, this._maxDate);
+    }
+    return PoUtils.validateDateRange(this.date, this._minDate, this._maxDate);
+  }
+
+  private validateMonthYearRange(date: Date, minDate: Date, maxDate: Date): boolean {
+    if (!date) {
+      return true;
+    }
+    const dateMonthYear = date.getFullYear() * 12 + date.getMonth();
+    if (minDate) {
+      const minMonthYear = minDate.getFullYear() * 12 + minDate.getMonth();
+      if (dateMonthYear < minMonthYear) {
+        return false;
+      }
+    }
+    if (maxDate) {
+      const maxMonthYear = maxDate.getFullYear() * 12 + maxDate.getMonth();
+      if (dateMonthYear > maxMonthYear) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private validateYearRange(date: Date, minDate: Date, maxDate: Date): boolean {
+    if (!date) {
+      return true;
+    }
+    if (minDate && date.getFullYear() < minDate.getFullYear()) {
+      return false;
+    }
+    if (maxDate && date.getFullYear() > maxDate.getFullYear()) {
+      return false;
+    }
+    return true;
+  }
+
   protected validateModel(model: any) {
     if (this.validatorChange) {
       this.validatorChange(model);
@@ -410,8 +950,8 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
   }
 
   // Retorna um objeto do tipo PoMask com a mascara configurada.
-  protected buildMask() {
-    let mask = this.format.toUpperCase();
+  protected buildMask(format: string = this.format) {
+    let mask = format.toUpperCase();
 
     mask = mask.replace(/DD/g, '99');
     mask = mask.replace(/MM/g, '99');
@@ -420,39 +960,22 @@ export abstract class PoDatepickerBaseComponent implements ControlValueAccessor,
     return new PoMask(mask, true);
   }
 
-  validate(c: AbstractControl): { [key: string]: any } {
-    // Verifica se já possui algum error pattern padrão.
-    this.errorPattern =
-      this.errorPattern !== 'Data inválida' && this.errorPattern !== 'Data fora do período' ? this.errorPattern : '';
-
-    if (dateFailed(c.value)) {
-      this.errorPattern = this.errorPattern || 'Data inválida';
-
-      return {
-        date: {
-          valid: false
-        }
-      };
-    }
-
-    if (requiredFailed(this.required, this.disabled, c.value)) {
-      return {
-        required: {
-          valid: false
-        }
-      };
-    }
-
-    if (this.date && !validateDateRange(this.date, this._minDate, this._maxDate)) {
-      this.errorPattern = this.errorPattern || 'Data fora do período';
-
-      return {
-        date: {
-          valid: false
-        }
-      };
-    }
-
-    return null;
+  formatTimezoneAndHour(offset: number) {
+    const offsetAbsolute = Math.abs(offset);
+    const timezone =
+      (offset < 0 ? '+' : '-') +
+      ('00' + Math.floor(offsetAbsolute / 60)).slice(-2) +
+      ':' +
+      ('00' + (offsetAbsolute % 60)).slice(-2);
+    this.hour = 'T00:00:00' + timezone;
   }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
+  }
+
+  abstract writeValue(value: any): void;
+
+  abstract refreshValue(value: Date): void;
 }

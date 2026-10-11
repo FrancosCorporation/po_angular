@@ -8,6 +8,8 @@ import { getObservable } from '../../../util-test/util-expect.spec';
 
 import { PoPageJobSchedulerExecutionComponent } from './po-page-job-scheduler-execution.component';
 import { PoPageJobSchedulerModule } from '../po-page-job-scheduler.module';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('PoPageJobSchedulerExecutionComponent:', () => {
   let component: PoPageJobSchedulerExecutionComponent;
@@ -15,13 +17,12 @@ describe('PoPageJobSchedulerExecutionComponent:', () => {
 
   let debugElement;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [RouterTestingModule.withRoutes([]), PoPageJobSchedulerModule]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      imports: [RouterTestingModule.withRoutes([]), PoPageJobSchedulerModule],
+      providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoPageJobSchedulerExecutionComponent);
@@ -49,6 +50,18 @@ describe('PoPageJobSchedulerExecutionComponent:', () => {
       expectPropertiesValues(component, 'value', validValues, validValues);
     });
 
+    it('value: should set `containsFrequency` with true if value.frequency.value', () => {
+      component.value = { frequency: { value: 2 } };
+
+      expect(component.containsFrequency).toBeTrue();
+    });
+
+    it('value: should set `containsFrequency` with false if value.frequency.value is undefined', () => {
+      component.value = { frequency: undefined };
+
+      expect(component.containsFrequency).toBeFalse();
+    });
+
     it('startDateFirstExecution: should return `Date` if `isEdit` is false', () => {
       component.isEdit = false;
 
@@ -60,6 +73,30 @@ describe('PoPageJobSchedulerExecutionComponent:', () => {
 
       expect(component.startDateFirstExecution instanceof Date).toBe(false);
       expect(component.startDateFirstExecution).toBeUndefined();
+    });
+
+    it('hourLabel: should return `literals.startTime` if `containsFrequency`', () => {
+      component.containsFrequency = true;
+      const result = component.hourLabel;
+      expect(result).toEqual(component.literals.startTime);
+    });
+
+    it('hourLabel: should return `literals.time` if `containsFrequency` is false', () => {
+      component.containsFrequency = false;
+      const result = component.hourLabel;
+      expect(result).toEqual(component.literals.time);
+    });
+
+    it('dayLabel: should return `literals.startDay` if `containsFrequency`', () => {
+      component.containsFrequency = true;
+      const result = component.dayLabel;
+      expect(result).toEqual(component.literals.startDay);
+    });
+
+    it('dayLabel: should return `literals.day` if `containsFrequency` is false', () => {
+      component.containsFrequency = false;
+      const result = component.dayLabel;
+      expect(result).toEqual(component.literals.day);
     });
   });
 
@@ -74,31 +111,68 @@ describe('PoPageJobSchedulerExecutionComponent:', () => {
       expect(component['subscribeProcessIdValueChanges']).toHaveBeenCalled();
     }));
 
+    it('ngAfterViewInit: should update `frequencyOption.disabled` if `frequencyOption.value` is equal to `day`', fakeAsync(() => {
+      component.value.periodicity = 'daily';
+      component.frequencyOptions = [
+        { label: 'Day', value: 'day' },
+        { label: 'Hour', value: 'hour' },
+        { label: 'minute', value: 'minute' }
+      ];
+      const expectedValue = [
+        { label: 'Day', value: 'day', disabled: true },
+        { label: 'Hour', value: 'hour', disabled: false },
+        { label: 'minute', value: 'minute', disabled: false }
+      ];
+
+      component.ngAfterViewInit();
+
+      tick(50);
+
+      expect(component.frequencyOptions).toEqual(expectedValue);
+    }));
+
     it('ngOnInit: should call `checkExistsProcessesAPI` and set `periodicityTemplates`, `periodicityOptions` and `weekDays`', () => {
       component.periodicityTemplates = undefined;
       component.periodicityOptions = undefined;
+      component.frequencyOptions = undefined;
       component.weekDays = undefined;
 
       spyOn(component, <any>'checkExistsProcessesAPI');
       spyOn(component, <any>'getPeriodicityOptions').and.callThrough();
       spyOn(component, <any>'getWeekDays').and.callThrough();
+      spyOn(component, <any>'getFrequencyOptions').and.callThrough();
 
       component.ngOnInit();
 
       expect(typeof component.periodicityTemplates === 'object').toBe(true);
       expect(component.periodicityOptions instanceof Array).toBe(true);
       expect(component.weekDays instanceof Array).toBe(true);
+      expect(component.frequencyOptions instanceof Array).toBe(true);
 
       expect(component['checkExistsProcessesAPI']).toHaveBeenCalled();
       expect(component['getPeriodicityOptions']).toHaveBeenCalled();
       expect(component['getWeekDays']).toHaveBeenCalled();
+      expect(component['getFrequencyOptions']).toHaveBeenCalled();
+    });
+
+    it('ngOnInit: shouldn`t call `checkExistsProcessesAPI` if `noParameters` is false', () => {
+      component.noParameters = false;
+
+      spyOn(component, <any>'checkExistsProcessesAPI');
+
+      component.ngOnInit();
+
+      expect(component['checkExistsProcessesAPI']).not.toHaveBeenCalled();
     });
 
     it('checkExistsProcessesAPI: should subscribe `getHeadProcesses` and on error set `existProcessAPI` to false', () => {
       component.existProcessAPI = true;
-      component['poPageJobSchedulerService'] = <any>{
-        getHeadProcesses: () => {}
-      };
+      Object.defineProperty(component, 'poPageJobSchedulerService', {
+        value: <any>{
+          getHeadProcesses: () => {}
+        },
+        configurable: true
+      });
 
       spyOn(component['poPageJobSchedulerService'], <any>'getHeadProcesses').and.returnValue(throwError(''));
 
@@ -126,6 +200,15 @@ describe('PoPageJobSchedulerExecutionComponent:', () => {
       expect(weekDays.length).toBe(weekDaysLength);
     });
 
+    it('getFrequencyOptions: should return 3 options', () => {
+      const frequencyOptionsLength = 3;
+
+      const frequencyOptions = component['getFrequencyOptions']();
+
+      expect(frequencyOptions instanceof Array).toBe(true);
+      expect(frequencyOptions.length).toBe(frequencyOptionsLength);
+    });
+
     it('subscribeProcessIdValueChanges: should call `changeProcess.emit` when subscribe `processID.valueChanges`', () => {
       const processId = 1;
       component['form'] = <any>{
@@ -144,6 +227,60 @@ describe('PoPageJobSchedulerExecutionComponent:', () => {
       expect(component['form'].controls.processID.valueChanges.subscribe).toHaveBeenCalled();
       expect(component.changeProcess.emit).toHaveBeenCalledWith({ processId, existAPI: component.existProcessAPI });
     });
+
+    it('changeContainsFrequency: should update `value.frequency` if `containsfrequency`', () => {
+      const containsFrequency = true;
+      const expectedValue = { type: 'hour', value: null };
+
+      component.onChangeContainsFrequency(containsFrequency);
+
+      expect(component.value.frequency).toEqual(expectedValue);
+    });
+
+    it('changeContainsFrequency: should update `value.frequency` with empty object if `containsfrequency` is false', () => {
+      const containsFrequency = false;
+      const expectedValue = {};
+
+      component.onChangeContainsFrequency(containsFrequency);
+
+      expect(component.value.frequency).toEqual(expectedValue);
+    });
+
+    it('changeContainsFrequency: should update `value.rangeLimitHour`, `value.rangeLimitDay` and `value.dayOfMonth` with null', () => {
+      const containsFrequency = false;
+
+      component.onChangeContainsFrequency(containsFrequency);
+
+      expect(component.value.rangeLimitHour).toBeNull();
+      expect(component.value.rangeLimitDay).toBeNull();
+      expect(component.value.dayOfMonth).toBeNull();
+    });
+
+    it('onChangePeriodicityOptions: should update `frequencyOptions` and `value.frequency.type`', () => {
+      const periodicity = 'daily';
+      component.value.frequency = {};
+      component.frequencyOptions = [
+        { label: 'Day', value: 'day' },
+        { label: 'Hour', value: 'hour' },
+        { label: 'minute', value: 'minute' }
+      ];
+      const expectedValue = [
+        { label: 'Day', value: 'day', disabled: true },
+        { label: 'Hour', value: 'hour', disabled: false },
+        { label: 'minute', value: 'minute', disabled: false }
+      ];
+
+      component.onChangePeriodicityOptions(periodicity);
+
+      expect(component.frequencyOptions).toEqual(expectedValue);
+      expect(component.value.frequency.type).toBeNull();
+    });
+
+    it('onChangeFrequencyOptions: should update `value.rangeLimitHour` with `null`', () => {
+      component.onChangeFrequencyOptions();
+
+      expect(component.value.rangeLimitHour).toBeNull();
+    });
   });
 
   describe('Templates:', () => {
@@ -157,6 +294,16 @@ describe('PoPageJobSchedulerExecutionComponent:', () => {
 
       expect(lookupComponent).toBeFalsy();
       expect(inputComponent).toBeTruthy();
+    });
+
+    it(`shouldn't find po-lookup[name="processID"] if 'p-not-parameters' is false`, () => {
+      component.noParameters = false;
+
+      fixture.detectChanges();
+
+      const lookupComponent = debugElement.querySelector('po-lookup[name="processID"]');
+
+      expect(lookupComponent).toBeFalsy();
     });
 
     it('should find po-lookup[name="processID"] and shouldn`t find po-input[name="processID"] if existProcessAPI is true', () => {

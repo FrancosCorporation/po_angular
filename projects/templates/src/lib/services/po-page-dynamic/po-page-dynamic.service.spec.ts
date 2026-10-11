@@ -1,6 +1,6 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
-import { HttpParams, HttpErrorResponse } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpParams, HttpErrorResponse, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 import { PoPageDynamicService, poPageDynamicLiterals } from './po-page-dynamic.service';
 import { PoPageDynamicTableMetaData } from '../../components';
@@ -11,14 +11,14 @@ describe('PoPageDynamicService:', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [PoPageDynamicService]
+      imports: [],
+      providers: [PoPageDynamicService, provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
     });
 
     poPageDynamicService = TestBed.inject(PoPageDynamicService);
     httpMock = TestBed.inject(HttpTestingController);
 
-    poPageDynamicService['language'] = 'en';
+    Object.defineProperty(poPageDynamicService, 'language', { value: 'en', configurable: true });
   });
 
   afterEach(() => {
@@ -112,9 +112,8 @@ describe('PoPageDynamicService:', () => {
 
         poPageDynamicService.configServiceApi({ endpoint: '/test' });
 
-        const { errorRenderPage, notPossibleLoadMetadataPage } = poPageDynamicLiterals[
-          poPageDynamicService['language']
-        ];
+        const { errorRenderPage, notPossibleLoadMetadataPage } =
+          poPageDynamicLiterals[poPageDynamicService['language']];
 
         const spyNotificationWarning = spyOn(poPageDynamicService['notification'], 'warning');
 
@@ -207,6 +206,18 @@ describe('PoPageDynamicService:', () => {
         poPageDynamicService.deleteResource(1, '/test').subscribe();
 
         const req = httpMock.expectOne(request => request.url === '/test/1');
+
+        expect(req.request.method).toBe('DELETE');
+        expect(req.request.headers.get('X-PO-SCREEN-LOCK')).toBe('true');
+
+        req.flush({});
+        tick();
+      }));
+
+      it('should delete a resource passing undefined id.', fakeAsync(() => {
+        poPageDynamicService.deleteResource(undefined, '/test').subscribe();
+
+        const req = httpMock.expectOne(request => request.url === '/test');
 
         expect(req.request.method).toBe('DELETE');
         expect(req.request.headers.get('X-PO-SCREEN-LOCK')).toBe('true');

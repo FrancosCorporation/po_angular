@@ -1,9 +1,9 @@
+import { provideNgReflectAttributes } from '@angular/core';
 import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 
 import { PoPageLoginPopoverComponent } from './po-page-login-popover.component';
 
-import * as UtilFunctions from './../../../utils/util';
 import { PoI18nPipe } from './../../../../../../ui/src/lib/services/po-i18n/po-i18n.pipe';
 
 describe('ThPageLoginPopoverComponent: ', () => {
@@ -11,14 +11,13 @@ describe('ThPageLoginPopoverComponent: ', () => {
   let fixture: ComponentFixture<PoPageLoginPopoverComponent>;
   let nativeElement: any;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [RouterTestingModule.withRoutes([])],
-        declarations: [PoI18nPipe, PoPageLoginPopoverComponent]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      imports: [RouterTestingModule.withRoutes([])],
+      declarations: [PoI18nPipe, PoPageLoginPopoverComponent],
+      providers: [provideNgReflectAttributes()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoPageLoginPopoverComponent);

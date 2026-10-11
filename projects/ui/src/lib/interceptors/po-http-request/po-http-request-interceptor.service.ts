@@ -1,12 +1,11 @@
+import { HttpHandler, HttpInterceptor, HttpRequest } from '@angular/common/http';
 import { ComponentRef, Injectable } from '@angular/core';
-import { HttpEvent, HttpHandler, HttpInterceptor, HttpRequest, HttpResponse } from '@angular/common/http';
 
-import { Observable, throwError } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
+import { Observable } from 'rxjs';
+import { finalize } from 'rxjs/operators';
 
 import { PoComponentInjectorService } from '../../services/po-component-injector/po-component-injector.service';
 import { PoLoadingOverlayComponent } from '../../components/po-loading/po-loading-overlay/po-loading-overlay.component';
-
 import { PoHttpRequesControltService } from './po-http-request-control-service';
 
 const noCountPendingRequests = 'X-PO-No-Count-Pending-Requests';
@@ -48,9 +47,63 @@ const screenLock = 'X-PO-Screen-Lock';
  * ```
  * > Após a validação no interceptor, o parâmetro será removido do cabeçalho da requisição.
  *
+ * ## Configuração
+ *
+ * É necessário configurar o `HttpClient` para utilizar os interceptors registrados via Dependency Injection (DI)
+ * por meio da função `provideHttpClient(withInterceptorsFromDi())`.
+ *
+ * ### 1) NgModule
+ *
+ * ```
+ * import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+ * import { PoModule } from '@po-ui/ng-components';
+ * ...
+ *
+ * @NgModule({
+ *   imports: [
+ *     ...
+ *     PoModule
+ *   ],
+ *   declarations: [
+ *     AppComponent,
+ *     ...
+ *   ],
+ *   providers: [
+ *     provideHttpClient(withInterceptorsFromDi()),
+ *     ...
+ *   ],
+ *   bootstrap: [AppComponent]
+ * })
+ * export class AppModule { }
+ * ```
+ *
  * Ao importar o módulo `PoModule` na aplicação, o `po-http-request-interceptor` é automaticamente configurado sem a necessidade
  * de qualquer configuração extra.
  *
+ * ### 2) Standalone
+ *
+ * No arquivo contendo a configuração da aplicação (geralmente `src/app/app.config.ts`), adicione os providers e configure o `HttpClient`,
+ * como no exemplo abaixo:
+ *
+ * ```
+ * import { ApplicationConfig, importProvidersFrom } from '@angular/core';
+ * import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+ * import { provideAnimations } from '@angular/platform-browser/animations';
+ * import { PoHttpRequestModule } from '@po-ui/ng-components';
+ *
+ * export const appConfig: ApplicationConfig = {
+ *   providers: [
+ *     ...
+ *     provideHttpClient(withInterceptorsFromDi()),
+ *     importProvidersFrom([
+ *       PoHttpRequestModule
+ *     ]),
+ *     ...
+ *   ]
+ * };
+ * ```
+ *
+ * ## Como usar
  *
  * Segue abaixo um exemplo de uso:
  *
@@ -59,7 +112,9 @@ const screenLock = 'X-PO-Screen-Lock';
  *
  * ...
  *
- * @Injectable()
+ * @Injectable({
+ *  providedIn: 'root'
+ * })
  * export class CustomersService {
  *
  *  headers = { 'X-PO-No-Count-Pending-Requests': true, 'X-PO-Screen-Lock': 'true' }
@@ -105,8 +160,8 @@ export class PoHttpRequestInterceptorService implements HttpInterceptor {
   private overlayRequests: number = 0;
 
   constructor(
-    private controlHttpRequest: PoHttpRequesControltService,
-    private poComponentInjector: PoComponentInjectorService
+    private readonly controlHttpRequest: PoHttpRequesControltService,
+    private readonly poComponentInjector: PoComponentInjectorService
   ) {}
 
   intercept(request: HttpRequest<any>, next: HttpHandler) {
@@ -118,17 +173,9 @@ export class PoHttpRequestInterceptorService implements HttpInterceptor {
     this.setCountOverlayRequests(true, requestClone);
 
     return next.handle(request).pipe(
-      tap((response: HttpEvent<any>) => {
-        if (response instanceof HttpResponse) {
-          this.setCountPendingRequests(false, requestClone);
-          this.setCountOverlayRequests(false, requestClone);
-        }
-      }),
-      catchError(error => {
+      finalize(() => {
         this.setCountPendingRequests(false, requestClone);
         this.setCountOverlayRequests(false, requestClone);
-
-        return throwError(error);
       })
     );
   }
@@ -157,7 +204,7 @@ export class PoHttpRequestInterceptorService implements HttpInterceptor {
 
     headersParams.forEach(headerParam => {
       if (request.headers.has(headerParam)) {
-        request.headers.delete(headerParam);
+        request = request.clone({ headers: request.headers.delete(headerParam) });
         isRequestClone = true;
       }
     });

@@ -1,12 +1,14 @@
 import { Component, OnInit } from '@angular/core';
 
-import { PoCheckboxGroupOption, PoSelectOption } from '@po-ui/ng-components';
+import { PoCheckboxGroupOption, PoRadioGroupOption, PoSelectOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-number-labs',
-  templateUrl: './sample-po-number-labs.component.html'
+  templateUrl: './sample-po-number-labs.component.html',
+  standalone: false
 })
 export class SamplePoNumberLabsComponent implements OnInit {
+  helperText: string;
   event: string;
   messageErrorPattern: string;
   help: string;
@@ -19,21 +21,33 @@ export class SamplePoNumberLabsComponent implements OnInit {
   number: number;
   placeholder: string;
   properties: Array<string>;
+  size: string;
   step: string;
 
   public readonly iconOptions: Array<PoSelectOption> = [
-    { value: 'po-icon-finance', label: 'po-icon-finance' },
-    { value: 'po-icon-calculator', label: 'po-icon-calculator' },
-    { value: 'po-icon-finance-bitcoin', label: 'po-icon-finance-bitcoin' }
+    { value: 'an an-currency-circle-dollar', label: 'an an-currency-circle-dollar' },
+    { value: 'an an-currency-btc', label: 'an an-currency-btc' },
+    { value: 'fa fa-calculator', label: 'fa fa-calculator' }
   ];
 
   public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [
     { value: 'clean', label: 'Clean' },
     { value: 'disabled', label: 'Disabled' },
+    { value: 'errorLimit', label: 'Limit Error Message' },
+    { value: 'labelTextWrap', label: 'Label Text Wrap' },
+    { value: 'compactLabel', label: 'Compact Label' },
+    { value: 'loading', label: 'Loading' },
     { value: 'noAutocomplete', label: 'No Autocomplete' },
     { value: 'optional', label: 'Optional' },
     { value: 'readonly', label: 'Read Only' },
-    { value: 'required', label: 'Required' }
+    { value: 'required', label: 'Required' },
+    { value: 'requiredFieldErrorMessage', label: 'Required Field Error Message' },
+    { value: 'showRequired', label: 'Show Required' }
+  ];
+
+  public readonly sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
   ];
 
   ngOnInit() {
@@ -45,6 +59,7 @@ export class SamplePoNumberLabsComponent implements OnInit {
   }
 
   restore() {
+    this.helperText = '';
     this.number = undefined;
     this.max = undefined;
     this.maxlength = undefined;
@@ -56,6 +71,7 @@ export class SamplePoNumberLabsComponent implements OnInit {
     this.placeholder = '';
     this.help = '';
     this.icon = '';
+    this.size = 'medium';
     this.step = undefined;
     this.properties = [];
   }

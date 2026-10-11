@@ -1,4 +1,13 @@
-import { AfterViewInit, Component, ComponentRef, OnDestroy, OnInit, ViewChild, ViewContainerRef } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ComponentRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  ViewContainerRef,
+  inject
+} from '@angular/core';
 import { NgForm } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -12,15 +21,15 @@ import {
   poLocaleDefault
 } from '@po-ui/ng-components';
 
-import { isExternalLink, isTypeof } from '../../utils/util';
+import { isTypeof, PoUtils } from '../../utils/util';
 
-import { PoModalPasswordRecoveryComponent } from '../po-modal-password-recovery/po-modal-password-recovery.component';
 import { PoModalPasswordRecoveryType } from '../po-modal-password-recovery/enums/po-modal-password-recovery-type.enum';
-import { PoPageChangePassword } from './interfaces/po-page-change-password.interface';
-import { PoPageChangePasswordBaseComponent } from './po-page-change-password-base.component';
-import { poPageChangePasswordLiterals } from './literals/i18n/po-page-change-password-literals';
+import { PoModalPasswordRecoveryComponent } from '../po-modal-password-recovery/po-modal-password-recovery.component';
 import { PoPageChangePasswordRecovery } from './interfaces/po-page-change-password-recovery.interface';
 import { PoPageChangePasswordRequirement } from './interfaces/po-page-change-password-requirement.interface';
+import { PoPageChangePassword } from './interfaces/po-page-change-password.interface';
+import { poPageChangePasswordLiterals } from './literals/i18n/po-page-change-password-literals';
+import { PoPageChangePasswordBaseComponent } from './po-page-change-password-base.component';
 import { PoPageChangePasswordService } from './po-page-change-password.service';
 
 /**
@@ -55,11 +64,23 @@ import { PoPageChangePasswordService } from './po-page-change-password.service';
  */
 @Component({
   selector: 'po-page-change-password',
-  templateUrl: './po-page-change-password.component.html'
+  templateUrl: './po-page-change-password.component.html',
+  standalone: false
 })
 export class PoPageChangePasswordComponent
   extends PoPageChangePasswordBaseComponent
-  implements AfterViewInit, OnDestroy, OnInit {
+  implements AfterViewInit, OnDestroy, OnInit
+{
+  private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly service = inject(PoPageChangePasswordService);
+  private readonly poComponentInjector = inject(PoComponentInjectorService);
+
+  @ViewChild(PoModalComponent, { static: true }) modal: PoModalComponent;
+  @ViewChild('pageChangePassword', { read: ViewContainerRef, static: true }) pageChangePassword: ViewContainerRef;
+  @ViewChild('passwordForm', { read: NgForm, static: true }) passwordForm: NgForm;
+
   literals: {
     backButton: string;
     confirmPassword: string;
@@ -80,27 +101,17 @@ export class PoPageChangePasswordComponent
     saveButton: string;
   } = poPageChangePasswordLiterals[poLocaleDefault];
 
-  private newPasswordSubscription: Subscription;
-  private componentRef: ComponentRef<any> = null;
-
   modalAction: PoModalAction = {
     action: this.navigateTo.bind(this, this.urlHome),
     label: this.literals.enterSystemButton
   };
 
-  @ViewChild(PoModalComponent, { static: true }) modal: PoModalComponent;
-  @ViewChild('pageChangePassword', { read: ViewContainerRef, static: true }) pageChangePassword: ViewContainerRef;
-  @ViewChild('passwordForm', { read: NgForm, static: true }) passwordForm: NgForm;
+  private readonly newPasswordSubscription: Subscription;
+  private componentRef: ComponentRef<any> = null;
 
-  constructor(
-    private activatedRoute: ActivatedRoute,
-    private route: ActivatedRoute,
-    private router: Router,
-    private service: PoPageChangePasswordService,
-    private poComponentInjector: PoComponentInjectorService,
-    languageService: PoLanguageService,
-    viewRef: ViewContainerRef
-  ) {
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     super();
 
     const language = languageService.getShortLanguage();
@@ -128,7 +139,7 @@ export class PoPageChangePasswordComponent
   }
 
   navigateTo(url: string) {
-    isExternalLink(url) ? window.open(url) : this.router.navigate([url || '/']);
+    PoUtils.isExternalLink(url) ? window.open(url) : this.router.navigate([url || '/']);
   }
 
   onForgotPasswordClick(recovery): void {

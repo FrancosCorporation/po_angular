@@ -1,0 +1,166 @@
+<div class="po-calendar-wrapper">
+  @if (isDayVisible) {
+    <ng-container>
+      @if (templateContext) {
+        <po-calendar-header
+          (p-previous)="onPreviousMonth()"
+          (p-next)="onNextMonth()"
+          [p-display-month]="displayMonth"
+          [p-display-year]="displayYear"
+          [p-template-context]="templateContext"
+          [p-header-template]="headerTemplate || internalComboTemplate"
+          [p-size]="size"
+          [p-locale]="locale"
+        >
+        </po-calendar-header>
+      }
+
+      <div class="po-calendar-content">
+        <div class="po-calendar-labels">
+          @for (weekDay of displayWeekDays; track trackByWeekDay($index, weekDay)) {
+            <div class="po-calendar-label">
+              {{ weekDay }}
+            </div>
+          }
+        </div>
+
+        <div class="po-calendar-content-list-day">
+          @for (day of displayDays; track trackByDay($index, day); let i = $index) {
+            <div
+              class="po-calendar-day"
+              [ngClass]="getDayBackgroundColor(day)"
+              (click)="onSelectDate(day)"
+              (mouseenter)="onMouseEnter(day)"
+              (mouseleave)="onMouseLeave()"
+              (keydown)="onDayKeydown($event, day, i)"
+              [tabindex]="getDayTabIndex(day, i)"
+              attr-calendar
+              [attr.data-other-month]="day.getMonth() !== displayMonthNumber"
+              [attr.data-day-index]="i"
+            >
+              <span [ngClass]="getDayForegroundColor(day)">
+                {{ day.getDate() }}
+              </span>
+            </div>
+          }
+        </div>
+      </div>
+    </ng-container>
+  }
+
+  @if (isMonthVisible) {
+    <ng-container>
+      <po-calendar-header
+        (p-previous)="updateYear(-1)"
+        (p-next)="updateYear(1)"
+        [p-template-context]="templateContext"
+        [p-header-template]="headerTemplate || internalComboTemplate"
+        [p-size]="size"
+        [p-locale]="locale"
+      >
+      </po-calendar-header>
+
+      <div class="po-calendar-content">
+        <div class="po-calendar-labels">
+          <div class="po-calendar-label">
+            {{ monthLabel }}
+          </div>
+        </div>
+        <div class="po-calendar-content-list-month">
+          @for (month of displayMonths; track trackByMonth($index, month); let i = $index) {
+            <div
+              class="po-calendar-month"
+              [ngClass]="getBackgroundColor(i, displayMonthNumber)"
+              (click)="onSelectMonth(displayYear, i)"
+              attr-calendar
+            >
+              <span [ngClass]="getForegroundColor(i, displayMonthNumber)">
+                {{ month }}
+              </span>
+            </div>
+          }
+        </div>
+      </div>
+    </ng-container>
+  }
+
+  @if (isYearVisible) {
+    <ng-container>
+      <po-calendar-header
+        (p-previous)="updateYear(-10)"
+        (p-next)="updateYear(10)"
+        [p-template-context]="templateContext"
+        [p-header-template]="headerTemplate || internalComboTemplate"
+        [p-size]="size"
+        [p-locale]="locale"
+      >
+      </po-calendar-header>
+
+      <div class="po-calendar-content">
+        <div class="po-calendar-labels">
+          <div class="po-calendar-label">
+            {{ yearLabel }}
+          </div>
+        </div>
+
+        <div class="po-calendar-content-list-year">
+          @for (year of displayDecade; track trackByYear($index, year)) {
+            <div
+              class="po-calendar-year"
+              [ngClass]="getBackgroundColor(year, currentYear)"
+              (click)="onSelectYear(year, displayMonthNumber)"
+              attr-calendar
+            >
+              <span [ngClass]="getForegroundColor(year, currentYear)">
+                {{ year }}
+              </span>
+            </div>
+          }
+        </div>
+      </div>
+    </ng-container>
+  }
+  @if (!responsive || (responsive && !hasPresets)) {
+    <po-calendar-footer
+      [p-label-clear]="displayToClean"
+      [p-label-today]="displayToday"
+      [p-hide-today-button]="hideTodayButton"
+      [p-size]="size"
+      [p-responsive]="responsive"
+      [p-today-disabled]="isTodayUnavailable()"
+      (p-clear)="onClear()"
+      (p-select-today)="onSelectToday()"
+      (p-close-calendar)="onFooterCloseCalendar()"
+    ></po-calendar-footer>
+  }
+</div>
+
+<ng-template #internalComboTemplate let-combo>
+  <po-combo
+    #monthCombo
+    class="po-combo-first"
+    [name]="'month-' + comboKey"
+    [p-clean]="false"
+    [p-remove-initial-filter]="true"
+    [ngModel]="combo.monthIndex"
+    [p-options]="combo.monthsOptions"
+    (p-change)="combo.updateDate(combo.year, $event)"
+    (p-blur)="combo.onComboBlur(monthCombo)"
+    [p-size]="size"
+  >
+  </po-combo>
+
+  <po-combo
+    #yearCombo
+    class="po-combo-last"
+    [name]="'year-' + comboKey"
+    [p-clean]="false"
+    [p-remove-initial-filter]="true"
+    [ngModel]="combo.year"
+    [p-options]="combo.yearsOptions"
+    (p-change)="combo.updateDate($event, combo.monthIndex)"
+    (p-blur)="combo.onComboBlur(yearCombo)"
+    [p-size]="size"
+  >
+  </po-combo>
+</ng-template>

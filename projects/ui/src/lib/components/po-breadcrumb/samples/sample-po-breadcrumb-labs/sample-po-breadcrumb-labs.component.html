@@ -1,7 +1,7 @@
 <po-breadcrumb [p-favorite-service]="favoriteService" [p-items]="breadcrumbItems" [p-params-service]="paramsService">
 </po-breadcrumb>
 
-<hr />
+<po-divider />
 
 <form #breadcrumbForm="ngForm">
   <div class="po-row">
@@ -32,7 +32,7 @@
   </div>
 </form>
 
-<hr />
+<po-divider />
 
 <form #propertiesForm="ngForm">
   <div class="po-row">
@@ -41,7 +41,7 @@
       name="favoriteService"
       [(ngModel)]="favoriteService"
       p-clean
-      p-help="Ex.: https://po-sample-api.herokuapp.com/v1/favorite"
+      p-help="Ex.: https://po-sample-api.onrender.com/v1/favorite"
       p-label="Favorite service"
       [p-disabled]="!breadcrumbItems?.length"
     >
@@ -59,7 +59,7 @@
     </po-input>
   </div>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-button

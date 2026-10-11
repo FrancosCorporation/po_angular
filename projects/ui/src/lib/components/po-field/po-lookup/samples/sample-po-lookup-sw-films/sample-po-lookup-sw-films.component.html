@@ -9,7 +9,7 @@
   </po-radio-group>
 </div>
 
-<hr />
+<po-divider />
 
 <div class="po-row">
   <po-lookup
@@ -23,11 +23,21 @@
     [p-columns]="entityColumns"
     [p-filter-params]="filterParams"
     [p-filter-service]="filterService"
+    [p-infinite-scroll]="true"
     (p-selected)="onSelected($event)"
   >
   </po-lookup>
 </div>
 
-<div class="po-row" *ngIf="filmItemsFiltered && entity">
-  <po-table class="po-sm-12" [p-columns]="filmColumns" [p-items]="filmItemsFiltered" [p-sort]="true"> </po-table>
-</div>
+@if (filmItemsFiltered && entity) {
+  <div class="po-row">
+    <po-table
+      class="po-sm-12"
+      [p-columns]="filmColumns"
+      [p-items]="filmItemsFiltered"
+      [p-sort]="true"
+      [p-hide-table-search]="false"
+    >
+    </po-table>
+  </div>
+}

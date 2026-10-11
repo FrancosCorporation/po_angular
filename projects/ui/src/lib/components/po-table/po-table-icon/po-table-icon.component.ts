@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, TemplateRef } from '@angular/core';
 
 /**
  * @docsPrivate
@@ -10,11 +10,10 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
 @Component({
   selector: 'po-table-icon',
   templateUrl: './po-table-icon.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
 export class PoTableIconComponent {
-  tooltip: string;
-
   /** Define se o ícone é clicável. */
   @Input('p-clickable') clickable: boolean;
 
@@ -25,13 +24,15 @@ export class PoTableIconComponent {
   @Input('p-disabled') disabled: boolean;
 
   /** Classe css do ícone. */
-  @Input('p-icon') icon: string;
+  @Input('p-icon') icon: string | TemplateRef<void>;
 
   /** Texto do tooltip. */
   @Input('p-icon-tooltip') iconTooltip: string;
 
   /** Output click. */
   @Output('p-click') click: EventEmitter<any> = new EventEmitter();
+
+  tooltip: string;
 
   private get allowTooltip() {
     return !this.disabled && this.iconTooltip;

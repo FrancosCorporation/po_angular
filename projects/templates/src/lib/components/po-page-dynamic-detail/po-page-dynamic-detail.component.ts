@@ -1,8 +1,8 @@
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
-import { Route, Router, ActivatedRoute } from '@angular/router';
+import { Component, HostBinding, HostListener, Input, OnDestroy, OnInit, inject } from '@angular/core';
+import { ActivatedRoute, Route, Router } from '@angular/router';
 
-import { Subscription, concat, EMPTY, Observable, throwError, of } from 'rxjs';
-import { tap, catchError, map, switchMap } from 'rxjs/operators';
+import { EMPTY, Observable, Subscription, concat, of, throwError } from 'rxjs';
+import { catchError, map, switchMap, tap } from 'rxjs/operators';
 
 import {
   PoBreadcrumb,
@@ -14,19 +14,19 @@ import {
   poLocaleDefault
 } from '@po-ui/ng-components';
 
-import { convertToBoolean, mapObjectByProperties, valuesFromObject } from '../../utils/util';
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn, valuesFromObject, PoUtils } from '../../utils/util';
 
-import { PoPageDynamicDetailActions } from './interfaces/po-page-dynamic-detail-actions.interface';
-import { PoPageDynamicDetailField } from './interfaces/po-page-dynamic-detail-field.interface';
 import { PoPageDynamicService } from '../../services/po-page-dynamic/po-page-dynamic.service';
-import { PoPageDynamicDetailActionsService } from './po-page-dynamic-detail-actions.service';
-import { PoPageDynamicDetailOptions } from './interfaces/po-page-dynamic-detail-options.interface';
 import { PoPageCustomizationService } from './../../services/po-page-customization/po-page-customization.service';
 import { PoPageDynamicOptionsSchema } from './../../services/po-page-customization/po-page-dynamic-options.interface';
-import { PoPageDynamicDetailMetaData } from './interfaces/po-page-dynamic-detail-metadata.interface';
+import { PoPageDynamicDetailActions } from './interfaces/po-page-dynamic-detail-actions.interface';
 import { PoPageDynamicDetailBeforeBack } from './interfaces/po-page-dynamic-detail-before-back.interface';
-import { PoPageDynamicDetailBeforeRemove } from './interfaces/po-page-dynamic-detail-before-remove.interface';
 import { PoPageDynamicDetailBeforeEdit } from './interfaces/po-page-dynamic-detail-before-edit.interface';
+import { PoPageDynamicDetailBeforeRemove } from './interfaces/po-page-dynamic-detail-before-remove.interface';
+import { PoPageDynamicDetailField } from './interfaces/po-page-dynamic-detail-field.interface';
+import { PoPageDynamicDetailMetaData } from './interfaces/po-page-dynamic-detail-metadata.interface';
+import { PoPageDynamicDetailOptions } from './interfaces/po-page-dynamic-detail-options.interface';
+import { PoPageDynamicDetailActionsService } from './po-page-dynamic-detail-actions.service';
 
 type UrlOrPoCustomizationFunction = string | (() => PoPageDynamicDetailOptions);
 
@@ -78,29 +78,38 @@ export const poPageDynamicDetailLiteralsDefault = {
  *
  * ### Utilização via rota
  *
- * Ao utilizar as rotas para carregar o template, o `page-dynamic-detail` disponibiliza propriedades para
- * poder especificar o endpoint dos dados e dos metadados. Exemplo de utilização:
+ * Ao utilizar as rotas para inicializar o template, o `page-dynamic-detail` disponibiliza propriedades que devem ser fornecidas no arquivo de configuração de rotas da aplicação, para
+ * poder especificar o endpoint dos dados e dos metadados que serão carregados na inicialização.
  *
- * O componente primeiro irá carregar o metadado da rota definida na propriedade serviceMetadataApi
- * e depois irá buscar da rota definida na propriedade serviceLoadApi.
+ * Exemplo de utilização:
  *
- * > Caso o servidor retornar um erro ao recuperar o metadados, será repassado o metadados salvo em cache,
- * se o cache não existe será disparado uma notificação.
- *
+ * Arquivo de configuração de rotas da aplicação: `app-routing.module.ts`
  * ```
+ * const routes: Routes = [
  * {
  *   path: 'people/:id',
  *   component: PoPageDynamicDetailComponent,
  *   data: {
  *     serviceApi: 'http://localhost:3000/v1/people', // endpoint dos dados
- *     serviceMetadataApi: 'http://localhost:3000/v1/metadata', // endpoint dos metadados
- *     serviceLoadApi: 'http://localhost:3000/load-metadata' // endpoint de customizações dos metadados
+ *     serviceMetadataApi: 'http://localhost:3000/v1/metadata', // endpoint dos metadados utilizando o método HTTP Get
+ *     serviceLoadApi: 'http://localhost:3000/load-metadata' // endpoint de customizações dos metadados utilizando o método HTTP Post
  *   }
- * }
+ *  },
+ *  {
+ *   path: 'home',
+ *   component: HomeExampleComponent
+ *  }
+ * ];
+ *
  * ```
+ * O componente primeiro irá carregar o metadado da rota definida na propriedade serviceMetadataApi
+ * e depois irá buscar da rota definida na propriedade serviceLoadApi.
  *
  * A requisição dos metadados é feita na inicialização do template para buscar os metadados da página passando o
  * tipo do metadado esperado e a versão cacheada pelo browser.
+ *
+ * > Caso o servidor retornar um erro ao recuperar os metadados, serão repassados os metadados salvos em cache,
+ * se o cache não existir será disparada uma notificação.
  *
  * O formato esperado na resposta da requisição está especificado na interface
  * [PoPageDynamicDetailMetadata](/documentation/po-page-dynamic-detail#po-page-dynamic-detail-metadata). Por exemplo:
@@ -127,6 +136,20 @@ export const poPageDynamicDetailLiteralsDefault = {
  * GET {end-point}/metadata?type=detail&version={version}
  * ```
  *
+ * #### Tokens customizáveis
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade         | Descrição                                   | Valor Padrão                          |
+ * |---------------------|---------------------------------------------|---------------------------------------|
+ * | **Header**          |                                             |                                       |
+ * | `--padding`         | Espaçamento do header                       | `var(--spacing-xs) var(--spacing-md)` |
+ * | `--gap`             | Espaçamento entre os breadcrumbs e o título | `var(--spacing-md)`                   |
+ * | `--gap-actions`     | Espaçamento entre as ações                  | `var(--spacing-xs)`                   |
+ * | `--font-family`     | Família tipográfica do título               | `var(--font-family-theme)`            |
+ * | **Content**         |                                             |                                       |
+ * | `--padding-content` | Espaçamento do conteúdo                     | `var(--spacing-xs) var(--spacing-sm)` |
+ *
  * @example
  *
  * <example name="po-page-dynamic-detail-user" title="PO Page Dynamic Detail User">
@@ -137,74 +160,20 @@ export const poPageDynamicDetailLiteralsDefault = {
 @Component({
   selector: 'po-page-dynamic-detail',
   templateUrl: './po-page-dynamic-detail.component.html',
-  providers: [PoPageDynamicService, PoPageDynamicDetailActionsService]
+  providers: [PoPageDynamicService, PoPageDynamicDetailActionsService],
+  standalone: false
 })
 export class PoPageDynamicDetailComponent implements OnInit, OnDestroy {
-  private subscriptions: Array<Subscription> = [];
-
-  private _actions: PoPageDynamicDetailActions = {};
-  private _autoRouter: boolean = false;
-  private _duplicates: Array<any> = [];
-  private _fields: Array<any> = [];
-  private _keys: Array<any> = [];
-  private _pageActions: Array<PoPageAction> = [];
-
-  literals;
-  model: any = {};
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Define as ações da página de acordo com a interface `PoPageDynamicDetailActions`.
-   */
-  @Input('p-actions') set actions(value: PoPageDynamicDetailActions) {
-    this._actions = this.isObject(value) ? value : {};
-
-    this._pageActions = this.getPageActions(this._actions);
-  }
-
-  get actions() {
-    return { ...this._actions };
-  }
-
-  /**
-   * @todo Validar rotas na mão pois se existir uma rota '**' o catch do navigation não funciona.
-   *
-   * @optional
-   *
-   * @description
-   *
-   * Cria automaticamente as rotas de edição (novo/duplicate) e detalhes caso as ações
-   * estejam definidas nas ações.
-   *
-   * > Para o correto funcionamento não pode haver nenhum rota coringa (`**`) especificada.
-   *
-   * @default false
-   */
-  @Input('p-auto-router') set autoRouter(value: boolean) {
-    this._autoRouter = convertToBoolean(value);
-  }
-
-  get autoRouter(): boolean {
-    return this._autoRouter;
-  }
+  private readonly router = inject(Router);
+  private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly poNotification = inject(PoNotificationService);
+  private readonly poDialogService = inject(PoDialogService);
+  private readonly poPageDynamicService = inject(PoPageDynamicService);
+  private readonly poPageDynamicDetailActionsService = inject(PoPageDynamicDetailActionsService);
+  private readonly poPageCustomizationService = inject(PoPageCustomizationService);
 
   /** Objeto com propriedades do breadcrumb. */
   @Input('p-breadcrumb') breadcrumb?: PoBreadcrumb = { items: [] };
-
-  /** Lista dos campos exibidos na página. */
-  @Input('p-fields') set fields(value: Array<PoPageDynamicDetailField>) {
-    this._fields = Array.isArray(value) ? [...value] : [];
-
-    this._keys = this.getKeysByFields(this.fields);
-    this._duplicates = this.getDuplicatesByFields(this.fields);
-  }
-
-  get fields(): Array<PoPageDynamicDetailField> {
-    return this._fields;
-  }
 
   /**
    * Função ou serviço que será executado na inicialização do componente.
@@ -276,16 +245,100 @@ export class PoPageDynamicDetailComponent implements OnInit, OnDestroy {
    */
   @Input('p-service-api') serviceApi: string;
 
-  constructor(
-    private router: Router,
-    private activatedRoute: ActivatedRoute,
-    private poNotification: PoNotificationService,
-    private poDialogService: PoDialogService,
-    private poPageDynamicService: PoPageDynamicService,
-    private poPageDynamicDetailActionsService: PoPageDynamicDetailActionsService,
-    private poPageCustomizationService: PoPageCustomizationService,
-    languageService: PoLanguageService
-  ) {
+  literals;
+  model: any = {};
+
+  private readonly subscriptions: Array<Subscription> = [];
+
+  private _actions: PoPageDynamicDetailActions = {};
+  private _autoRouter: boolean = false;
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _duplicates: Array<any> = [];
+  private _fields: Array<any> = [];
+  private _keys: Array<any> = [];
+  private _pageActions: Array<PoPageAction> = [];
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as ações da página de acordo com a interface `PoPageDynamicDetailActions`.
+   */
+  @Input('p-actions') set actions(value: PoPageDynamicDetailActions) {
+    this._actions = this.isObject(value) ? value : {};
+
+    this._pageActions = this.getPageActions(this._actions);
+  }
+
+  get actions() {
+    return { ...this._actions };
+  }
+
+  /**
+   * @todo Validar rotas na mão pois se existir uma rota '**' o catch do navigation não funciona.
+   *
+   * @optional
+   *
+   * @description
+   *
+   * Cria automaticamente as rotas de edição (novo/duplicate) e detalhes caso as ações
+   * estejam definidas nas ações.
+   *
+   * > Para o correto funcionamento não pode haver nenhum rota coringa (`**`) especificada.
+   *
+   * @default false
+   */
+  @Input('p-auto-router') set autoRouter(value: boolean) {
+    this._autoRouter = convertToBoolean(value);
+  }
+
+  get autoRouter(): boolean {
+    return this._autoRouter;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
+  }
+
+  /** Lista dos campos exibidos na página. */
+  @Input('p-fields') set fields(value: Array<PoPageDynamicDetailField>) {
+    this._fields = Array.isArray(value) ? [...value] : [];
+
+    this._keys = this.getKeysByFields(this.fields);
+    this._duplicates = this.getDuplicatesByFields(this.fields);
+  }
+
+  get fields(): Array<PoPageDynamicDetailField> {
+    return this._fields;
+  }
+
+  /* eslint-disable max-params */
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     const language = languageService.getShortLanguage();
 
     this.literals = {
@@ -293,6 +346,7 @@ export class PoPageDynamicDetailComponent implements OnInit, OnDestroy {
       ...poPageDynamicDetailLiteralsDefault[language]
     };
   }
+  /* eslint-enable max-params */
 
   ngOnInit(): void {
     this.loadDataFromAPI();
@@ -316,6 +370,15 @@ export class PoPageDynamicDetailComponent implements OnInit, OnDestroy {
 
   get pageActions() {
     return [...this._pageActions];
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
   }
 
   private remove(
@@ -371,7 +434,7 @@ export class PoPageDynamicDetailComponent implements OnInit, OnDestroy {
   }
 
   private formatUniqueKey(item) {
-    const keys = mapObjectByProperties(item, this.keys);
+    const keys = PoUtils.mapObjectByProperties(item, this.keys);
 
     return valuesFromObject(keys).join('|');
   }
@@ -453,6 +516,7 @@ export class PoPageDynamicDetailComponent implements OnInit, OnDestroy {
         return;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       this.router.config.unshift(<Route>{
         path: route.path,
         component: route.component,
@@ -520,7 +584,8 @@ export class PoPageDynamicDetailComponent implements OnInit, OnDestroy {
     if (actions.remove) {
       pageActions.push({
         label: this.literals.pageActionRemove,
-        action: this.confirmRemove.bind(this, actions.remove, this.actions.beforeRemove)
+        action: this.confirmRemove.bind(this, actions.remove, this.actions.beforeRemove),
+        type: 'danger'
       });
     }
 

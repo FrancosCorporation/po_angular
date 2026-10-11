@@ -1,24 +1,77 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 
-import { PoBreadcrumb, PoBreadcrumbItem } from '@po-ui/ng-components';
-import { PoCheckboxGroupOption, PoSelectOption } from '@po-ui/ng-components';
+import {
+  PoBreadcrumb,
+  PoBreadcrumbItem,
+  PoCheckboxGroupOption,
+  PoHelperOptions,
+  PoNotificationService,
+  PoPageAction,
+  PoPageDefaultLiterals,
+  PoRadioGroupOption,
+  PoSelectOption
+} from '@po-ui/ng-components';
 
-import { PoNotificationService } from '@po-ui/ng-components';
-import { PoPageAction, PoPageDefaultLiterals } from '@po-ui/ng-components';
+interface EditableAction extends PoPageAction {
+  visible: boolean;
+  disabled?: boolean;
+}
 
 @Component({
   selector: 'sample-po-page-default-labs',
-  templateUrl: './sample-po-page-default-labs.component.html'
+  templateUrl: './sample-po-page-default-labs.component.html',
+  standalone: false
 })
 export class SamplePoPageDefaultLabsComponent implements OnInit {
-  action: PoPageAction;
-  actions: Array<PoPageAction>;
-  breadcrumb: PoBreadcrumb;
-  breadcrumbItem: PoBreadcrumbItem;
-  breadcrumbParams: any;
-  customLiterals: PoPageDefaultLiterals;
-  literals: string;
-  title: string;
+  private poNotification = inject(PoNotificationService);
+
+  action: EditableAction = { label: '', visible: true, disabled: false };
+  actions: Array<EditableAction> = [];
+  breadcrumb: PoBreadcrumb = { items: [] };
+  breadcrumbItem: PoBreadcrumbItem = { label: '', link: undefined };
+  breadcrumbParams: { property?: string; value?: string } = {};
+  componentsSize: string = 'medium';
+  customLiterals: PoPageDefaultLiterals | undefined;
+  literals: string = '';
+  pageActionsLayout: string = 'default';
+  pageHeaderType: string = 'primary';
+  subtitle: string = '';
+  title: string = 'PO Page Default';
+
+  helperContent: string = '';
+  helperFooterLabel: string = '';
+  helperTitle: string = '';
+  helperType: 'help' | 'info' = 'info';
+  showHelper: boolean = false;
+  showRefresh: boolean = false;
+
+  public readonly helperTypeOptions: Array<PoSelectOption> = [
+    { label: 'help', value: 'help' },
+    { label: 'info', value: 'info' }
+  ];
+
+  get helper(): PoHelperOptions | undefined {
+    if (!this.showHelper || !this.helperContent) {
+      return undefined;
+    }
+    const options: PoHelperOptions = {
+      title: this.helperTitle,
+      content: this.helperContent,
+      type: this.helperType
+    };
+    if (this.helperType === 'help' && this.helperFooterLabel) {
+      options.footerAction = {
+        label: this.helperFooterLabel,
+        action: () => this.poNotification.information('Footer action clicked')
+      };
+    }
+    return options;
+  }
+
+  public readonly actionKindOptions: Array<PoSelectOption> = [
+    { label: 'primary', value: 'primary' },
+    { label: 'secondary', value: 'secondary' }
+  ];
 
   public readonly actionOptions: Array<PoCheckboxGroupOption> = [
     { label: 'Disabled', value: 'disabled' },
@@ -27,10 +80,28 @@ export class SamplePoPageDefaultLabsComponent implements OnInit {
     { label: 'Visible', value: 'visible' }
   ];
 
+  public readonly componentsSizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
+  ];
+
   public readonly iconOptions: Array<PoSelectOption> = [
-    { value: 'po-icon-news', label: 'po-icon-news' },
-    { value: 'po-icon-search', label: 'po-icon-search' },
-    { value: 'po-icon-world', label: 'po-icon-world' }
+    { value: 'an an-newspaper', label: 'an an-newspaper' },
+    { value: 'an an-magnifying-glass', label: 'an an-magnifying-glass' },
+    { value: 'an an-globe', label: 'an an-globe' },
+    { value: 'fa fa-podcast', label: 'fa fa-podcast' }
+  ];
+
+  public readonly pageActionsLayoutOptions: Array<PoSelectOption> = [
+    { label: 'default', value: 'default' },
+    { label: 'dropdown', value: 'dropdown' },
+    { label: 'mixed', value: 'mixed' }
+  ];
+
+  public readonly pageHeaderTypeOptions: Array<PoSelectOption> = [
+    { label: 'primary', value: 'primary' },
+    { label: 'secondary', value: 'secondary' },
+    { label: 'tertiary', value: 'tertiary' }
   ];
 
   public readonly typeOptions: Array<PoSelectOption> = [
@@ -38,14 +109,16 @@ export class SamplePoPageDefaultLabsComponent implements OnInit {
     { label: 'Default', value: 'default' }
   ];
 
-  constructor(private poNotification: PoNotificationService) {}
-
   ngOnInit() {
     this.restore();
   }
 
-  addAction(action: PoPageAction) {
-    const newAction = Object.assign({}, action);
+  addAction(action: EditableAction) {
+    const newAction: EditableAction = {
+      ...action,
+      visible: action.visible !== undefined ? action.visible : true,
+      disabled: action.disabled !== undefined ? action.disabled : false
+    };
     newAction.action = newAction.action ? this.showAction.bind(this, newAction.action) : undefined;
     this.actions = [...this.actions, newAction];
 
@@ -54,11 +127,13 @@ export class SamplePoPageDefaultLabsComponent implements OnInit {
 
   addBreadcrumbItem() {
     this.breadcrumb.items = this.breadcrumb.items.concat([this.breadcrumbItem]);
-    this.breadcrumbItem = { label: undefined, link: undefined };
+    this.breadcrumbItem = { label: '', link: undefined };
   }
 
   addBreadcrumbParam() {
-    const newParam = { [this.breadcrumbParams.property]: this.breadcrumbParams.value };
+    const newParam = {
+      [this.breadcrumbParams.property || '']: this.breadcrumbParams.value
+    };
 
     if (this.breadcrumb.params) {
       this.breadcrumb.params = Object.assign(this.breadcrumb.params, newParam);
@@ -77,20 +152,40 @@ export class SamplePoPageDefaultLabsComponent implements OnInit {
     }
   }
 
+  onBack() {
+    this.poNotification.information('Back button clicked (p-back event)');
+  }
+
+  onRefresh = (): void => {
+    this.poNotification.success('Page refreshed (p-refresh event)');
+  };
+
   restore() {
     this.actions = [];
     this.breadcrumb = { items: [] };
-    this.breadcrumbItem = { label: undefined, link: undefined };
+    this.breadcrumbItem = { label: '', link: undefined };
     this.breadcrumbParams = {};
+    this.componentsSize = 'medium';
+    this.customLiterals = undefined;
+    this.helperContent = '';
+    this.helperFooterLabel = '';
+    this.helperTitle = '';
+    this.helperType = 'info';
     this.literals = '';
+    this.pageActionsLayout = 'default';
+    this.pageHeaderType = 'primary';
+    this.showHelper = false;
+    this.showRefresh = false;
+    this.subtitle = '';
     this.title = 'PO Page Default';
     this.restoreActionForm();
   }
 
   restoreActionForm() {
     this.action = {
-      label: undefined,
-      visible: null
+      label: '',
+      visible: true,
+      disabled: false
     };
   }
 

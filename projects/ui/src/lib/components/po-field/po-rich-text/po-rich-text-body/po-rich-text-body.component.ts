@@ -1,10 +1,25 @@
-import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild, OnDestroy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  EventEmitter,
+  HostBinding,
+  HostListener,
+  Input,
+  OnDestroy,
+  OnInit,
+  OnChanges,
+  Output,
+  SimpleChanges,
+  ViewChild,
+  inject,
+  ChangeDetectorRef
+} from '@angular/core';
 
 import { Subscription } from 'rxjs';
 
-import { isFirefox, isIE, isIEOrEdge, openExternalLink } from './../../../../utils/util';
-import { PoKeyCodeEnum } from './../../../../enums/po-key-code.enum';
 import { PoRichTextService } from '../po-rich-text.service';
+import { PoKeyCodeEnum } from './../../../../enums/po-key-code.enum';
+import { mapInputSizeToLoadingIcon, PoUtils } from './../../../../utils/util';
 
 const poRichTextBodyCommands = [
   'bold',
@@ -20,18 +35,18 @@ const poRichTextBodyCommands = [
 
 @Component({
   selector: 'po-rich-text-body',
-  templateUrl: './po-rich-text-body.component.html'
+  templateUrl: './po-rich-text-body.component.html',
+  standalone: false
 })
-export class PoRichTextBodyComponent implements OnInit, OnDestroy {
-  private isLinkEditing: boolean;
-  private linkElement: any;
-  private timeoutChange: any;
-  private valueBeforeChange: any;
-  private modelSubscription: Subscription;
+export class PoRichTextBodyComponent implements OnInit, OnDestroy, OnChanges {
+  private readonly richTextService = inject(PoRichTextService);
+  private readonly cd = inject(ChangeDetectorRef);
 
   @ViewChild('bodyElement', { static: true }) bodyElement: ElementRef;
 
   @Input('p-height') height?: string;
+
+  @Input('p-label') label: string;
 
   @Input('p-model-value') modelValue?: string;
 
@@ -39,17 +54,41 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
 
   @Input('p-readonly') readonly?: string;
 
+  @Input('p-disabled') disabled: boolean = false;
+
+  @Input('p-loading') loading: boolean = false;
+
   @Output('p-change') change = new EventEmitter<any>();
 
   @Output('p-commands') commands = new EventEmitter<any>();
 
+  @Output('p-keydown') keydown: EventEmitter<KeyboardEvent> = new EventEmitter<KeyboardEvent>();
+
   @Output('p-selected-link') selectedLink = new EventEmitter<any>();
+
+  @HostBinding('attr.p-size')
+  @Input('p-size')
+  size: string;
 
   @Output('p-shortcut-command') shortcutCommand = new EventEmitter<any>();
 
   @Output('p-value') value = new EventEmitter<any>();
 
-  constructor(private richTextService: PoRichTextService) {}
+  @Output('p-blur') blur = new EventEmitter<any>();
+
+  private isLinkEditing: boolean;
+  private linkElement: any;
+  private timeoutChange: any;
+  private valueBeforeChange: any;
+  private modelSubscription: Subscription;
+  private resizeObserver: ResizeObserver;
+  hasScroll: boolean = false;
+  hasValue: boolean = false;
+
+  @HostListener('window:resize')
+  onWindowResize() {
+    this.checkScrollState();
+  }
 
   ngOnInit() {
     this.bodyElement.nativeElement.designMode = 'on';
@@ -59,11 +98,23 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
       this.bodyElement.nativeElement.innerHTML = '';
       this.updateValueWithModelValue();
       this.addClickListenerOnAnchorElements();
+
+      this.updateHasValue();
+      this.checkScrollState();
     });
+
+    this.initResizeObserver();
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['loading']) {
+      setTimeout(() => this.checkScrollState());
+    }
   }
 
   ngOnDestroy() {
     this.modelSubscription?.unsubscribe();
+    this.resizeObserver?.disconnect();
   }
 
   executeCommand(command: string | { command: any; value: string | any }) {
@@ -94,6 +145,7 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
   }
 
   onBlur() {
+    this.blur.emit();
     if (this.modelValue !== this.valueBeforeChange) {
       clearTimeout(this.timeoutChange);
       this.timeoutChange = setTimeout(() => {
@@ -117,6 +169,7 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
   onKeyDown(event) {
     const keyK = event.keyCode === PoKeyCodeEnum.keyK;
     const isLinkShortcut = (keyK && event.ctrlKey) || (keyK && event.metaKey);
+    const isFieldFocused = document.activeElement === this.bodyElement.nativeElement;
 
     if (isLinkShortcut) {
       event.preventDefault();
@@ -124,6 +177,10 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
     }
 
     this.toggleCursorOnLink(event, 'add');
+
+    if (isFieldFocused) {
+      this.keydown.emit(event);
+    }
   }
 
   onKeyUp(event: any) {
@@ -132,11 +189,19 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
     this.removeBrElement();
     this.updateModel();
     this.emitSelectionCommands();
+
+    this.updateHasValue();
+    this.checkScrollState();
   }
 
   onPaste() {
     this.update();
-    setTimeout(() => this.addClickListenerOnAnchorElements());
+    setTimeout(() => {
+      this.addClickListenerOnAnchorElements();
+
+      this.updateHasValue();
+      this.checkScrollState();
+    });
   }
 
   update() {
@@ -146,7 +211,15 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
       this.removeBrElement();
       this.updateModel();
       this.emitSelectionCommands();
+
+      this.updateHasValue();
+      this.checkScrollState();
     });
+  }
+
+  //Transforma o tamanho do input para o tamanho do ícone de loading correspondente
+  protected mapSizeToIcon(size: string): string {
+    return mapInputSizeToLoadingIcon(size);
   }
 
   private addClickListenerOnAnchorElements() {
@@ -160,7 +233,7 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
     const rgbColor = document.queryCommandValue('ForeColor');
 
     let hexColor;
-    if (!isIE()) {
+    if (!PoUtils.isIE()) {
       hexColor = this.rgbToHex(rgbColor);
     }
 
@@ -192,12 +265,12 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
   }
 
   private handleCommandLink(linkCommand: string, urlLink: string, urlLinkText: string) {
-    if (isIE()) {
+    if (PoUtils.isIE()) {
       this.insertHtmlLinkElement(urlLink, urlLinkText);
     } else {
       // '&nbsp;' necessário para o cursor não ficar preso dentro do link no Firefox.
       const linkValue =
-        isFirefox() && !this.isLinkEditing
+        PoUtils.isFirefox() && !this.isLinkEditing
           ? `&nbsp;${this.makeLinkTag(urlLink, urlLinkText)}&nbsp;`
           : this.makeLinkTag(urlLink, urlLinkText);
 
@@ -232,7 +305,7 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
     if (textSelection && textSelection.node && textSelection.tagName === 'A') {
       this.linkElement = textSelection.node;
       isLink = true;
-    } else if ((isFirefox() || isIEOrEdge()) && this.verifyCursorPositionInFirefoxIEEdge()) {
+    } else if ((PoUtils.isFirefox() || PoUtils.isIEOrEdge()) && this.verifyCursorPositionInFirefoxIEEdge()) {
       isLink = true;
     } else {
       isLink = textSelection ? this.isParentNodeAnchor(textSelection) : false;
@@ -261,7 +334,7 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
     return `<a class="po-rich-text-link" href="${urlLink}" target="_blank">${urlLinkText || urlLink}</a>`;
   }
 
-  private onAnchorClick = event => {
+  private readonly onAnchorClick = event => {
     const { target, ctrlKey, metaKey } = event;
     let url;
     let elementLink;
@@ -278,7 +351,7 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
         url = target.attributes.href.value;
         elementLink = target;
       }
-      openExternalLink(url);
+      PoUtils.openExternalLink(url);
       elementLink.classList.remove('po-clickable');
     }
   };
@@ -365,5 +438,35 @@ export class PoRichTextBodyComponent implements OnInit, OnDestroy {
     }
 
     return isLink;
+  }
+
+  private get bodyEl(): HTMLElement {
+    return this.bodyElement?.nativeElement;
+  }
+
+  private updateHasValue(): void {
+    const text = this.bodyEl?.innerText?.trim();
+    this.hasValue = !!text;
+  }
+
+  private checkScrollState(): void {
+    const el = this.bodyEl;
+    if (!el) return;
+
+    this.hasScroll = el.scrollHeight > el.clientHeight;
+    this.cd.markForCheck();
+  }
+
+  private initResizeObserver(): void {
+    const el = this.bodyEl;
+    if (!el || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    this.resizeObserver = new ResizeObserver(() => {
+      this.checkScrollState();
+    });
+
+    this.resizeObserver.observe(el);
   }
 }

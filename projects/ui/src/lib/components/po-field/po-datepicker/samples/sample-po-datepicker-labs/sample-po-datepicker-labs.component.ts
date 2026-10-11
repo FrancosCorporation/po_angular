@@ -4,9 +4,11 @@ import { PoCheckboxGroupOption, PoDatepickerIsoFormat, PoRadioGroupOption } from
 
 @Component({
   selector: 'sample-po-datepicker-labs',
-  templateUrl: './sample-po-datepicker-labs.component.html'
+  templateUrl: './sample-po-datepicker-labs.component.html',
+  standalone: false
 })
 export class SamplePoDatepickerLabsComponent implements OnInit {
+  helperText: string;
   datepicker: string | Date;
   maxDate: string | Date;
   errorPattern: string;
@@ -19,6 +21,7 @@ export class SamplePoDatepickerLabsComponent implements OnInit {
   placeholder: string;
   properties: Array<string>;
   minDate: string | Date;
+  size: string;
 
   public readonly isoFormatOptions: Array<PoRadioGroupOption> = [
     { label: 'Basic', value: PoDatepickerIsoFormat.Basic },
@@ -31,7 +34,13 @@ export class SamplePoDatepickerLabsComponent implements OnInit {
     { value: 'noAutocomplete', label: 'No Autocomplete' },
     { value: 'optional', label: 'Optional' },
     { value: 'readonly', label: 'Read Only' },
-    { value: 'required', label: 'Required' }
+    { value: 'required', label: 'Required' },
+    { value: 'requiredFieldErrorMessage', label: 'Required Field Error Message' },
+    { value: 'showRequired', label: 'Show Required' },
+    { value: 'errorLimit', label: 'Limit Error Message' },
+    { value: 'labelTextWrap', label: 'Label Text Wrap' },
+    { value: 'loading', label: 'Loading' },
+    { value: 'compactLabel', label: 'Compact Label' }
   ];
 
   public readonly formatOptions: Array<PoRadioGroupOption> = [
@@ -47,6 +56,11 @@ export class SamplePoDatepickerLabsComponent implements OnInit {
     { label: 'ru', value: 'ru' }
   ];
 
+  public readonly sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
+  ];
+
   ngOnInit() {
     this.restore();
   }
@@ -56,6 +70,7 @@ export class SamplePoDatepickerLabsComponent implements OnInit {
   }
 
   restore() {
+    this.helperText = '';
     this.datepicker = undefined;
     this.maxDate = undefined;
     this.event = undefined;
@@ -68,5 +83,6 @@ export class SamplePoDatepickerLabsComponent implements OnInit {
     this.placeholder = undefined;
     this.properties = [];
     this.minDate = undefined;
+    this.size = 'medium';
   }
 }

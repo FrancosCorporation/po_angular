@@ -5,12 +5,16 @@ import { MenuComponentsService } from './menu-components.service';
 
 @Component({
   templateUrl: './documentation.component.html',
-  providers: [MenuComponentsService]
+  providers: [MenuComponentsService],
+  standalone: false
 })
 export class DocumentationComponent implements OnInit {
   menus = [];
 
-  constructor(private menuComponentsService: MenuComponentsService, private http: HttpClient) {}
+  constructor(
+    private menuComponentsService: MenuComponentsService,
+    private http: HttpClient
+  ) {}
 
   ngOnInit() {
     this.http.get('./assets/json/api-list.json').subscribe(

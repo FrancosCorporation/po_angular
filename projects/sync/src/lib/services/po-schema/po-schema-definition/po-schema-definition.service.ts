@@ -12,9 +12,11 @@ import { PoSyncSchema } from './../../po-sync/interfaces/po-sync-schema.interfac
  *
  * Serviço que disponibiliza métodos que permite operar sobre as definições dos *schemas*.
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoSchemaDefinitionService {
-  constructor(private poStorage: PoStorageService) {}
+  constructor(private readonly poStorage: PoStorageService) {}
 
   /**
    * Destrói a chave do *storage* que contém as definições dos *schemas*.

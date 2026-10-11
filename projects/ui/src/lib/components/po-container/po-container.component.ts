@@ -20,11 +20,13 @@ import { PoContainerBaseComponent } from './po-container-base.component';
  * <example name="po-container-dashboard" title="PO Container - Dashboard">
  *  <file name="sample-po-container-dashboard/sample-po-container-dashboard.component.html"> </file>
  *  <file name="sample-po-container-dashboard/sample-po-container-dashboard.component.ts"> </file>
+ *  <file name="sample-po-container-dashboard/sample-po-container-dashboard.component.css"> </file>
  *  <file name="sample-po-container-dashboard/sample-po-container-dashboard.service.ts"> </file>
  * </example>
  */
 @Component({
   selector: 'po-container',
-  templateUrl: './po-container.component.html'
+  templateUrl: './po-container.component.html',
+  standalone: false
 })
 export class PoContainerComponent extends PoContainerBaseComponent {}

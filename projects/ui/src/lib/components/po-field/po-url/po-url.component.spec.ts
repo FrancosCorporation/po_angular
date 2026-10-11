@@ -1,4 +1,4 @@
-import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
 
 import { configureTestSuite } from './../../../util-test/util-expect.spec';
 
@@ -6,6 +6,7 @@ import { PoUrlComponent } from './po-url.component';
 import { PoFieldContainerBottomComponent } from './../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
 import { PoFieldContainerComponent } from '../po-field-container/po-field-container.component';
 import { PoCleanComponent } from './../po-clean/po-clean.component';
+import { PoIconModule } from '../../po-icon';
 
 describe('PoUrlComponent:', () => {
   let component: PoUrlComponent;
@@ -13,6 +14,7 @@ describe('PoUrlComponent:', () => {
 
   configureTestSuite(() => {
     TestBed.configureTestingModule({
+      imports: [PoIconModule],
       declarations: [PoUrlComponent, PoFieldContainerComponent, PoCleanComponent, PoFieldContainerBottomComponent]
     });
   });
@@ -23,8 +25,6 @@ describe('PoUrlComponent:', () => {
     component.label = 'Label de teste';
     component.help = 'Help de teste';
     component.clean = true;
-
-    fixture.detectChanges();
   });
 
   it('should be created', () => {
@@ -32,6 +32,7 @@ describe('PoUrlComponent:', () => {
   });
 
   it('should return null in extraValidation()', () => {
+    fixture.detectChanges();
     expect(component.extraValidation(null)).toBeNull();
   });
 
@@ -188,7 +189,8 @@ describe('PoUrlComponent:', () => {
     const eventKeyup = new KeyboardEvent('keyup', { 'key': 'a' });
 
     it('should have `world` icon', () => {
-      expect(fixture.debugElement.nativeElement.querySelector('.po-icon-world')).toBeTruthy();
+      fixture.detectChanges();
+      expect(fixture.debugElement.nativeElement.querySelector('.an-globe-simple')).toBeTruthy();
     });
 
     it('should call `getScreenValue` and `verifyPattern` on input keyup', fakeAsync(() => {
@@ -206,37 +208,8 @@ describe('PoUrlComponent:', () => {
 
       expect(component.getScreenValue).toHaveBeenCalled();
       expect(component.verifyPattern).toHaveBeenCalled();
+      flush();
     }));
-
-    it(`should show optional if the field isn't 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = false;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeTruthy();
-    });
-
-    it(`shouldn't show optional if the field is 'required', has 'label' and 'p-optional' is true.`, () => {
-      component.required = true;
-      component.optional = true;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-    });
-
-    it(`shouldn't show optional if the field isn't 'required', has 'label' but 'p-optional' is false.`, () => {
-      component.required = true;
-      component.optional = false;
-      component.label = 'label';
-
-      fixture.detectChanges();
-
-      expect(fixture.debugElement.nativeElement.querySelector('.po-field-optional')).toBeNull();
-    });
 
     it('url: should be valid and have `ng-valid`', fakeAsync(() => {
       component.ngAfterViewInit();
@@ -251,6 +224,7 @@ describe('PoUrlComponent:', () => {
 
       expect(input.value).toContain(fakeURL);
       expect(fixture.debugElement.nativeElement.querySelectorAll('po-url.ng-dirty.ng-valid')).toBeTruthy();
+      flush();
     }));
 
     it('url: should be invalid and have `ng-invalid`', fakeAsync(() => {
@@ -266,6 +240,7 @@ describe('PoUrlComponent:', () => {
 
       expect(input.value).toContain(fakeURL);
       expect(fixture.debugElement.nativeElement.querySelectorAll('po-url.ng-dirty.ng-invalid')).toBeTruthy();
+      flush();
     }));
   });
 });

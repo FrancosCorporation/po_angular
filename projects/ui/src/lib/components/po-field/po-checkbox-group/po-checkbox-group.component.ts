@@ -6,13 +6,20 @@ import {
   Component,
   ElementRef,
   forwardRef,
+  inject,
+  OnChanges,
   QueryList,
+  SimpleChanges,
+  ViewChild,
   ViewChildren
 } from '@angular/core';
 import { NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
-import { PoCheckboxGroupBaseComponent } from './po-checkbox-group-base.component';
+import { PoCheckboxComponent } from '../po-checkbox/po-checkbox.component';
 import { PoCheckboxGroupOption } from './interfaces/po-checkbox-group-option.interface';
+import { PoCheckboxGroupBaseComponent } from './po-checkbox-group-base.component';
+import { setHelperSettings } from '../../../utils/util';
+import { PoHelperComponent } from '../../po-helper';
 
 /**
  * @docsExtends PoCheckboxGroupBaseComponent
@@ -49,13 +56,23 @@ import { PoCheckboxGroupOption } from './interfaces/po-checkbox-group-option.int
       useExisting: forwardRef(() => PoCheckboxGroupComponent),
       multi: true
     }
-  ]
+  ],
+  standalone: false
 })
-export class PoCheckboxGroupComponent extends PoCheckboxGroupBaseComponent implements AfterViewChecked, AfterViewInit {
-  @ViewChildren('checkboxLabel') checkboxLabels: QueryList<ElementRef>;
+export class PoCheckboxGroupComponent
+  extends PoCheckboxGroupBaseComponent
+  implements AfterViewChecked, AfterViewInit, OnChanges
+{
+  private readonly changeDetector = inject(ChangeDetectorRef);
 
-  constructor(private changeDetector: ChangeDetectorRef) {
-    super();
+  @ViewChildren('checkboxLabel') checkboxLabels: QueryList<PoCheckboxComponent>;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
+  private readonly el: ElementRef = inject(ElementRef);
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
   }
 
   ngAfterViewChecked(): void {
@@ -65,6 +82,18 @@ export class PoCheckboxGroupComponent extends PoCheckboxGroupBaseComponent imple
   ngAfterViewInit() {
     if (this.autoFocus) {
       this.focus();
+    }
+  }
+
+  onBlur(checkbox: PoCheckboxComponent) {
+    if (!this.isCheckboxOptionFocused(checkbox) && this.getAdditionalHelpTooltip() && this.displayAdditionalHelp) {
+      this.showAdditionalHelp();
+    }
+  }
+
+  emitAdditionalHelp() {
+    if (this.label && this.isAdditionalHelpEventTriggered()) {
+      this.additionalHelp.emit();
     }
   }
 
@@ -90,12 +119,26 @@ export class PoCheckboxGroupComponent extends PoCheckboxGroupBaseComponent imple
       const checkboxLabel = this.checkboxLabels.find((_, index) => !this.options[index].disabled);
 
       if (checkboxLabel) {
-        checkboxLabel.nativeElement.focus();
+        checkboxLabel.checkboxLabel.nativeElement.focus();
       }
     }
   }
 
-  onKeyDown(event: KeyboardEvent, option: PoCheckboxGroupOption) {
+  getAdditionalHelpTooltip() {
+    return this.isAdditionalHelpEventTriggered() ? null : this.additionalHelpTooltip;
+  }
+
+  getErrorPattern() {
+    return this.fieldErrorMessage && this.hasInvalidClass() ? this.fieldErrorMessage : '';
+  }
+
+  hasInvalidClass() {
+    return (
+      this.el.nativeElement.classList.contains('ng-invalid') && this.el.nativeElement.classList.contains('ng-dirty')
+    );
+  }
+
+  onKeyDown(event: KeyboardEvent, option: PoCheckboxGroupOption, checkbox?: PoCheckboxComponent) {
     const spaceBar = 32;
 
     if (event.which === spaceBar || event.keyCode === spaceBar) {
@@ -103,9 +146,81 @@ export class PoCheckboxGroupComponent extends PoCheckboxGroupBaseComponent imple
 
       event.preventDefault();
     }
+
+    if (this.isCheckboxOptionFocused(checkbox)) {
+      this.keydown.emit(event);
+    }
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * //Exemplo com p-label e p-helper
+   * <po-checkbox-group
+   *  #checkboxGroup
+   *  ...
+   *  p-label="Label do checkbox"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, checkboxGroup)"
+   * ></po-checkbox-group>
+   * ```
+   * ```
+   * ...
+   * onKeyDown(event: KeyboardEvent, inp: PoCheckboxGroupComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  showAdditionalHelp(): boolean {
+    this.displayAdditionalHelp = !this.displayAdditionalHelp;
+    const helper = this.poHelperComponent();
+    const isHelpEvt = this.isAdditionalHelpEventTriggered();
+    if (!this.label && (helper || this.additionalHelpTooltip || isHelpEvt)) {
+      if (isHelpEvt) {
+        this.additionalHelp.emit();
+      }
+      if (typeof helper !== 'string' && typeof helper?.eventOnClick === 'function') {
+        helper.eventOnClick();
+        return;
+      }
+      if (this.helperEl?.helperIsVisible()) {
+        this.helperEl?.closeHelperPopover();
+        return;
+      }
+      this.helperEl?.openHelperPopover();
+      return;
+    }
+    return this.displayAdditionalHelp;
   }
 
   trackByFn(index) {
     return index;
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.isAdditionalHelpEventTriggered() ? this.additionalHelp : undefined
+    );
+  }
+
+  private isAdditionalHelpEventTriggered(): boolean {
+    return (
+      this.additionalHelpEventTrigger === 'event' ||
+      (this.additionalHelpEventTrigger === undefined && this.additionalHelp.observed)
+    );
+  }
+
+  private isCheckboxOptionFocused(checkbox: PoCheckboxComponent): boolean {
+    return document.activeElement === checkbox.checkboxLabel.nativeElement;
   }
 }

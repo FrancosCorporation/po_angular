@@ -1,32 +1,46 @@
 import {
-  AfterViewInit,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
-  ContentChild,
   Component,
-  DoCheck,
   ElementRef,
+  EventEmitter,
   forwardRef,
-  HostListener,
-  IterableDiffers,
+  Input,
+  OnChanges,
+  Output,
   Renderer2,
-  ViewChild
+  SimpleChanges,
+  ViewChild,
+  inject,
+  input,
+  HostListener,
+  HostBinding
 } from '@angular/core';
-import { NG_VALUE_ACCESSOR, NG_VALIDATORS } from '@angular/forms';
+import { AbstractControl, NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
-import { isMobile, removeDuplicatedOptions, removeUndefinedAndNullOptions, validValue } from '../../../utils/util';
-import { PoControlPositionService } from './../../../services/po-control-position/po-control-position.service';
-import { PoKeyCodeEnum } from './../../../enums/po-key-code.enum';
+import {
+  convertToBoolean,
+  getDefaultSizeFn,
+  isSafari,
+  mapInputSizeToLoadingIcon,
+  setHelperSettings,
+  uuid,
+  validateSizeFn,
+  validValue,
+  PoUtils
+} from '../../../utils/util';
 
-import { PoSelectBaseComponent } from './po-select-base.component';
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import { PoFieldValidateModel } from '../po-field-validate.model';
+import { PoSelectOptionGroup } from './po-select-option-group.interface';
 import { PoSelectOption } from './po-select-option.interface';
-import { PoSelectOptionTemplateDirective } from './po-select-option-template/po-select-option-template.directive';
+import { PoHelperComponent, PoHelperOptions } from '../../po-helper';
 
-const poSelectContentOffset = 8;
-const poSelectContentPositionDefault = 'bottom';
+const PO_SELECT_FIELD_LABEL_DEFAULT = 'label';
+const PO_SELECT_FIELD_VALUE_DEFAULT = 'value';
 
 /**
- * @docsExtends PoSelectBaseComponent
+ * @docsExtends PoFieldValidateModel
  *
  * @example
  *
@@ -43,10 +57,58 @@ const poSelectContentPositionDefault = 'bottom';
  * <example name="po-select-customer-registration" title="PO Select - Customer registration">
  *   <file name="sample-po-select-customer-registration/sample-po-select-customer-registration.component.html"> </file>
  *   <file name="sample-po-select-customer-registration/sample-po-select-customer-registration.component.ts"> </file>
+ *   <file name="sample-po-select-customer-registration/sample-po-select-customer-registration.component.css"> </file>
  *   <file name="sample-po-select-customer-registration/sample-po-select-customer-registration.service.ts"> </file>
- *   <file name='sample-po-select-customer-registration/sample-po-select-customer-registration.component.e2e-spec.ts'> </file>
- *   <file name='sample-po-select-customer-registration/sample-po-select-customer-registration.component.po.ts'> </file>
  * </example>
+ *
+ * <example name="po-select-companies" title="PO Select Companies">
+ *   <file name="sample-po-select-companies/sample-po-select-companies.component.html"> </file>
+ *   <file name="sample-po-select-companies/sample-po-select-companies.component.ts"> </file>
+ * </example>
+ *
+ * @description
+ *
+ * O componente po-select exibe uma lista de valores e permite que o usuário selecione um desses valores.
+ * Os valores listados podem ser fixos ou dinâmicos de acordo com a necessidade do desenvolvedor, dando mais flexibilidade ao componente.
+ * O po-select não permite que o usuário informe um valor diferente dos valores listados, isso garante a consistência da informação.
+ * O po-select não permite que sejam passados valores duplicados, undefined e null para as opções, excluindo-os da lista.
+ *
+ * > Ao passar um valor para o _model_ que não está na lista de opções, o mesmo será definido como `undefined`.
+ *
+ * Também existe a possibilidade de utilizar um _template_ para a exibição dos itens da lista,
+ * veja mais em **[p-combo-option-template](/documentation/po-combo-option-template)**.
+ *
+ * > Obs: o template **[p-select-option-template](/documentation/po-select-option-template)** será depreciado na versão 14.x.x.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                    |
+ * |----------------------------------------|-------------------------------------------------------|-------------------------------------------------|
+ * | **Default Values**                     |                                                       |                                                 |
+ * | `--font-family`                        | Família tipográfica usada                             | `var(--font-family-theme)`                      |
+ * | `--font-size`                          | Tamanho da fonte                                      | `var(--font-size-default)`                      |
+ * | `--text-color-empty`                   | Cor do placeholder                                    | `var(--color-neutral-light-30)`                 |
+ * | `--color`                              | Cor da borda                                          | `var(--color-neutral-dark-70)`                  |
+ * | `--background`                         | Cor de background                                     | `var(--color-neutral-light-05)`                 |
+ * | `--text-color`                         | Cor do texto                                          | `var(--color-neutral-dark-90)`                  |
+ * | `--padding-horizontal`                 | Preenchimento horizontal                              | `0.5em`                                         |
+ * | `--padding-vertical`                   | Preenchimento vertical                                | `0.7em`                                         |
+ * | `--field-container-title-justify`      | Alinhamento horizontal do título (`justify-content`)  | `space-between`                                 |
+ * | `--field-container-title-flex`         | Flex do título (`flex`)                               | `1 auto`                                        |
+ * | **Hover**                              |                                                       |                                                 |
+ * | `--color-hover`                        | Cor principal no estado hover                         | `var(--color-brand-01-dark)`                    |
+ * | `--background-hover`                   | Cor de background no estado hover                     | `var(--color-brand-01-lighter)`                 |
+ * | **Focused**                            |                                                       |                                                 |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                     |
+ * | `--color-focused`                      | Cor da borda no estado de focus                       | `var(--color-action-default)`                   |
+ * | **Disabled**                           |                                                       |                                                 |
+ * | `--color-disabled`                     | Cor principal no estado disabled                      | `var(--color-neutral-light-30)`                 |
+ * | `--background-color-disabled`&nbsp;    | Cor de background no estado disabled                  | `var(--color-neutral-light-20)`                 |
+ *
  */
 @Component({
   selector: 'po-select',
@@ -62,90 +124,335 @@ const poSelectContentPositionDefault = 'bottom';
       provide: NG_VALIDATORS,
       useExisting: forwardRef(() => PoSelectComponent),
       multi: true
-    },
-    PoControlPositionService
-  ]
+    }
+  ],
+  standalone: false
 })
-export class PoSelectComponent extends PoSelectBaseComponent implements AfterViewInit, DoCheck {
-  displayValue;
-  isMobile: any = isMobile();
-  modelValue: any;
-  open: boolean = false;
-  selectedValue: any;
-  selectIcon: string = 'po-icon-arrow-down';
-  scrollPosition: number;
+export class PoSelectComponent extends PoFieldValidateModel<any> implements OnChanges {
+  private readonly el = inject(ElementRef);
+  renderer = inject(Renderer2);
 
-  private differ: any;
-
-  eventListenerFunction: () => void;
-  eventResizeListener: () => void;
-
-  @ContentChild(PoSelectOptionTemplateDirective, { static: true })
-  selectOptionTemplate: PoSelectOptionTemplateDirective;
-
-  @ViewChild('contentList', { read: ElementRef, static: true }) contentList: ElementRef;
-  @ViewChild('icon', { read: ElementRef, static: true }) iconElement: ElementRef;
   @ViewChild('select', { read: ElementRef, static: true }) selectElement: ElementRef;
-  @ViewChild('selectButton', { read: ElementRef, static: true }) selectButtonElement: ElementRef;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
 
-  constructor(
-    element: ElementRef,
-    changeDetector: ChangeDetectorRef,
-    differs: IterableDiffers,
-    public renderer: Renderer2,
-    private controlPosition: PoControlPositionService
-  ) {
-    super(element, changeDetector);
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao sair do campo.
+   */
+  @Output('p-blur') blur: EventEmitter<any> = new EventEmitter();
 
-    this.differ = differs.find([]).create(null);
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado sempre que o valor do model é alterado, seja por interação do usuário
+   * ou por atualização programática (ex: `setValue`, `patchValue`, carregamento assíncrono).
+   *
+   * Diferentemente do `p-change`, que é disparado apenas por interação do usuário,
+   * o `p-change-model` cobre todos os cenários de alteração de valor.
+   *
+   * Não emite quando o novo valor é idêntico ao anterior (deduplicação automática).
+   */
+  @Output('p-change-model') changeModel: EventEmitter<any> = new EventEmitter();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Função para atualizar o ngModel do componente, necessário quando não for utilizado dentro da tag form.
+   *
+   * Na versão 12.2.0 do Angular a verificação `strictTemplates` vem true como default. Portanto, para utilizar
+   * two-way binding no componente deve se utilizar da seguinte forma:
+   *
+   * ```
+   * <po-select ... [ngModel]="selectModel" (ngModelChange)="selectModel = $event"> </po-select>
+   * ```
+   */
+  @Output('ngModelChange') ngModelChange: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Indica que o campo será somente para leitura.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-readonly', transform: convertToBoolean }) readonly: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   * Define se o título do campo será exibido de forma compacta.
+   *
+   * Quando habilitado (`true`), o modo compacto afeta o conjunto composto por:
+   * - `po-label`
+   * - `p-requirement (showRequired)`
+   * - `po-helper`
+   *
+   * Ou seja, todos os elementos relacionados ao título do campo
+   * (rótulo, indicador de obrigatoriedade e componente auxiliar) passam
+   * a seguir o comportamento de layout compacto.
+   *
+   * Também é possível definir esse comportamento de forma global,
+   * uma única vez, na folha de estilo geral da aplicação, por meio
+   * da customização dos tokens CSS:
+   *
+   * - `--field-container-title-justify`
+   * - `--field-container-title-flex`
+   *
+   * Exemplo:
+   *
+   * ```
+   * :root {
+   *   --field-container-title-justify: flex-start;
+   *   --field-container-title-flex: 0 1 auto;
+   * }
+   * ```
+   *
+   * Dessa forma, o layout compacto passa a ser o padrão da aplicação,
+   * sem a necessidade de definir a propriedade individualmente em cada campo.
+   *
+   * @default `false`
+   */
+  compactLabel = input<boolean, unknown>(false, { alias: 'p-compact-label', transform: convertToBoolean });
+
+  /** Mensagem que aparecerá enquanto nenhuma opção estiver selecionada. */
+  @Input('p-placeholder') placeholder?: string;
+
+  displayValue;
+  id = `po-select[${uuid()}]`;
+  modelValue: any;
+  modelLastUpdate: any;
+  selectedValue: any;
+  optionsDefault = [];
+  listGroupOptions = [];
+  optionWithoutGroup = [];
+  isSafari: boolean = isSafari();
+
+  protected onModelTouched: any;
+
+  private _fieldLabel?: string = PO_SELECT_FIELD_LABEL_DEFAULT;
+  private _fieldValue?: string = PO_SELECT_FIELD_VALUE_DEFAULT;
+  private _loading: boolean = false;
+  private _options: Array<PoSelectOption> | Array<PoSelectOptionGroup> | Array<any>;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+
+  /**
+   * Nesta propriedade deve ser definido uma coleção de objetos que implementam a interface `PoSelectOption`,
+   * ou uma coleção de objetos dentro de grupos diferentes, que seriam da interface `PoSelectOptionGroup`.
+   *
+   * Caso esta lista estiver vazia, o model será `undefined`.
+   *
+   * > Essa propriedade é imutável, ou seja, sempre que quiser atualizar a lista de opções disponíveis
+   * atualize a referência do objeto:
+   *
+   * ```
+   * // atualiza a referência do objeto garantindo a atualização do template
+   * this.options = [...this.options, { value: 'x', label: 'Nova opção' }];
+   *
+   * // evite, pois não atualiza a referência do objeto podendo gerar atrasos na atualização do template
+   * this.options.push({ value: 'x', label: 'Nova opção' });
+   * ```
+   *
+   * > Para coleção de objetos dentro de grupos distintos será exibido a label e opções somente se a propriedade `options` possua valores.
+   *  Sendo assim, a estrutura seguiria dessa forma:
+   *
+   * ```
+   * this.options = [{
+   *  label: 'Opções',
+   *  options: [
+   *    { value: 1, label: 'opção 1' },
+   *    { value: 2, label: 'opção 2' }
+   *  ],
+   * }];
+   * ```
+   *
+   * É possível a utilização de opções agrupadas e desagrupadas em conjunto, porém será feita a ordenação de exibir as opções
+   * desagrupadas acima.
+   *
+   */
+  @Input('p-options') set options(options: Array<PoSelectOption | PoSelectOptionGroup | any>) {
+    this.listGroupOptions = [];
+    this.optionWithoutGroup = [];
+
+    if (this.fieldLabel && this.fieldValue && options) {
+      options.map(option => {
+        if (this.isItemGroup(option)) {
+          option.options.map(opt => {
+            opt.label = opt[this.fieldLabel];
+            opt.value = opt[this.fieldValue];
+          });
+        } else {
+          option.label = option[this.fieldLabel];
+          option.value = option[this.fieldValue];
+        }
+      });
+    }
+
+    if (options) {
+      this.optionsDefault = [...options];
+      this.separateOptions();
+
+      this.optionsDefault = [];
+      this.optionsDefault = [...this.optionWithoutGroup, ...this.transformInArray(this.listGroupOptions)];
+      this.onUpdateOptions();
+      this._options = [...this.optionsDefault];
+    }
   }
 
-  get isInvisibleSelectNative() {
-    return this.readonly && this.isMobile;
+  get options() {
+    return this._options;
   }
 
-  @HostListener('keydown', ['$event']) onKeydown($event?: any) {
-    const charCode = $event.which || $event.keyCode;
-
-    // Tratamentos para quando o readonly for ativado.
-    if (this.readonly) {
-      // deve matar o evento do teclado devido a alterar o valor do model mesmo com os options fechados
-      if (charCode !== PoKeyCodeEnum.tab) {
-        this.disableDefaultEventAndToggleButton();
-        $event.preventDefault();
-      }
-      return;
-    }
-
-    // Seleciona os itens com as teclas "up" e "down"
-    if ((!this.open || $event.altKey) && (charCode === PoKeyCodeEnum.arrowDown || charCode === PoKeyCodeEnum.arrowUp)) {
-      this.disableDefaultEventAndToggleButton();
-    }
-
-    // Abre o po-select com as teclas "enter" e "espaço"
-    if (charCode === PoKeyCodeEnum.enter || charCode === PoKeyCodeEnum.space) {
-      this.disableDefaultEventAndToggleButton();
-    }
-
-    // Fecha o po-select com a tecla "tab"
-    if (this.open && charCode === PoKeyCodeEnum.tab) {
-      $event.preventDefault();
-      this.toggleButton();
+  /**
+   * @optional
+   *
+   * @description
+   * Deve ser informado o nome da propriedade do objeto que será utilizado para a conversão dos itens apresentados na lista do componente
+   * (`p-options`), esta propriedade será responsável pelo texto de apresentação de cada item da lista.
+   *
+   * @default `label`
+   */
+  @Input('p-field-label') set fieldLabel(value: string) {
+    this._fieldLabel = value || PO_SELECT_FIELD_LABEL_DEFAULT;
+    if (this.options && this.options.length > 0) {
+      this.options = [...this.options];
     }
   }
 
-  ngAfterViewInit() {
-    if (this.autoFocus) {
-      this.focus();
+  get fieldLabel() {
+    return this._fieldLabel;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   * Deve ser informado o nome da propriedade do objeto que será utilizado para a conversão dos itens apresentados na lista do componente
+   * (`p-options`), esta propriedade será responsável pelo valor de cada item da lista.
+   *
+   * @default `value`
+   */
+  @Input('p-field-value') set fieldValue(value: string) {
+    this._fieldValue = value || PO_SELECT_FIELD_VALUE_DEFAULT;
+    if (this.options && this.options.length > 0) {
+      this.options = [...this.options];
     }
   }
 
-  ngDoCheck() {
-    const change = this.differ.diff(this.options);
-    if (change) {
-      removeDuplicatedOptions(this.options);
-      removeUndefinedAndNullOptions(this.options);
+  /**
+   * @docsPrivate
+   *
+   * Determinar se o valor do compo deve retorna objeto do tipo {value: any, label: any}
+   */
+  @Input({ alias: 'p-control-value-with-label', transform: convertToBoolean }) controlValueWithLabel?: boolean = false;
+
+  get fieldValue() {
+    return this._fieldValue;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de carregamento no lado direito do campo para sinalizar que uma operação está em andamento.
+   *
+   * @default `false`
+   */
+  @HostBinding('attr.p-loading')
+  @Input({ alias: 'p-loading', transform: convertToBoolean })
+  set loading(value: boolean) {
+    this._loading = value;
+    this.changeDetector?.markForCheck();
+  }
+
+  get loading(): boolean {
+    return this._loading;
+  }
+
+  get isDisabled(): boolean {
+    return this.disabled || this.loading;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho do componente:
+   * - `small`: altura do input como 32px (disponível apenas para acessibilidade AA).
+   * - `medium`: altura do input como 44px.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as opções do componente de ajuda (po-helper) que será exibido ao lado do label quando a propriedade `p-label` for definida, ou, ao lado do componente na ausência da propriedade `p-label`.
+   * > Para mais informações acesse: https://po-ui.io/documentation/po-helper.
+   *
+   * > Ao configurar esta propriedade, o antigo ícone de ajuda adicional (`p-additional-help-tooltip` e `p-additional-help`) será ignorado.
+   */
+  poHelperComponent = input<PoHelperOptions | string>(undefined, { alias: 'p-helper' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita a quebra automática do texto da propriedade `p-label`. Quando `p-label-text-wrap` for verdadeiro, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
+   *
+   * @default `false`
+   */
+  labelTextWrap = input<boolean>(false, { alias: 'p-label-text-wrap' });
+
+  /* istanbul ignore next */
+  constructor() {
+    const changeDetector = inject(ChangeDetectorRef);
+
+    super(changeDetector);
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
     }
+
+    if (changes.options?.currentValue) {
+      this.options = changes.options.currentValue;
+    }
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
   }
 
   /**
@@ -171,18 +478,149 @@ export class PoSelectComponent extends PoSelectBaseComponent implements AfterVie
     }
   }
 
-  hideDropDown() {
-    this.selectIcon = 'po-icon-arrow-down';
-    this.selector('.po-select-container').classList.remove('po-select-show');
-    this.open = false;
-
-    this.changeDetector.markForCheck();
-    this.selectElement.nativeElement.focus();
-
-    this.removeListeners();
+  getErrorPattern() {
+    return this.fieldErrorMessage && this.hasInvalidClass() ? this.fieldErrorMessage : '';
   }
 
-  isEqual(value: any, inputValue: any): boolean {
+  hasInvalidClass() {
+    return (
+      this.el.nativeElement.classList.contains('ng-invalid') && this.el.nativeElement.classList.contains('ng-dirty')
+    );
+  }
+
+  //Transforma o tamanho do input para o tamanho do ícone de loading correspondente
+  mapSizeToIcon(size: string): string {
+    return mapInputSizeToLoadingIcon(size);
+  }
+
+  onBlur(event: any) {
+    this.onModelTouched?.();
+
+    if (event.type === 'blur') {
+      this.blur.emit();
+    }
+  }
+
+  // Altera o valor ao selecionar um item.
+  onSelectChange(value: any) {
+    this.onModelTouched?.();
+    if (value && this.options && this.options.length) {
+      const optionFound: any = this.findOptionValue(value);
+
+      if (optionFound) {
+        this.updateValues(optionFound);
+      }
+    }
+  }
+
+  onUpdateOptions() {
+    if (this.modelValue) {
+      this.onSelectChange(this.modelValue);
+    }
+  }
+
+  // Atualiza valores
+  updateValues(option: any): void {
+    if (this.selectedValue !== option[this.fieldValue]) {
+      this.selectedValue = option[this.fieldValue];
+      this.selectElement.nativeElement.value = option[this.fieldValue];
+      this.updateModel(this.getValueUpdate(option));
+      this.displayValue = option[this.fieldLabel];
+      this.emitChange(option[this.fieldValue]);
+      this.controlChangeModelEmitter(option[this.fieldValue]);
+    }
+  }
+
+  // Recebe as alterações do model
+  onWriteValue(value: any) {
+    value = this.getValueWrite(value);
+    const optionFound: any = this.findOptionValue(value);
+
+    if (optionFound) {
+      this.selectElement.nativeElement.value = optionFound.value;
+      this.selectedValue = optionFound[this.fieldValue];
+      this.displayValue = optionFound[this.fieldLabel];
+    } else if (validValue(this.selectedValue)) {
+      this.selectElement.nativeElement.value = undefined;
+      this.updateModel(undefined);
+      this.selectedValue = undefined;
+      this.displayValue = undefined;
+    }
+
+    this.modelValue = value;
+    this.changeDetector.detectChanges();
+    this.controlChangeModelEmitter(this.selectedValue);
+  }
+
+  extraValidation(c: AbstractControl): { [key: string]: any } {
+    return null;
+  }
+
+  isItemGroup(item: PoSelectOption | PoSelectOptionGroup | any): boolean {
+    if (item.options) {
+      return Array.isArray(item.options) ? true : false;
+    }
+    return false;
+  }
+
+  onKeyDown(event: KeyboardEvent): void {
+    const isFieldFocused = document.activeElement === this.selectElement.nativeElement;
+
+    if (isFieldFocused) {
+      this.keydown.emit(event);
+    }
+  }
+
+  registerOnTouched(fn: any): void {
+    this.onModelTouched = fn;
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * //Exemplo com p-label e p-helper
+   * <po-select
+   *  #select
+   *  ...
+   *  p-label="Label do select"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, select)"
+   * ></po-select>
+   * ```
+   * ```typescript
+   * onKeyDown(event: KeyboardEvent, inp: PoSelectComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  override showAdditionalHelp(): boolean {
+    return super.showAdditionalHelp(this.helperEl, this.poHelperComponent());
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.isAdditionalHelpEventTriggered() ? this.additionalHelp : undefined
+    );
+  }
+
+  controlChangeModelEmitter(value: any) {
+    if (this.modelLastUpdate !== value) {
+      this.changeModel.emit(value);
+      this.modelLastUpdate = value;
+    }
+  }
+
+  private isEqual(value: any, inputValue: any): boolean {
     if ((value || value === 0) && inputValue) {
       return value.toString() === inputValue.toString();
     }
@@ -194,168 +632,66 @@ export class PoSelectComponent extends PoSelectBaseComponent implements AfterVie
     return value === inputValue;
   }
 
-  onOptionClick(option: PoSelectOption) {
-    this.updateModel(option);
-    this.toggleButton();
-  }
-
-  // Altera o valor ao selecionar um item.
-  onSelectChange(value: any) {
-    if (value && this.options && this.options.length) {
-      const optionFound: PoSelectOption = this.findOptionValue(value);
-
-      if (optionFound) {
-        this.updateModel(optionFound);
-        this.setScrollPosition(optionFound.value);
-      }
-    }
-  }
-
-  onUpdateOptions() {
-    if (this.modelValue) {
-      this.onSelectChange(this.modelValue);
-    }
-  }
-
-  scrollValue(index, clientHeight) {
-    const heightScrollValue: number = index * this.getSelectItemHeight();
-
-    return (this.scrollPosition = heightScrollValue > clientHeight ? heightScrollValue : 0);
-  }
-
-  selector(query: string): Element {
-    return this.element.nativeElement.querySelector(query);
-  }
-
-  toggleButton(): void {
-    this.open ? this.hideDropDown() : this.showDropdown();
-  }
-
-  // Atualiza valores
-  updateModel(option: PoSelectOption): void {
-    if (this.selectedValue !== option.value) {
-      this.selectedValue = option.value;
-      this.selectElement.nativeElement.value = option.value;
-      this.callModelChange(option.value);
-      this.displayValue = option.label;
-      this.onChange(option.value);
-    }
-  }
-
-  // Esconde Content do Select quando for clicado fora
-  wasClickedOnToggle(event: MouseEvent): void {
-    if (
-      !this.selectButtonElement.nativeElement.contains(event.target) &&
-      !this.iconElement.nativeElement.contains(event.target)
-    ) {
-      this.hideDropDown();
-    }
-  }
-
-  // Recebe as alterações do model
-  writeValue(value: any) {
-    const optionFound: PoSelectOption = this.findOptionValue(value);
-
-    if (optionFound) {
-      this.selectElement.nativeElement.value = optionFound.value;
-      this.selectedValue = optionFound.value;
-      this.displayValue = optionFound.label;
-      this.setScrollPosition(optionFound.value);
-    } else if (validValue(this.selectedValue)) {
-      this.selectElement.nativeElement.value = undefined;
-      this.callModelChange(undefined);
-      this.selectedValue = undefined;
-      this.displayValue = undefined;
-    }
-
-    this.modelValue = value;
-    this.changeDetector.detectChanges();
-  }
-
-  // Método necessário para bloquear o evento default do select nativo.
-  // Ao utilizar event.preventDefault(), nos navegadores Firefox e IE o mesmo não cancela o evento.
-  private disableDefaultEventAndToggleButton() {
-    this.selectElement.nativeElement.style.display = 'none';
-
-    setTimeout(() => {
-      this.selectElement.nativeElement.style.display = 'block';
-      this.toggleButton();
-    });
-  }
-
   private findOptionValue(value: any) {
-    return this.options.find(option => this.isEqual(option.value, value));
+    if (this.options) {
+      return this.options.find(option => this.isEqual(option.value, value));
+    }
   }
 
-  private getSelectItemHeight() {
-    const selectItem = this.selector('div.po-select-item');
+  private getValueUpdate(option: any) {
+    if (this.controlValueWithLabel) {
+      return {
+        value: option[this.fieldValue],
+        label: option[this.fieldLabel]
+      };
+    }
 
-    return selectItem && selectItem.clientHeight;
+    return option[this.fieldValue];
   }
 
-  private initializeListeners() {
-    this.clickoutListener = this.renderer.listen('document', 'click', (event: MouseEvent) => {
-      this.wasClickedOnToggle(event);
+  private getValueWrite(data: any) {
+    if (!this.controlValueWithLabel || data == null) {
+      return data;
+    }
+
+    if (data?.value !== undefined) {
+      return data.value;
+    }
+
+    return data;
+  }
+
+  private transformInArray(objectWithArray: Array<any>): Array<PoSelectOptionGroup | any> {
+    return objectWithArray.reduce((options, items) => {
+      if (items.options) {
+        return options.concat(items.options);
+      }
+      return [];
+    }, []);
+  }
+
+  private separateOptions() {
+    this.optionsDefault.forEach(option => {
+      if (this.isItemGroup(option)) {
+        this.validateOptions(option.options);
+        this.listGroupOptions.push(option);
+      } else {
+        this.optionWithoutGroup.push(option);
+      }
     });
 
-    this.eventResizeListener = this.renderer.listen('window', 'resize', () => {
-      this.hideDropDown();
-    });
-
-    window.addEventListener('scroll', this.onScroll, true);
-  }
-
-  private onScroll = (): void => {
-    this.controlPosition.adjustPosition(poSelectContentPositionDefault);
-  };
-
-  private removeListeners() {
-    if (this.clickoutListener) {
-      this.clickoutListener();
-    }
-
-    this.eventResizeListener();
-    window.removeEventListener('scroll', this.onScroll, true);
-  }
-
-  private setPositionDropdown() {
-    this.controlPosition.setElements(
-      this.contentList.nativeElement,
-      poSelectContentOffset,
-      this.selectButtonElement,
-      ['top', 'bottom'],
-      true
-    );
-
-    this.controlPosition.adjustPosition(poSelectContentPositionDefault);
-  }
-
-  private setScrollPosition(value: any) {
-    const ulDropdpwn = this.element.nativeElement.querySelector('ul.po-select-content');
-
-    if (value && this.options && this.options.length) {
-      const optionFound: PoSelectOption = this.findOptionValue(value);
-
-      if (optionFound) {
-        const index = this.options.indexOf(optionFound);
-        ulDropdpwn.scrollTop = this.scrollValue(index, ulDropdpwn.clientHeight);
-      }
+    if (this.optionWithoutGroup.length > 0) {
+      this.validateOptions(this.optionWithoutGroup);
     }
   }
 
-  private showDropdown() {
-    if (!this.readonly) {
-      this.selectElement.nativeElement.focus();
-      this.selectIcon = 'po-icon-arrow-up';
-      this.selector('.po-select-container').classList.add('po-select-show');
-      this.open = true;
-      this.changeDetector.markForCheck();
-      this.setPositionDropdown();
-      this.initializeListeners();
+  private validateOptions(options: Array<any>) {
+    PoUtils.removeDuplicatedOptions(options);
+    PoUtils.removeUndefinedAndNullOptions(options);
+  }
 
-      if (this.options && this.options.length) {
-        this.setScrollPosition(this.selectedValue);
-      }
-    }
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
   }
 }

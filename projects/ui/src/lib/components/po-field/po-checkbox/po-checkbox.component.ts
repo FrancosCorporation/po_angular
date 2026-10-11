@@ -1,17 +1,23 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
   ElementRef,
-  forwardRef,
+  OnChanges,
+  OnInit,
+  SimpleChanges,
   ViewChild,
-  AfterViewInit
+  forwardRef,
+  inject
 } from '@angular/core';
 import { NG_VALUE_ACCESSOR } from '@angular/forms';
 
 import { PoKeyCodeEnum } from './../../../enums/po-key-code.enum';
 
 import { PoCheckboxBaseComponent } from './po-checkbox-base.component';
+import { setHelperSettings, updateTooltip } from '../../../utils/util';
+import { PoHelperComponent } from '../../po-helper';
 
 /**
  * @docsExtends PoCheckboxBaseComponent
@@ -43,13 +49,21 @@ import { PoCheckboxBaseComponent } from './po-checkbox-base.component';
       useExisting: forwardRef(() => PoCheckboxComponent),
       multi: true
     }
-  ]
+  ],
+  standalone: false
 })
-export class PoCheckboxComponent extends PoCheckboxBaseComponent implements AfterViewInit {
-  @ViewChild('checkboxLabel', { static: true }) checkboxLabel: ElementRef;
+export class PoCheckboxComponent extends PoCheckboxBaseComponent implements AfterViewInit, OnChanges, OnInit {
+  private readonly changeDetector = inject(ChangeDetectorRef);
 
-  constructor(private changeDetector: ChangeDetectorRef) {
-    super();
+  showTip = false;
+
+  @ViewChild('checkboxLabel', { static: false }) checkboxLabel: ElementRef;
+  @ViewChild('labelEl', { read: ElementRef }) labelEl!: ElementRef<HTMLElement>;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
+  constructor() {
+    const changeDetector = inject(ChangeDetectorRef);
+    super(changeDetector);
+    this.changeDetector = changeDetector;
   }
 
   /**
@@ -77,22 +91,129 @@ export class PoCheckboxComponent extends PoCheckboxBaseComponent implements Afte
     }
   }
 
+  onBlur() {
+    this.onTouched?.();
+    this.blur.emit();
+  }
+
   ngAfterViewInit() {
+    this.handleLabelTooltip();
     if (this.autoFocus) {
       this.focus();
     }
   }
 
-  onKeyDown(event: KeyboardEvent, value: boolean) {
-    if (event.which === PoKeyCodeEnum.space || event.keyCode === PoKeyCodeEnum.space) {
-      this.checkOption(value);
-
-      event.preventDefault();
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label || changes.additionalHelpTooltip || changes.helper || changes.size) {
+      this.displayAdditionalHelp = false;
+      queueMicrotask(() => this.handleLabelTooltip());
+      this.changeDetector.detectChanges();
     }
   }
 
-  protected changeModelValue(value: boolean | null) {
-    this.checkboxValue = typeof value === 'boolean' || value === null ? value : false;
+  ngOnInit(): void {
+    this.handleLabelTooltip();
+  }
+
+  emitAdditionalHelp() {
+    if (this.label && this.isAdditionalHelpEventTriggered()) {
+      this.additionalHelp.emit();
+    }
+  }
+
+  getAdditionalHelpTooltip() {
+    return this.isAdditionalHelpEventTriggered() ? null : this.additionalHelpTooltip;
+  }
+
+  onKeyDown(event: KeyboardEvent, value: boolean | string) {
+    const isFieldFocused = document.activeElement === this.checkboxLabel.nativeElement;
+
+    if (event.which === PoKeyCodeEnum.space || event.keyCode === PoKeyCodeEnum.space) {
+      this.checkOption(event, value);
+
+      event.preventDefault();
+    }
+
+    if (isFieldFocused) {
+      this.keydown.emit(event);
+    }
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * //Exemplo com label e p-helper
+   * <po-checkbox
+   *  #checkbox
+   *  ...
+   *  p-label="Label do checkbox"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, checkbox)"
+   * ></po-checkbox>
+   * ```
+   * ```
+   * ...
+   * onKeyDown(event: KeyboardEvent, inp: PoCheckboxComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  showAdditionalHelp(): boolean {
+    this.displayAdditionalHelp = !this.displayAdditionalHelp;
+    if (this.helperEl?.helperIsVisible()) {
+      this.helperEl?.closeHelperPopover();
+      return;
+    }
+    if (this.helperEl) {
+      const helper = this.poHelperComponent();
+      const isHelpEvt = this.isAdditionalHelpEventTriggered();
+      if (isHelpEvt) {
+        this.additionalHelp.emit();
+        return;
+      }
+      if (helper && typeof helper !== 'string' && helper.eventOnClick) {
+        helper.eventOnClick();
+        return;
+      }
+      this.helperEl?.openHelperPopover();
+    }
+    return this.displayAdditionalHelp;
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.isAdditionalHelpEventTriggered() ? this.additionalHelp : undefined
+    );
+  }
+
+  protected changeModelValue(value: boolean | null | string) {
+    if (value === null) {
+      this.checkboxValue = 'mixed';
+    } else {
+      this.checkboxValue = typeof value === 'boolean' || value === null ? value : false;
+    }
     this.changeDetector.detectChanges();
+  }
+
+  private isAdditionalHelpEventTriggered(): boolean {
+    return (
+      this.additionalHelpEventTrigger === 'event' ||
+      (this.additionalHelpEventTrigger === undefined && this.additionalHelp.observed)
+    );
+  }
+
+  public handleLabelTooltip(): void {
+    this.showTip = updateTooltip(this.showTip, this.labelEl);
+    this.changeDetector.markForCheck();
   }
 }

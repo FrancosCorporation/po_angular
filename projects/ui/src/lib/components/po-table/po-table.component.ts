@@ -1,37 +1,51 @@
+import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
+
+import { DecimalPipe } from '@angular/common';
 import {
   AfterViewInit,
   ChangeDetectorRef,
   Component,
   ContentChild,
+  ContentChildren,
   DoCheck,
   ElementRef,
   IterableDiffers,
   OnDestroy,
+  OnInit,
   QueryList,
   Renderer2,
+  TemplateRef,
   ViewChild,
   ViewChildren,
-  ViewContainerRef,
-  ContentChildren,
-  TemplateRef
+  inject
 } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
-import { Router } from '@angular/router';
+import { Observable, Subscription } from 'rxjs';
 
-import { convertToBoolean } from '../../utils/util';
 import { PoDateService } from '../../services/po-date/po-date.service';
 import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { PoNotificationService } from '../../services/po-notification/po-notification.service';
+import { getDefaultSizeFn, PO_TABLE_ROW_HEIGHT_BY_SPACING, PoUtils, uuid } from '../../utils/util';
+import { PoModalAction, PoModalComponent } from '../po-modal';
 import { PoPopupComponent } from '../po-popup/po-popup.component';
-
-import { PoTableAction } from './interfaces/po-table-action.interface';
-import { PoTableBaseComponent } from './po-table-base.component';
-import { PoTableColumn } from './interfaces/po-table-column.interface';
 import { PoTableColumnLabel } from './po-table-column-label/po-table-column-label.interface';
-import { PoTableRowTemplateDirective } from './po-table-row-template/po-table-row-template.directive';
-import { PoTableSubtitleColumn } from './po-table-subtitle-footer/po-table-subtitle-column.interface';
+
+import { PoSearchAiColumn } from '../po-field/po-search-ai/interfaces/po-search-ai-column.interface';
+import { PoSearchAiError, PoSearchAiResult } from '../po-field/po-search-ai/interfaces/po-search-ai.interface';
+import { PoSearchAiComponent } from '../po-field/po-search-ai/po-search-ai.component';
+import { poSearchAiFilterItems } from '../po-field/po-search-ai/po-search-ai-odata-filter';
+import { extractSearchAiColumns } from '../po-field/po-search-ai/po-search-ai-utils';
+import { PoTableRowTemplateArrowDirection } from './enums/po-table-row-template-arrow-direction.enum';
+import { PoTableAction } from './interfaces/po-table-action.interface';
+import { PoTableColumn } from './interfaces/po-table-column.interface';
+import { PoTableBaseComponent, QueryParamsType } from './po-table-base.component';
 import { PoTableCellTemplateDirective } from './po-table-cell-template/po-table-cell-template.directive';
 import { PoTableColumnTemplateDirective } from './po-table-column-template/po-table-column-template.directive';
-import { PoTableRowTemplateArrowDirection } from './enums/po-table-row-template-arrow-direction.enum';
+import { PoTableRowTemplateDirective } from './po-table-row-template/po-table-row-template.directive';
+import { PoTableSubtitleColumn } from './po-table-subtitle-footer/po-table-subtitle-column.interface';
+import { PoTableService } from './services/po-table.service';
+import { PoTableColumnSpacing } from './enums/po-table-spacing.enum';
+import { PoFieldSize } from '../../enums/po-field-size.enum';
 
 /**
  * @docsExtends PoTableBaseComponent
@@ -46,9 +60,12 @@ import { PoTableRowTemplateArrowDirection } from './enums/po-table-row-template-
  * <example name="po-table-labs" title="PO Table Labs">
  *  <file name="sample-po-table-labs/sample-po-table-labs.component.ts"> </file>
  *  <file name="sample-po-table-labs/sample-po-table-labs.component.html"> </file>
- *  <file name="sample-po-table-labs/sample-po-table-labs.component.e2e-spec.ts"> </file>
- *  <file name="sample-po-table-labs/sample-po-table-labs.component.po.ts"> </file>
  *  <file name="sample-po-table-labs/sample-po-table-labs.service.ts"> </file>
+ * </example>
+ *
+ * <example name="po-table-with-api" title="PO Table using API">
+ *  <file name="sample-po-table-with-api/sample-po-table-with-api.component.ts"> </file>
+ *  <file name="sample-po-table-with-api/sample-po-table-with-api.component.html"> </file>
  * </example>
  *
  * <example name="po-table-transport" title="PO Table - Transport">
@@ -70,36 +87,104 @@ import { PoTableRowTemplateArrowDirection } from './enums/po-table-row-template-
  *  <file name="sample-po-table-components/sample-po-table-components.service.ts"> </file>
  *  <file name="sample-po-table-components/sample-po-table-components.component.css"> </file>
  * </example>
+ *
+ * <example name="po-table-heroes" title="PO Table - Heroes">
+ *  <file name="sample-po-table-heroes/sample-po-table-heroes.component.ts"> </file>
+ *  <file name="sample-po-table-heroes/sample-po-table-heroes.component.html"> </file>
+ *  <file name="sample-po-table-heroes/sample-po-table-heroes.service.ts"> </file>
+ * </example>
+ *
+ * <example name="po-table-draggable" title="PO Table Drag and Drop">
+ *  <file name="sample-po-table-draggable/sample-po-table-draggable.component.html"> </file>
+ *  <file name="sample-po-table-draggable/sample-po-table-draggable.component.ts"> </file>
+ * </example>
+ *
+ * <example name="po-table-search-ai" title="PO Table - Search A.I. (EXPERIMENTAL)">
+ *  <file name="sample-po-table-search-ai/sample-po-table-search-ai.component.html"> </file>
+ *  <file name="sample-po-table-search-ai/sample-po-table-search-ai.component.ts"> </file>
+ * </example>
  */
 @Component({
   selector: 'po-table',
   templateUrl: './po-table.component.html',
-  providers: [PoDateService]
+  providers: [PoDateService, PoTableService],
+  standalone: false
 })
-export class PoTableComponent extends PoTableBaseComponent implements AfterViewInit, DoCheck, OnDestroy {
-  private _columnManagerTarget: ElementRef;
+export class PoTableComponent extends PoTableBaseComponent implements AfterViewInit, DoCheck, OnDestroy, OnInit {
+  @ContentChild(PoTableRowTemplateDirective, { static: true }) tableRowTemplate: PoTableRowTemplateDirective;
+  @ContentChild(PoTableCellTemplateDirective) tableCellTemplate: PoTableCellTemplateDirective;
+
+  @ContentChildren(PoTableColumnTemplateDirective) tableColumnTemplates: QueryList<PoTableColumnTemplateDirective>;
+
+  @ViewChild('noColumnsHeader', { read: ElementRef }) noColumnsHeader;
+  @ViewChild('popup') poPopupComponent: PoPopupComponent;
+  @ViewChild(PoModalComponent, { static: true }) modalDelete: PoModalComponent;
+  @ViewChild('tableFooter', { read: ElementRef, static: false }) tableFooterElement;
+  @ViewChild('tableWrapper', { read: ElementRef, static: false }) tableWrapperElement;
+
+  @ViewChild('tableTemplate', { read: ElementRef, static: false }) tableTemplate;
+  @ViewChild('tableVirtualScroll', { read: ElementRef, static: false }) tableVirtualScroll;
+  @ViewChild('tableScrollable', { read: ElementRef, static: false }) tableScrollable;
+
+  @ViewChild('columnManager', { read: ElementRef, static: false }) columnManager;
+  @ViewChild('columnBatchActions', { read: ElementRef, static: false }) columnBatchActions;
+  @ViewChild('columnActionLeft', { read: ElementRef, static: false }) columnActionLeft;
+
+  @ViewChildren('actionsIconElement', { read: ElementRef }) actionsIconElement: QueryList<any>;
+  @ViewChildren('actionsElement', { read: ElementRef }) actionsElement: QueryList<any>;
+  @ViewChild('filterInput') filterInput: ElementRef;
+  @ViewChild('poSearchInput', { read: ElementRef, static: true }) poSearchInput: ElementRef;
+  @ViewChild(PoSearchAiComponent) searchAiComponent: PoSearchAiComponent;
+  @ViewChild(CdkVirtualScrollViewport, { static: false }) public viewPort: CdkVirtualScrollViewport;
+
+  poNotification = inject(PoNotificationService);
 
   heightTableContainer: number;
+  heightTableVirtual: number;
   popupTarget;
   tableOpacity: number = 0;
   tooltipText: string;
+  itemSize: number;
+  lastVisibleColumnsSelected: Array<PoTableColumn>;
+  tagColor: string;
+  idRadio: string;
+  inputFieldValue = '';
+  JSON: JSON;
+  newOrderColumns: Array<PoTableColumn>;
+  sizeLoading: string = 'sm';
+  headerWidth: number;
 
-  private differ;
+  close: PoModalAction = {
+    action: () => {
+      this.modalDelete.close();
+    },
+    label: this.literals.cancel,
+    danger: true
+  };
+
+  confirm: PoModalAction = {
+    action: () => {
+      this.deleteItems();
+    },
+    label: this.literals.delete
+  };
+
+  private _columnManagerTarget: ElementRef;
+  private _columnManagerTargetFixed: ElementRef;
+  private readonly differ;
   private footerHeight;
-  private initialized = false;
   private timeoutResize;
   private visibleElement = false;
+  private scrollEvent$: Observable<any>;
+  private subscriptionScrollEvent: Subscription;
+  private readonly subscriptionService: Subscription = new Subscription();
+  private aiParserSubscription?: Subscription;
 
-  private clickListener: () => void;
-  private resizeListener: () => void;
-
-  @ContentChild(PoTableRowTemplateDirective, { static: true }) tableRowTemplate: PoTableRowTemplateDirective;
-  @ContentChild(PoTableCellTemplateDirective) tableCellTemplate: PoTableCellTemplateDirective;
-  @ContentChildren(PoTableColumnTemplateDirective) tableColumnTemplates: QueryList<PoTableColumnTemplateDirective>;
+  private readonly clickListener: () => void;
+  private readonly resizeListener: () => void;
 
   @ViewChild('columnManagerTarget') set columnManagerTarget(value: ElementRef) {
     this._columnManagerTarget = value;
-
     this.changeDetector.detectChanges();
   }
 
@@ -107,28 +192,28 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
     return this._columnManagerTarget;
   }
 
-  @ViewChild('noColumnsHeader', { read: ElementRef }) noColumnsHeader;
-  @ViewChild('popup') poPopupComponent: PoPopupComponent;
+  @ViewChild('columnManagerTargetFixed') set columnManagerTargetFixed(value: ElementRef) {
+    this._columnManagerTargetFixed = value;
+    this.changeDetector.detectChanges();
+  }
 
-  @ViewChild('tableFooter', { read: ElementRef, static: false }) tableFooterElement;
-  @ViewChild('tableWrapper', { read: ElementRef, static: false }) tableWrapperElement;
+  get columnManagerTargetFixed() {
+    return this._columnManagerTargetFixed;
+  }
 
-  @ViewChildren('actionsIconElement', { read: ElementRef }) actionsIconElement: QueryList<any>;
-  @ViewChildren('actionsElement', { read: ElementRef }) actionsElement: QueryList<any>;
-  @ViewChildren('headersTable') headersTable: QueryList<any>;
+  /* eslint-disable max-params */
 
   constructor(
     poDate: PoDateService,
     differs: IterableDiffers,
-    viewRef: ViewContainerRef,
     renderer: Renderer2,
     poLanguageService: PoLanguageService,
-    private changeDetector: ChangeDetectorRef,
-    private decimalPipe: DecimalPipe,
-    private router: Router
+    private readonly changeDetector: ChangeDetectorRef,
+    private readonly decimalPipe: DecimalPipe,
+    private readonly defaultService: PoTableService
   ) {
-    super(poDate, poLanguageService);
-
+    super(poDate, poLanguageService, defaultService);
+    this.JSON = JSON;
     this.differ = differs.find([]).create(null);
 
     // TODO: #5550 ao remover este listener, no portal, quando as colunas forem fixas não sofrem
@@ -139,6 +224,7 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
       this.debounceResize();
     });
   }
+  /* eslint-enable max-params */
 
   get hasRowTemplateWithArrowDirectionRight() {
     return this.tableRowTemplate?.tableRowTemplateArrowDirection === PoTableRowTemplateArrowDirection.Right;
@@ -147,18 +233,17 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
   get columnCount() {
     const columnCount =
       this.mainColumns.length +
-      (this.actions.length > 0 ? 1 : 0) +
-      (this.selectable ? 1 : 0) +
-      (!this.hideDetail && this.columnMasterDetail !== undefined ? 1 : 0);
+      (this.hasItems && this.actions.length > 0 ? 1 : 0) +
+      (this.hasItems && this.selectable ? 1 : 0) +
+      (!this.hideDetail && this.columnMasterDetail !== undefined ? 1 : 0) +
+      this.countExtraColumns();
 
     return columnCount || 1;
   }
 
   get columnCountForMasterDetail() {
     // caso tiver ações será utilizado a sua coluna para exibir o columnManager
-    const columnManager = this.actions.length ? 0 : 1;
-
-    return this.mainColumns.length + 1 + (this.actions.length > 0 ? 1 : 0) + (this.selectable ? 1 : 0) + columnManager;
+    return this.mainColumns.length + 1 + (this.actions.length > 0 ? 1 : 0) + (this.selectable ? 1 : 0);
   }
 
   get detailHideSelect() {
@@ -204,27 +289,145 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
     return this.visibleActions.length === 1;
   }
 
-  get visibleActions() {
-    return this.actions && this.actions.filter(action => action && action.visible !== false);
+  get isDraggable(): boolean {
+    return this.draggable;
+  }
+
+  public get inverseOfTranslation(): string {
+    if (!this.viewPort || !this.viewPort['_renderedContentOffset']) {
+      return '-0px';
+    }
+
+    const offset = this.viewPort['_renderedContentOffset'];
+
+    return `-${offset}px`;
+  }
+
+  ngOnInit() {
+    this.idRadio = `po-radio-${uuid()}`;
+  }
+
+  changeHeaderWidth() {
+    if (this.noColumnsHeader) {
+      this.headerWidth = this.noColumnsHeader?.nativeElement.offsetWidth;
+    }
+    this.changeDetector.detectChanges();
   }
 
   ngAfterViewInit() {
     this.initialized = true;
+    this.changeHeaderWidth();
+    this.changeSizeLoading();
+    this.applyFixedColumns();
+    this.initializeVisibleElement();
+  }
+
+  showMoreInfiniteScroll({ target }): void {
+    const scrollPosition = target.offsetHeight + target.scrollTop;
+    if (!this.showMoreDisabled && scrollPosition >= target.scrollHeight * (this.infiniteScrollDistance / 110)) {
+      this.onShowMore();
+    }
   }
 
   ngDoCheck() {
+    this.applyFixedColumns();
     this.checkChangesItems();
     this.verifyCalculateHeightTableContainer();
+
     // Permite que os cabeçalhos sejam calculados na primeira vez que o componente torna-se visível,
     // evitando com isso, problemas com Tabs ou Divs que iniciem escondidas.
-    if (this.tableWrapperElement?.nativeElement.offsetWidth && !this.visibleElement && this.initialized) {
-      this.debounceResize();
-      this.visibleElement = true;
+    if (this.initialized) {
+      this.initializeVisibleElement();
     }
   }
 
   ngOnDestroy() {
     this.removeListeners();
+    this.subscriptionService?.unsubscribe();
+  }
+
+  /**
+   * Método responsável por realizar busca no serviço de dados podendo informar filtros e com o retorno, atualiza a tabela.
+   *
+   * Caso não seja informado parâmetro, nada será adicionado ao GET, conforme abaixo:
+   * ```
+   * url + ?page=1&pageSize=10
+   * ```
+   * > Obs: os parâmetros `page` e `pageSize` sempre serão chamados independente de ser enviados outros parâmetros.
+   *
+   * Caso sejam informados os parâmetros `{ name: 'JOHN', age: '23' }`, todos serão adicionados ao GET, conforme abaixo:
+   * ```
+   * url + ?page=1&pageSize=10&name=JOHN&age=23
+   * ```
+   *
+   * @param { { key: value } } queryParams Formato do objeto a ser enviado.
+   * > Pode ser utilizada qualquer string como key, e qualquer string ou number como value.
+   */
+  applyFilters(queryParams?: { [key: string]: QueryParamsType }) {
+    this.page = 1;
+    this.initializeData(queryParams);
+  }
+
+  /**
+   * Verifica se columns possuem a propriedade width.
+   */
+  applyFixedColumns(): boolean {
+    return !this.columns.some(column => !column.width);
+  }
+
+  /**
+   * Método que colapsa uma linha com detalhe quando executada.
+   *
+   * @param { number } rowIndex Índice da linha que será colapsada.
+   * > Ao reordenar os dados da tabela, o valor contido neste índice será alterado conforme a ordenação.
+   */
+  collapse(rowIndex: number) {
+    this.setShowDetail(rowIndex, false);
+  }
+
+  /**
+   * Método que expande uma linha com detalhe quando executada.
+   *
+   * @param { number } rowIndex Índice da linha que será expandida.
+   * > Ao reordenar os dados da tabela, o valor contido neste índice será alterado conforme a ordenação.
+   */
+  expand(rowIndex: number) {
+    this.setShowDetail(rowIndex, true);
+  }
+
+  /**
+   * Retorna as linhas do `po-table` que estão selecionadas.
+   */
+  getSelectedRows() {
+    return this.items.filter(item => item.$selected);
+  }
+
+  /**
+   * Retorna as linhas do `po-table` que não estão selecionadas.
+   */
+  getUnselectedRows() {
+    return this.items.filter(item => !item.$selected);
+  }
+
+  /**
+   * Desmarca as linhas que estão selecionadas.
+   */
+  unselectRows() {
+    const columnDetail = this.nameColumnDetail;
+
+    this.items.forEach(item => {
+      const detailItems = columnDetail ? item[columnDetail] : null;
+
+      if (Array.isArray(detailItems)) {
+        detailItems.forEach(detailItem => {
+          detailItem.$selected = false;
+        });
+      }
+
+      item.$selected = false;
+    });
+
+    this.selectAll = false;
   }
 
   checkDisabled(row, column: PoTableColumn) {
@@ -242,6 +445,59 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
     }
   }
 
+  /**
+   * Desmarca uma linha que está selecionada.
+   */
+  unselectRowItem(itemfn: { [key: string]: any } | ((item) => boolean)) {
+    this.toggleSelect(itemfn, false);
+
+    if (this.items.every(item => !item.$selected)) {
+      this.selectAll = false;
+    } else {
+      this.selectAll = null;
+    }
+  }
+
+  /**
+   * Seleciona uma linha do 'po-table'.
+   */
+  selectRowItem(itemfn: { [key: string]: any } | ((item) => boolean)) {
+    this.toggleSelect(itemfn, true);
+
+    if (this.items.every(item => item.$selected)) {
+      this.selectAll = true;
+    } else {
+      this.selectAll = null;
+    }
+  }
+
+  /**
+   * Método responsável pela exclusão de itens em lote.
+   * Caso a tabela esteja executando a propriedade `p-service-delete`, será necessário excluir 1 item por vez.
+   *
+   * Ao utilizar `p-service-delete` mas sem a propriedade `p-service-api`, será responsabilidade do usuário o tratamento
+   * após a requisição DELETE ser executada.
+   *
+   * Caso a tabela utilize `p-height` e esteja sem serviço, é necessário a reatribuição dos itens utilizando o evento `(p-delete-items)`, por exemplo:
+   *
+   * ```
+   *<po-table
+   *  (p-delete-items)="items = $event"
+   * >
+   *</po-table>
+   * ```
+   */
+  deleteItems() {
+    const newItems = [...this.items];
+    const newItemsFiltered = [...newItems].filter(item => !item.$selected);
+
+    if (!this.serviceDeleteApi) {
+      this.deleteItemsLocal(newItems, newItemsFiltered);
+    } else {
+      this.deleteItemsService(newItemsFiltered);
+    }
+  }
+
   formatNumber(value: any, format: string) {
     if (!format) {
       return value;
@@ -250,9 +506,63 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
     return this.decimalPipe.transform(value, format);
   }
 
+  protected formatWithMask(value: any, mask: string): string {
+    if (!mask || value == null || value === '') {
+      return value ?? '';
+    }
+
+    const rawValue = String(value).replace(/[^a-zA-Z\d]/g, '');
+    let formatted = '';
+    let rawIndex = 0;
+
+    for (let maskIndex = 0; maskIndex < mask.length && rawIndex < rawValue.length; maskIndex++) {
+      const maskChar = mask[maskIndex];
+      const rawChar = rawValue[rawIndex];
+      const isValid = this.isValidMaskChar(maskChar, rawChar);
+
+      if (isValid === true) {
+        formatted += rawChar;
+        rawIndex++;
+      } else if (isValid === false) {
+        break;
+      } else {
+        formatted += maskChar;
+      }
+    }
+
+    return formatted;
+  }
+
+  private isValidMaskChar(maskChar: string, rawChar: string): boolean | null {
+    switch (maskChar) {
+      case '9':
+        return /\d/.test(rawChar);
+      case '@':
+        return /[a-zA-Z]/.test(rawChar);
+      case 'w':
+        return /[a-zA-Z\d]/.test(rawChar);
+      default:
+        return null;
+    }
+  }
+
+  getCellData(row: any, column: PoTableColumn): any {
+    const arrayProperty = column.property.split('.');
+    if (arrayProperty.length > 1) {
+      const nestedProperties = arrayProperty;
+      let value: any = row;
+      for (const property of nestedProperties) {
+        value = value[property] || value[property] === 0 ? value[property] : '';
+      }
+      return value;
+    } else {
+      return row[column.property];
+    }
+  }
+
   getBooleanLabel(rowValue: any, columnBoolean: PoTableColumn): string {
     if (rowValue || rowValue === false || rowValue === 0) {
-      rowValue = convertToBoolean(rowValue);
+      rowValue = PoUtils.convertToBoolean(rowValue);
 
       if (columnBoolean.boolean) {
         return rowValue ? columnBoolean.boolean.trueLabel || 'Sim' : columnBoolean.boolean.falseLabel || 'Não';
@@ -265,7 +575,7 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
   }
 
   getColumnIcons(row: any, column: PoTableColumn) {
-    const rowIcons = row[column.property];
+    const rowIcons = this.getCellData(row, column);
 
     if (column.icons) {
       if (Array.isArray(rowIcons)) {
@@ -279,11 +589,11 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
   }
 
   getColumnLabel(row: any, columnLabel: PoTableColumn): PoTableColumnLabel {
-    return columnLabel.labels.find(labelItem => row[columnLabel.property] === labelItem.value);
+    return columnLabel.labels.find(labelItem => this.getCellData(row, columnLabel) === labelItem.value);
   }
 
   getSubtitleColumn(row: any, subtitleColumn: PoTableColumn): PoTableSubtitleColumn {
-    return subtitleColumn.subtitles.find(subtitleItem => row[subtitleColumn.property] === subtitleItem.value);
+    return subtitleColumn.subtitles.find(subtitleItem => this.getCellData(row, subtitleColumn) === subtitleItem.value);
   }
 
   isShowMasterDetail(row) {
@@ -314,16 +624,25 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
     this.changeVisibleColumns.emit(columns);
   }
 
+  onChangeFixedColumns(columns: Array<string>) {
+    if (!this.hideActionFixedColumns) {
+      this.changeFixedColumns.emit(columns);
+    }
+  }
+
+  onColumnRestoreManager(value: Array<string>) {
+    this.columnRestoreManager.emit(value);
+  }
+
   onVisibleColumnsChange(columns: Array<PoTableColumn>) {
     this.columns = columns;
-
     this.changeDetector.detectChanges();
   }
 
   tooltipMouseEnter(event: any, column?: PoTableColumn, row?: any) {
     this.tooltipText = undefined;
 
-    if (this.hideTextOverflow && event.target.offsetWidth < event.target.scrollWidth && event.target.innerText.trim()) {
+    if (event.target.offsetWidth < event.target.scrollWidth && event.target.innerText.trim()) {
       return (this.tooltipText = event.target.innerText);
     }
 
@@ -355,24 +674,298 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
     }
   }
 
-  protected calculateHeightTableContainer(height) {
-    const value = parseFloat(height);
-    this.heightTableContainer = value ? value - this.getHeightTableFooter() : undefined;
+  onOpenColumnManager() {
+    this.lastVisibleColumnsSelected = [...this.columns];
+  }
+
+  onFilteredItemsChange(items: Array<any>): void {
+    if (this.sortedColumn.property) {
+      this.sortArray(this.sortedColumn.property, this.sortedColumn.ascending, items);
+    } else {
+      this.filteredItems = items;
+    }
+  }
+
+  get searchAiColumns(): Array<PoSearchAiColumn> {
+    if (this.searchAiField()?.columns) {
+      return this.searchAiField().columns;
+    }
+    return extractSearchAiColumns(this.columns);
+  }
+
+  get searchAiPlaceholder(): string {
+    return this.searchAiField()?.placeholder ?? this.literals.searchAiPlaceholder;
+  }
+
+  onAiResult(result: PoSearchAiResult): void {
+    this.searchAiResult.emit(result);
+
+    const apply = this.searchAiField()?.apply ?? 'auto';
+
+    if (typeof apply === 'function') {
+      apply(result);
+      return;
+    }
+
+    if (apply === 'none') {
+      return;
+    }
+
+    if (this.shouldDelegateToServer(apply)) {
+      this.applyFilterViaServer(result);
+      return;
+    }
+
+    if (apply === 'parser' && this.hasService) {
+      this.applyFilterViaParser(result);
+      return;
+    }
+
+    this.applyFilterLocally(result);
+  }
+
+  onAiLowConfidence(result: PoSearchAiResult): void {
+    this.searchAiLowConfidence.emit(result);
+  }
+
+  onAiError(error: PoSearchAiError): void {
+    this.searchAiError.emit(error);
+  }
+
+  onAiClear(): void {
+    if (this.hasService) {
+      this.page = 1;
+      this.initializeData();
+    } else {
+      this.filteredItems = this.height ? [...this.items] : this.items;
+    }
+  }
+
+  private shouldDelegateToServer(apply: string): boolean {
+    return apply === 'server' || (apply === 'auto' && this.hasService);
+  }
+
+  private applyFilterViaServer(result: PoSearchAiResult): void {
+    this.page = 1;
+    this.initializeData({ $filter: result.filter });
+  }
+
+  private applyFilterViaParser(result: PoSearchAiResult): void {
+    this.loading = true;
+    this.aiParserSubscription?.unsubscribe();
+    this.aiParserSubscription = this.getFilteredItems({ pageSize: 9999, page: 1 }).subscribe({
+      next: data => {
+        this.loading = false;
+        this.filteredItems = poSearchAiFilterItems(data.items as Array<Record<string, unknown>>, result.filter);
+      },
+      error: () => {
+        this.loading = false;
+      }
+    });
+    this.subscriptionService.add(this.aiParserSubscription);
+  }
+
+  private applyFilterLocally(result: PoSearchAiResult): void {
+    this.filteredItems = poSearchAiFilterItems(this.items as Array<Record<string, unknown>>, result.filter);
+  }
+
+  /**
+   * Atualiza programaticamente o valor do campo de busca por IA (`po-search-ai`) integrado à tabela
+   * via `p-search-ai-field`.
+   *
+   * Útil quando a aplicação precisa preencher a busca a partir de uma ação externa (por exemplo, o
+   * clique em um botão que sugere uma consulta pronta), opcionalmente disparando a busca em seguida.
+   *
+   * > Só tem efeito quando a propriedade `p-search-ai-field` está configurada. Caso contrário, o método
+   * > não executa nenhuma ação.
+   *
+   * @param { string } value Texto da consulta a ser inserido no campo de busca por IA.
+   * @param { boolean } triggerSearch Quando `true`, dispara automaticamente a busca após preencher o
+   * valor. Quando `false` _(padrão)_, apenas preenche o campo.
+   *
+   * @default `triggerSearch = false`
+   *
+   * @example
+   *
+   * ```typescript
+   * @ViewChild(PoTableComponent) table: PoTableComponent;
+   *
+   * onSuggestionClick() {
+   *   // apenas preenche o campo
+   *   this.table.updateSearchAIQuery('clientes de SP com saldo acima de 500');
+   *
+   *   // preenche e já dispara a busca
+   *   this.table.updateSearchAIQuery('clientes de SP com saldo acima de 500', true);
+   * }
+   * ```
+   */
+  updateSearchAIQuery(value: string, triggerSearch: boolean = false): void {
+    if (!this.searchAiField() || !this.searchAiComponent) {
+      return;
+    }
+
+    this.searchAiComponent.writeValueModel(value);
+
+    if (triggerSearch) {
+      this.searchAiComponent.search();
+    }
+  }
+
+  /**
+   * Método que remove um item da tabela.
+   *
+   * @param { number | { key: value } } item Índice da linha ou o item que será removido.
+   * > Ao remover o item, a linha que o representa será excluída da tabela.
+   */
+  removeItem(item: number | { [key: string]: any }) {
+    if (item instanceof Object) {
+      this.items = this.items.filter(filterItem => filterItem !== item);
+    } else if (typeof item === 'number') {
+      const index: number = item;
+      this.items.splice(index, 1);
+    }
+  }
+
+  /**
+   * Método que atualiza um item da tabela.
+   *
+   * @param { number | { key: value } } item Índice da linha ou o item que será atualizado.
+   * @param { { key: value } } updatedItem Item que foi atualizado.
+   * > Ao atualizar o item, a informação será alterada na tabela.
+   */
+  updateItem(item: number | { [key: string]: any }, updatedItem: { [key: string]: any }) {
+    if (typeof item === 'number') {
+      this.items.splice(item, 1, updatedItem);
+    } else {
+      const index = this.items.findIndex(indexItem => indexItem === item);
+      this.items.splice(index, 1, updatedItem);
+    }
+  }
+
+  drop(event: CdkDragDrop<Array<string>>) {
+    if (!this.mainColumns[event.currentIndex].fixed) {
+      moveItemInArray(this.mainColumns, event.previousIndex, event.currentIndex);
+
+      if (this.hideColumnsManager === false) {
+        this.newOrderColumns = this.mainColumns;
+        const detail = this.columns.filter(item => item.property === 'detail')[0];
+
+        if (detail !== undefined) {
+          this.newOrderColumns.push(detail);
+        }
+
+        this.columns.map((item, index) => {
+          if (!item.visible) {
+            this.newOrderColumns.splice(index, 0, item);
+          }
+        });
+        this.columns = this.newOrderColumns;
+
+        this.onVisibleColumnsChange(this.newOrderColumns);
+      }
+    }
+  }
+
+  public getTemplate(column: PoTableColumn): TemplateRef<any> {
+    const template: PoTableColumnTemplateDirective = this.tableColumnTemplates?.find(
+      tableColumnTemplate => tableColumnTemplate.targetProperty === column.property
+    );
+    if (!this.initialized) return null;
+
+    if (template) {
+      return template.templateRef;
+    } else {
+      console.warn(
+        `Não foi possível encontrar o template para a coluna: ${column.property}, por gentileza informe a propriedade [p-property]`
+      );
+      return null;
+    }
+  }
+
+  public getWidthColumnManager() {
+    return this.columnManager?.nativeElement.offsetWidth;
+  }
+
+  public getColumnWidthActionsLeft() {
+    return this.columnActionLeft?.nativeElement.offsetWidth;
+  }
+
+  public hasSomeFixed() {
+    return this.columns.some(item => item.fixed === true);
+  }
+
+  protected calculateHeightTableContainer(height: number) {
+    this.itemSize =
+      PO_TABLE_ROW_HEIGHT_BY_SPACING[this.spacing] ?? PO_TABLE_ROW_HEIGHT_BY_SPACING[PoTableColumnSpacing.Medium];
+    this.heightTableContainer = height ? height - this.getHeightTableFooter() : undefined;
+    this.heightTableVirtual = this.heightTableContainer ? this.heightTableContainer - this.itemSize : undefined;
     this.setTableOpacity(1);
+    this.changeDetector.markForCheck();
+  }
+
+  protected verifyCalculateHeightTableContainer() {
+    if (this.height && this.verifyChangeHeightInFooter()) {
+      this.footerHeight = this.getHeightTableFooter();
+
+      this.calculateHeightTableContainer(this.height);
+    }
+  }
+
+  protected checkInfiniteScroll(): void {
+    if (this.hasInfiniteScroll()) {
+      let scrollHeight = 0;
+
+      if (this.virtualScroll) {
+        scrollHeight = this.tableVirtualScroll.nativeElement.scrollHeight;
+      } else {
+        scrollHeight = this.tableScrollable.nativeElement.scrollHeight;
+      }
+
+      if (scrollHeight >= this.height) {
+        this.includeInfiniteScroll();
+      } else {
+        this.infiniteScroll = false;
+      }
+    }
     this.changeDetector.detectChanges();
   }
 
-  protected calculateWidthHeaders() {
-    setTimeout(() => {
-      if (this.height) {
-        this.headersTable.forEach(header => {
-          const divHeader = header.nativeElement.querySelector('.po-table-header-fixed-inner');
-          if (divHeader) {
-            divHeader.style.width = `${header.nativeElement.offsetWidth}px`;
-          }
-        });
-      }
-    });
+  private changesAfterDelete(newItemsFiltered: Array<any>) {
+    this.selectAll = false;
+    this.setSelectedList();
+    this.modalDelete.close();
+    this.poNotification.success(this.literals.deleteSuccessful);
+    this.eventDelete.emit(newItemsFiltered);
+  }
+
+  protected changeSizeLoading() {
+    const tableHeight = this.tableWrapperElement?.nativeElement?.offsetHeight;
+
+    if (tableHeight <= 150 || this.componentsSize === PoFieldSize.Small) {
+      this.sizeLoading = 'sm';
+    } else if (tableHeight > 150 && tableHeight < 260) {
+      this.sizeLoading = 'md';
+    } else {
+      this.sizeLoading = 'lg';
+    }
+
+    this.changeDetector.detectChanges();
+  }
+
+  protected getDefaultSpacing(): PoTableColumnSpacing {
+    return this.componentsSize === PoFieldSize.Small ||
+      getDefaultSizeFn(PoTableColumnSpacing) === PoTableColumnSpacing.Small
+      ? PoTableColumnSpacing.ExtraSmall
+      : PoTableColumnSpacing.Medium;
+  }
+
+  protected reapplySort(): void {
+    const hasData = this.filteredItems && this.filteredItems.length > 0;
+    const hasSortConfig = !!this.sortedColumn?.property;
+
+    if (hasData && hasSortConfig) {
+      this.sortArray(this.sortedColumn.property, this.sortedColumn.ascending);
+    }
   }
 
   private checkChangesItems() {
@@ -398,14 +991,84 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
     }
   }
 
+  private countExtraColumns(): number {
+    let extraColumns = 0;
+
+    if (!this.columnMasterDetail && this.hasItems) {
+      if (
+        (this.hasMasterDetailColumn || this.hasRowTemplate) &&
+        this.hasMainColumns &&
+        !this.hasRowTemplateWithArrowDirectionRight
+      ) {
+        extraColumns++;
+      }
+      if (
+        this.hasRowTemplateWithArrowDirectionRight &&
+        this.hasMainColumns &&
+        (this.hasVisibleActions || this.hideColumnsManager)
+      ) {
+        extraColumns++;
+      }
+    }
+
+    return extraColumns;
+  }
+
   private debounceResize() {
     clearTimeout(this.timeoutResize);
     this.timeoutResize = setTimeout(() => {
-      this.calculateWidthHeaders();
-
       // show the table
       this.setTableOpacity(1);
+      this.changeDetector.markForCheck();
     });
+  }
+
+  private deleteItemsLocal(newItems: Array<any>, newItemsFiltered: Array<any>) {
+    if (this.height) {
+      this.items = newItemsFiltered;
+    } else {
+      let index = this.items.length - 1;
+      newItems
+        .slice()
+        .reverse()
+        .forEach(item => {
+          if (item.$selected) {
+            this.removeItem(index);
+          }
+          index--;
+        });
+    }
+    this.changesAfterDelete(newItemsFiltered);
+    this.onFilteredItemsChange(newItemsFiltered);
+  }
+
+  private deleteItemsService(newItemsFiltered: Array<any>) {
+    this.subscriptionService.add(
+      this.defaultService.deleteItem(this.paramDeleteApi, this.itemsSelected[0][this.paramDeleteApi]).subscribe({
+        next: value => {
+          if (this.hasService) {
+            const filteredParams = {
+              ...this.paramsFilter,
+              pageSize: newItemsFiltered.length + 1,
+              page: 1
+            };
+            this.loading = true;
+            this.subscriptionService.add(
+              this.defaultService.getFilteredItems(filteredParams).subscribe(items => {
+                this.setTableResponseProperties(items);
+              })
+            );
+          }
+          this.items = newItemsFiltered;
+          this.changesAfterDelete(newItemsFiltered);
+        },
+        error: error => {
+          this.poNotification.error(this.literals.deleteApiError);
+          this.modalDelete.close();
+          this.eventDelete.emit(this.items);
+        }
+      })
+    );
   }
 
   private findCustomIcon(rowIcons, column: PoTableColumn) {
@@ -415,6 +1078,36 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
 
   private getHeightTableFooter() {
     return this.tableFooterElement ? this.tableFooterElement.nativeElement.offsetHeight : 0;
+  }
+
+  private hasInfiniteScroll(): boolean {
+    let scrollHeight = 0;
+
+    if (this.virtualScroll && this.tableVirtualScroll) {
+      scrollHeight = this.tableVirtualScroll.nativeElement.scrollHeight;
+    }
+    if (!this.virtualScroll && this.tableScrollable) {
+      scrollHeight = this.tableScrollable.nativeElement.scrollHeight;
+    }
+
+    return this.infiniteScroll && this.hasItems && !this.subscriptionScrollEvent && this.height > 0 && scrollHeight > 0;
+  }
+
+  private includeInfiniteScroll(): void {
+    let element: HTMLElement | null = null;
+
+    if (this.virtualScroll) {
+      element = this.tableVirtualScroll?.nativeElement;
+    } else {
+      element = this.tableScrollable.nativeElement.closest('.po-table-container-overflow');
+    }
+
+    if (element) {
+      this.scrollEvent$ = this.defaultService.scrollListener(element);
+      this.subscriptionScrollEvent = this.scrollEvent$.subscribe(event => this.showMoreInfiniteScroll(event));
+    }
+
+    this.changeDetector.detectChanges();
   }
 
   private mergeCustomIcons(rowIcons: Array<string>, customIcons: Array<any>) {
@@ -430,6 +1123,14 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
     return mergedIcons;
   }
 
+  private initializeVisibleElement(): void {
+    if (this.tableWrapperElement?.nativeElement.offsetWidth && !this.visibleElement) {
+      this.debounceResize();
+      this.checkInfiniteScroll();
+      this.visibleElement = true;
+    }
+  }
+
   private removeListeners() {
     if (this.resizeListener) {
       this.resizeListener();
@@ -437,6 +1138,10 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
 
     if (this.clickListener) {
       this.clickListener();
+    }
+
+    if (this.subscriptionScrollEvent) {
+      this.subscriptionScrollEvent.unsubscribe();
     }
   }
 
@@ -448,23 +1153,19 @@ export class PoTableComponent extends PoTableBaseComponent implements AfterViewI
     return this.footerHeight !== this.getHeightTableFooter();
   }
 
-  private verifyCalculateHeightTableContainer() {
-    if (this.height && this.verifyChangeHeightInFooter()) {
-      this.footerHeight = this.getHeightTableFooter();
-      this.calculateHeightTableContainer(this.height);
+  private toggleSelect(compare, selectValue: boolean) {
+    if (typeof compare !== 'function') {
+      this.items.forEach(item => {
+        if (item === compare) {
+          item.$selected = selectValue;
+        }
+      });
+    } else {
+      this.items.forEach(item => {
+        if (compare(item)) {
+          item.$selected = selectValue;
+        }
+      });
     }
-  }
-
-  public getTemplate(column: PoTableColumn): TemplateRef<any> {
-    const template: PoTableColumnTemplateDirective = this.tableColumnTemplates.find(tableColumnTemplate => {
-      return tableColumnTemplate.targetProperty === column.property;
-    });
-    if (!template) {
-      console.warn(
-        `Não foi possível encontrar o template para a coluna: ${column.property}, por gentileza informe a propriedade [p-property]`
-      );
-      return null;
-    }
-    return template.templateRef;
   }
 }

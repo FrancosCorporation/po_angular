@@ -1,3 +1,5 @@
+export * from './po-page-default/enums/po-page-actions-layout.enum';
+export * from './po-page-default/enums/po-page-header-type.enum';
 export * from './po-page-default/po-page-default.component';
 export * from './po-page-default/po-page-default.interface';
 export * from './po-page-default/po-page-default-literals.interface';
@@ -9,8 +11,9 @@ export * from './po-page-list/po-page-list-literals.interface';
 export * from './po-page-list/po-page-list.component';
 export * from './po-page-slide/po-page-slide.component';
 
-export * from './po-page.interface';
-export * from './po-page-action.interface';
-export * from './po-page-filter.interface';
+export * from './interfaces/po-page.interface';
+export * from './interfaces/po-page-action.interface';
+export * from './interfaces/po-page-filter.interface';
 
+export * from './po-page-slide/po-page-slide.module';
 export * from './po-page.module';

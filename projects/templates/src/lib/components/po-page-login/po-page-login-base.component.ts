@@ -1,16 +1,16 @@
-import { Subscription } from 'rxjs';
-import { EventEmitter, Input, OnDestroy, Output, Directive } from '@angular/core';
+import { Directive, EventEmitter, HostBinding, HostListener, Input, OnDestroy, Output } from '@angular/core';
 import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 
-import { convertToBoolean, convertToInt, getShortBrowserLanguage, isExternalLink, isTypeof } from './../../utils/util';
+import { convertToBoolean, getDefaultSizeFn, isTypeof, validateSizeFn, PoUtils } from './../../utils/util';
 
-import { PoLanguageService, poLocaleDefault, PoLanguage, poLanguageDefault } from '@po-ui/ng-components';
+import { PoLanguage, poLanguageDefault, PoLanguageService, poLocaleDefault } from '@po-ui/ng-components';
 
-import { PoPageLogin } from './interfaces/po-page-login.interface';
 import { PoPageLoginAuthenticationType } from './enums/po-page-login-authentication-type.enum';
 import { PoPageLoginCustomField } from './interfaces/po-page-login-custom-field.interface';
 import { PoPageLoginLiterals } from './interfaces/po-page-login-literals.interface';
 import { PoPageLoginRecovery } from './interfaces/po-page-login-recovery.interface';
+import { PoPageLogin } from './interfaces/po-page-login.interface';
 import { PoPageLoginService } from './po-page-login.service';
 
 const poPageLoginContentMaxLength = 40;
@@ -166,6 +166,173 @@ export const poPageLoginLiteralIn = {
  */
 @Directive()
 export abstract class PoPageLoginBaseComponent implements OnDestroy {
+  /**
+   * O `p-background` permite inserir uma imagem de destaque ao lado direito do formulário de login, caso a propriedade
+   * não seja preenchida o formulário será centralizado no espaço disponível.
+   *
+   * A fonte da imagem pode ser de um caminho local ou uma url de um servidor externo.
+   *
+   * Além da imagem, é possível adicionar um texto informativo por cima da imagem da imagem de destaque, para isso informe
+   * um valor para a literal `highlightInfo`.
+   *
+   * > Veja mais sobre as literais na propriedade `p-literals`.
+   *
+   * Exemplos de valores válidos:
+   * - **local**: `./assets/images/login-background.png`
+   * - **url externa**: `https://po-ui.io/assets/images/login-background.png`
+   *
+   * > Essa propriedade é ignorada para aplicações mobile.
+   */
+  @Input('p-background') background?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Caminho para a logomarca localizada na parte superior.
+   *
+   * > Caso seja indefinida o espaço se mantém preservado porém vazio.
+   */
+  @Input('p-logo') logo?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Expressão regular para validar o campo de login, caso a expressão não seja atentida, a literal `loginErrorPattern`
+   * será exibida.
+   *
+   * Exemplos de valores válidos:
+   * - email: `[expressao-regular-email]`
+   * - cpf: `[expressao-regular-cpf]`
+   *
+   * > Veja a propriedade `p-literals` para customizar a literal `loginErrorPattern`.
+   */
+  @Input('p-login-pattern') loginPattern?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Expressão regular para validar o campo de password, caso a expressão não seja atentida, a literal `passwordErrorPattern`
+   * será exibida.
+   *
+   * Exemplos de valores válidos:
+   * - Apenas números: `\d?`
+   * - Letras mínusculas: `\z?`
+   *
+   * > Veja a propriedade `p-literals` para customizar a literal `passwordErrorPattern`.
+   */
+  @Input('p-password-pattern') passwordPattern?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Caminho para a logomarca localizada no rodapé.
+   */
+  @Input('p-secondary-logo') secondaryLogo?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado quando o usuário alterar o input do campo login.
+   *
+   * Esse evento receberá como parâmetro uma variável do tipo `string` com o texto informado no campo.
+   *
+   * > Esta propriedade será ignorada se for definido valor para a propriedade `p-authentication-url`.
+   */
+  @Output('p-login-change') loginChange: EventEmitter<string> = new EventEmitter<string>();
+
+  /**
+   * Evento disparado ao submeter o formulário de login (apertando `Enter` dentro dos campos ou pressionando o botão de confirmação).
+   *
+   * Esse evento receberá como parâmetro um objeto do tipo `PoPageLogin` com os dados informados no formulário.
+   *
+   * > Esta propriedade será ignorada se for definido valor para a propriedade `p-url-recovery`.
+   *
+   * > Para mais detalhes consulte a documentação sobre a interface `PoPageLogin` mais abaixo.
+   */
+  @Output('p-login-submit') loginSubmit = new EventEmitter<PoPageLogin>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado quando o usuário alterar o input do campo password.
+   *
+   * Esse evento receberá como parâmetro uma variável do tipo `string` com o texto informado no campo.
+   *
+   * > Esta propriedade será ignorada se for definido valor para a propriedade `p-authentication-url`.
+   */
+  @Output('p-password-change') passwordChange: EventEmitter<string> = new EventEmitter<string>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado quando o usuário alterar o idioma da página.
+   *
+   * Esse evento receberá como parâmetro um objeto do tipo `PoLanguage` com a linguagem selecionada.
+   *
+   */
+  @Output('p-language-change') languageChange: EventEmitter<PoLanguage> = new EventEmitter<PoLanguage>();
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a propriedade nativa `autocomplete` do campo como `off`.
+   *
+   * @default `true`
+   */
+  @Input('p-no-autocomplete-login') noAutocompleteLogin: boolean = true;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a propriedade nativa `autocomplete` do campo como `off`.
+   *
+   * > No componente `po-password` será definido como `new-password`.
+   *
+   * @default `true`
+   */
+  @Input('p-no-autocomplete-password') noAutocompletePassword: boolean = true;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Indica se o status do `model` do switch de lembrar o usuário será escondido visualmente.
+   *
+   * > Por padrão será atribuído `false`.
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-label-status', transform: convertToBoolean }) hideLabelStatus: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite esconder a função de espiar a senha digitada.
+   *
+   * @default `false`
+   */
+  @Input('p-hide-password-peek') hidePasswordPeek: boolean;
+
   allLoginErrors: Array<string> = [];
   allPasswordErrors: Array<string> = [];
   customFieldObject: PoPageLoginCustomField;
@@ -179,6 +346,8 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
   private _authenticationType: PoPageLoginAuthenticationType = PoPageLoginAuthenticationType.Basic;
   private _authenticationUrl: string;
   private _blockedUrl: string;
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
   private _contactEmail: string;
   private _customField: string | PoPageLoginCustomField;
   private _environment?: string;
@@ -194,6 +363,31 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
   private _registerUrl: string;
   private _support: string | Function;
   private _languagesList: Array<PoLanguage>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
+  }
 
   /**
    * @optional
@@ -280,25 +474,6 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
   }
 
   /**
-   * O `p-background` permite inserir uma imagem de destaque ao lado direito do formulário de login, caso a propriedade
-   * não seja preenchida o formulário será centralizado no espaço disponível.
-   *
-   * A fonte da imagem pode ser de um caminho local ou uma url de um servidor externo.
-   *
-   * Além da imagem, é possível adicionar um texto informativo por cima da imagem da imagem de destaque, para isso informe
-   * um valor para a literal `highlightInfo`.
-   *
-   * > Veja mais sobre as literais na propriedade `p-literals`.
-   *
-   * Exemplos de valores válidos:
-   * - **local**: `./assets/images/login-background.png`
-   * - **url externa**: `https://po-ui.io/assets/images/login-background.png`
-   *
-   * > Essa propriedade é ignorada para aplicações mobile.
-   */
-  @Input('p-background') background?: string;
-
-  /**
    * @optional
    *
    * @description
@@ -358,7 +533,7 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
    * @default `0`
    */
   @Input('p-exceeded-attempts-warning') set exceededAttemptsWarning(value: number) {
-    this._exceededAttemptsWarning = convertToInt(value);
+    this._exceededAttemptsWarning = PoUtils.convertToInt(value);
     this.showExceededAttemptsWarning = this.exceededAttemptsWarning > 0;
   }
 
@@ -502,33 +677,6 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
    *
    * @description
    *
-   * Caminho para a logomarca localizada na parte superior.
-   *
-   * > Caso seja indefinida o espaço se mantém preservado porém vazio.
-   */
-  @Input('p-logo') logo?: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Expressão regular para validar o campo de login, caso a expressão não seja atentida, a literal `loginErrorPattern`
-   * será exibida.
-   *
-   * Exemplos de valores válidos:
-   * - email: `[expressao-regular-email]`
-   * - cpf: `[expressao-regular-cpf]`
-   *
-   * > Veja a propriedade `p-literals` para customizar a literal `loginErrorPattern`.
-   */
-  @Input('p-login-pattern') loginPattern?: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
    * Atributo que recebe uma lista de erros e exibe abaixo do campo de login.
    */
   @Input('p-login-errors') set loginErrors(value: Array<string>) {
@@ -559,33 +707,17 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
    *
    * @description
    *
-   * Expressão regular para validar o campo de password, caso a expressão não seja atentida, a literal `passwordErrorPattern`
-   * será exibida.
-   *
-   * Exemplos de valores válidos:
-   * - Apenas números: `\d?`
-   * - Letras mínusculas: `\z?`
-   *
-   * > Veja a propriedade `p-literals` para customizar a literal `passwordErrorPattern`.
-   */
-  @Input('p-password-pattern') passwordPattern?: string;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
    * Exibe um link abaixo do formulário de login para que os usuários da aplicação façam a recuperação dos dados de autenticação.
    *
    * A propriedade aceita os seguintes tipos:
    *
    * - **String**: informe uma url externa ou uma rota válida;
    * - **Function**: pode-se customizar a ação. Para esta possilidade basta atribuir:
-   * ```
-   * <po-page-login>
-   *   [recovery]="this.myRecovery.bind(this)">
-   * </po-page-login>
-   * ```
+   *   ```
+   *   <po-page-login>
+   *     [recovery]="this.myRecovery.bind(this)">
+   *   </po-page-login>
+   *   ```
    *
    * - **PoPageLoginRecovery**: cria-se vínculo automático com o template **po-modal-password-recovery**.
    *   O objeto deve conter a **url** para requisição dos recursos e pode-se definir o **tipo** de modal para recuperação de senha,
@@ -620,15 +752,6 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
   get registerUrl(): string {
     return this._registerUrl;
   }
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Caminho para a logomarca localizada no rodapé.
-   */
-  @Input('p-secondary-logo') secondaryLogo?: string;
 
   /**
    * @optional
@@ -819,11 +942,11 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
    *
    * - **String**: URL externa ou uma rota válida;
    * - **Function**: Função a ser disparada ao clicar no botão de suporte;
-   * ```
-   * <po-page-login>
-   *   [p-support]="this.mySupport.bind(this)">
-   * </po-page-login>
-   * ```
+   *   ```
+   *   <po-page-login>
+   *     [p-support]="this.mySupport.bind(this)">
+   *   </po-page-login>
+   *   ```
    *
    */
   @Input('p-support') set support(value: string | Function) {
@@ -872,57 +995,8 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
     return this.languagesList.length > 1;
   }
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado quando o usuário alterar o input do campo login.
-   *
-   * Esse evento receberá como parâmetro uma variável do tipo `string` com o texto informado no campo.
-   *
-   * > Esta propriedade será ignorada se for definido valor para a propriedade `p-authentication-url`.
-   */
-  @Output('p-login-change') loginChange: EventEmitter<string> = new EventEmitter<string>();
-
-  /**
-   * Evento disparado ao submeter o formulário de login (apertando `Enter` dentro dos campos ou pressionando o botão de confirmação).
-   *
-   * Esse evento receberá como parâmetro um objeto do tipo `PoPageLogin` com os dados informados no formulário.
-   *
-   * > Esta propriedade será ignorada se for definido valor para a propriedade `p-url-recovery`.
-   *
-   * > Para mais detalhes consulte a documentação sobre a interface `PoPageLogin` mais abaixo.
-   */
-  @Output('p-login-submit') loginSubmit = new EventEmitter<PoPageLogin>();
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado quando o usuário alterar o input do campo password.
-   *
-   * Esse evento receberá como parâmetro uma variável do tipo `string` com o texto informado no campo.
-   *
-   * > Esta propriedade será ignorada se for definido valor para a propriedade `p-authentication-url`.
-   */
-  @Output('p-password-change') passwordChange: EventEmitter<string> = new EventEmitter<string>();
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado quando o usuário alterar o idioma da página.
-   *
-   * Esse evento receberá como parâmetro um objeto do tipo `PoLanguage` com a linguagem selecionada.
-   *
-   */
-  @Output('p-language-change') languageChange: EventEmitter<PoLanguage> = new EventEmitter<PoLanguage>();
-
   get language(): string {
-    return this.selectedLanguage || getShortBrowserLanguage();
+    return this.selectedLanguage || PoUtils.getShortBrowserLanguage();
   }
 
   get pageLoginLiterals(): PoPageLoginLiterals {
@@ -939,7 +1013,7 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
   }
 
   constructor(
-    private loginService: PoPageLoginService,
+    private readonly loginService: PoPageLoginService,
     public router: Router,
     public poLanguageService: PoLanguageService
   ) {
@@ -968,6 +1042,7 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
     }
 
     if (this.authenticationUrl) {
+      this.loading = true;
       this.loginSubscription = this.loginService
         .onLogin(this.authenticationUrl, this.authenticationType, loginForm)
         .subscribe(
@@ -975,18 +1050,25 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
             this.setValuesToProperties();
             sessionStorage.setItem('PO_USER_LOGIN', JSON.stringify(data));
             this.openInternalLink('/');
+            this.loading = false;
           },
           error => {
             if (error.error.code === '400' || error.error.code === '401') {
               this.setValuesToProperties(error);
               this.redirectBlockedUrl(this.exceededAttemptsWarning, this.blockedUrl);
             }
+            this.loading = false;
           }
         );
     } else {
       this.loginSubmit.emit(loginForm);
       this.showExceededAttemptsWarning = this.exceededAttemptsWarning > 0;
     }
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
   }
 
   private getDefaultCustomFieldObject(property): PoPageLoginCustomField {
@@ -1004,7 +1086,7 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
   private redirectBlockedUrl(attempts: number, blockedUrl: string) {
     if (attempts === 0 && blockedUrl) {
       this.showExceededAttemptsWarning = false;
-      isExternalLink(blockedUrl) ? this.openExternalLink(blockedUrl) : this.openInternalLink(blockedUrl);
+      PoUtils.isExternalLink(blockedUrl) ? this.openExternalLink(blockedUrl) : this.openInternalLink(blockedUrl);
     }
   }
 
@@ -1020,6 +1102,10 @@ export abstract class PoPageLoginBaseComponent implements OnDestroy {
       this.passwordErrors = [];
       this.blockedUrl = '';
     }
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
   }
 
   protected abstract concatenateLoginHintWithContactEmail(contactEmail: string);

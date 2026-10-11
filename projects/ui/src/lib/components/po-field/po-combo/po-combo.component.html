@@ -1,105 +1,174 @@
-<po-field-container [p-label]="label" [p-help]="help" [p-optional]="!required && optional">
-  <div class="po-field-container-content">
-    <div *ngIf="icon" class="po-field-icon-container-left">
-      <span class="po-icon po-field-icon {{ icon }}" [class.po-field-icon-disabled]="disabled"></span>
-    </div>
-
-    <input
-      #inp
-      class="po-input po-combo-input"
-      [ngClass]="clean && inp.value ? 'po-input-double-icon-right' : 'po-input-icon-right'"
-      [class.po-input-icon-left]="icon"
-      autocomplete="off"
-      type="text"
-      [attr.name]="name"
-      [disabled]="disabled"
-      [placeholder]="placeholder"
-      [required]="required"
-      (click)="toggleComboVisibility()"
-      (keyup)="onKeyUp($event)"
-      (keyup.enter)="searchOnEnter($event.target.value)"
-      (keydown)="onKeyDown($event)"
-    />
-
-    <div class="po-field-icon-container-right">
-      <po-clean *ngIf="clean && !disabled" (p-change-event)="clear($event)" [p-element-ref]="inputEl"> </po-clean>
-      <span
-        #iconArrow
-        class="po-icon po-field-icon {{ comboIcon }}"
-        [class.po-field-icon-disabled]="disabled"
-        [class.po-field-icon]="!disabled"
-        (click)="toggleComboVisibility()"
-      >
-      </span>
-    </div>
-  </div>
-
-  <div #containerElement class="po-combo-container" [hidden]="!comboOpen && !isServerSearching">
-    <ng-container *ngIf="isServerSearching; then loadingTemplate; else optionsTemplate"> </ng-container>
-  </div>
-
-  <po-field-container-bottom></po-field-container-bottom>
-</po-field-container>
-
-<ng-template #loadingTemplate>
-  <div class="po-combo-container-loading">
-    <po-loading></po-loading>
-  </div>
-</ng-template>
-
-<ng-template #optionsTemplate>
-  <ng-container *ngIf="visibleOptions.length; then visibleOptionsTemplate; else noDataTemplate"> </ng-container>
-</ng-template>
-
-<ng-template #visibleOptionsTemplate>
-  <ul #contentElement class="po-combo-container-content">
-    <li
-      *ngFor="let option of visibleOptions"
-      [class.po-combo-item-selected]="compareObjects(selectedView, option)"
-      (click)="option?.options ? undefined : onOptionClick(option, $event)"
+@let poHelper = setHelper(label, additionalHelpTooltip);
+@let needsHelper = !label && (poHelperComponent() || poHelper.hideAdditionalHelp);
+<div #outerContainer>
+  <po-field-container
+    [p-disabled]="isDisabled"
+    [p-id]="id"
+    [p-label]="label"
+    [p-optional]="optional"
+    [p-required]="required"
+    [p-show-required]="showRequired"
+    [p-helper]="label ? poHelper.helperSettings : undefined"
+    [p-show-helper]="label ? displayAdditionalHelp : undefined"
+    [p-size]="size"
+    [p-text-wrap]="labelTextWrap()"
+    [p-compact-label]="compactLabel()"
+  >
+    <div
+      #searchContainer
+      cdkOverlayOrigin
+      #trigger="cdkOverlayOrigin"
+      class="po-field-container-content po-combo-container-content"
     >
-      <ng-container *ngIf="comboOptionTemplate; then optionTemplate; else defaultOptionTemplate"></ng-container>
+      <div class="po-field-container-content-helper-wrapper">
+        <div #fieldContainerInput class="po-field-container-input">
+          @if (icon) {
+            <div class="po-field-icon-container-left">
+              <po-icon
+                class="po-field-icon po-icon-input"
+                [class.po-field-icon-disabled]="isDisabled"
+                [class.po-field-icon-aa]="size === 'small'"
+                [p-icon]="icon"
+              ></po-icon>
+            </div>
+          }
 
-      <ng-template #defaultOptionTemplate>
-        <label *ngIf="option?.options; else optionLink" class="po-combo-item-title">{{ option.label }}</label>
-        <ng-template #optionLink>
-          <a class="po-combo-item">
-            <span [innerHTML]="getLabelFormatted(option?.label)"></span>
-          </a>
-        </ng-template>
-      </ng-template>
+          <input
+            #inp
+            class="po-combo-input"
+            [ngClass]="
+              clean && inp.value
+                ? size === 'small'
+                  ? 'po-input-double-icon-right-aa'
+                  : 'po-input-double-icon-right'
+                : size === 'small'
+                  ? 'po-input-icon-right-aa'
+                  : 'po-input-icon-right'
+            "
+            [class.po-input-icon-left]="icon"
+            [class.po-input-icon-left-aa]="icon && size === 'small'"
+            autocomplete="off"
+            type="text"
+            [attr.data-focused-element]="!isDisabled"
+            [attr.data-inactive-component]="isDisabled"
+            [attr.name]="name"
+            [disabled]="isDisabled"
+            [id]="id"
+            [placeholder]="isDisabled ? '' : placeholder"
+            [required]="required"
+            [attr.data-append-in-body]="appendBox"
+            [attr.p-size]="size"
+            (click)="!isDisabled && toggleComboVisibility()"
+            (keyup)="onKeyUp($event)"
+            (blur)="onBlur($event)"
+            (keyup)="searchOnEnterOrArrow($event, $event.target.value)"
+            (keydown)="onKeyDown($event)"
+          />
 
-      <ng-template #optionTemplate>
-        <ng-container *ngIf="isOptionGroupList; then optionsGroupTemplate; else defaultOptionsTemplate"></ng-container>
-
-        <ng-template #optionsGroupTemplate>
-          <ng-template
-            [ngTemplateOutlet]="comboOptionTemplate?.templateRef"
-            [ngTemplateOutletContext]="{ $implicit: option, selected: compareObjects(selectedView, option) }"
-          >
-          </ng-template>
-        </ng-template>
-
-        <ng-template #defaultOptionsTemplate>
-          <a class="po-combo-item">
-            <ng-template
-              [ngTemplateOutlet]="comboOptionTemplate?.templateRef"
-              [ngTemplateOutletContext]="{ $implicit: option }"
+          <div class="po-field-icon-container-right">
+            @if (loading) {
+              <po-loading-icon [p-size]="mapSizeToIcon(size)"></po-loading-icon>
+            } @else {
+              @if (!loading && isCleanVisible()) {
+                <po-clean
+                  tabindex="0"
+                  role="button"
+                  [attr.aria-label]="literals.clean"
+                  class="po-combo-clean po-icon-input"
+                  [class.po-combo-clean-aa]="size === 'small'"
+                  [p-element-ref]="inputEl"
+                  [p-size]="size"
+                  (p-change-event)="clear($event)"
+                  (click)="clear(null); $event.preventDefault()"
+                  (keydown.enter)="clearAndFocus(); $event.preventDefault()"
+                  (keydown.tab)="handleCleanKeyboardTab($event)"
+                >
+                </po-clean>
+              }
+            }
+            <div
+              #iconArrow
+              class="po-combo-arrow po-field-icon"
+              [class.po-field-icon-disabled]="isDisabled"
+              [class.po-field-icon-disabled-aa]="isDisabled && size === 'small'"
+              (click)="!isDisabled && toggleComboVisibility(true)"
             >
-            </ng-template>
-          </a>
-        </ng-template>
-      </ng-template>
-    </li>
-  </ul>
-</ng-template>
-
-<ng-template #noDataTemplate>
-  <div class="po-combo-container-no-data">
-    <div class="po-combo-no-data po-text-center">
-      <span>
-        {{ literals.noData }}
-      </span>
+              <po-icon
+                [p-icon]="comboOpen ? 'ICON_ARROW_UP po-icon-input' : 'ICON_ARROW_DOWN po-icon-input'"
+                [class.po-field-icon]="!isDisabled"
+                [class.po-field-icon-aa]="size === 'small'"
+                [class.po-combo-default-border]="!isDisabled && inp.value"
+                [class.po-combo-background-arrow-up]="!isDisabled && comboOpen"
+              ></po-icon>
+            </div>
+          </div>
+        </div>
+        @if ((!this.label && poHelperComponent()) || (!this.label && poHelper.hideAdditionalHelp)) {
+          <po-helper
+            #helperEl
+            class="po-field-helper-button"
+            [p-size]="size"
+            [p-helper]="poHelper.helperSettings"
+            [p-disabled]="isDisabled"
+            [p-append-in-body]="appendBox"
+          >
+          </po-helper>
+        }
+      </div>
     </div>
-  </div>
-</ng-template>
+
+    @if (appendBox) {
+      <ng-template
+        cdkConnectedOverlay
+        [cdkConnectedOverlayOrigin]="trigger"
+        [cdkConnectedOverlayOpen]="true"
+        [cdkConnectedOverlayDisableClose]="true"
+      >
+        <ng-container *ngTemplateOutlet="dropdownListbox"></ng-container>
+      </ng-template>
+    } @else {
+      <ng-container *ngTemplateOutlet="dropdownListbox"> </ng-container>
+    }
+
+    <po-field-container-bottom
+      [p-append-in-body]="appendBox"
+      [p-help]="help"
+      [p-disabled]="isDisabled"
+      [p-error-pattern]="getErrorPattern()"
+      [p-error-limit]="errorLimit"
+      [p-size]="size"
+    ></po-field-container-bottom>
+  </po-field-container>
+
+  <ng-template #dropdownListbox>
+    <div #containerElement class="po-combo-container" [hidden]="!comboOpen && !isServerSearching">
+      <po-listbox
+        #poListbox
+        #contentElement
+        p-type="option"
+        [p-items]="visibleOptions"
+        [p-field-value]="dynamicValue"
+        [p-field-label]="dynamicLabel"
+        [p-template]="comboOptionTemplate"
+        [p-search-value]="getInputValue()"
+        [p-infinite-loading]="infiniteLoading"
+        [p-infinite-scroll]="infiniteScroll"
+        [p-filtering]="isFiltering"
+        [p-cache]="cache"
+        [p-filter-mode]="filterMode"
+        [p-visible]="comboOpen"
+        [p-is-searching]="isServerSearching"
+        [p-should-mark-letter]="shouldMarkLetters"
+        [p-compare-cache]="compareObjects(cacheOptions, visibleOptions)"
+        [p-combo-service]="service"
+        [p-infinite-scroll-distance]="infiniteScrollDistance"
+        [p-size]="size"
+        [p-container-width]="containerWidth"
+        (p-selectcombo-item)="onOptionClick($event, $event.event)"
+        (p-update-infinite-scroll)="showMoreInfiniteScroll()"
+        (p-close)="onCloseCombo()"
+        (keydown)="onListboxKeyDown($event)"
+      ></po-listbox>
+    </div>
+  </ng-template>
+</div>

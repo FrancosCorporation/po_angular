@@ -11,14 +11,12 @@ import { PoTableSubtitleColumn } from './po-table-subtitle-column.interface';
  */
 @Component({
   selector: 'po-table-subtitle-footer',
-  templateUrl: './po-table-subtitle-footer.component.html'
+  templateUrl: './po-table-subtitle-footer.component.html',
+  standalone: false
 })
 export class PoTableSubtitleFooterComponent implements AfterViewInit, DoCheck, OnDestroy {
-  showSubtitle: boolean;
-
-  private isVisible: boolean;
-  private timeoutResize;
-  protected resizeListener: () => void;
+  /** Define o tamanho dos elementos que possuem `p-size` dentro do componente. */
+  @Input('p-components-size') componentsSize: string;
 
   /** Propriedade que recebe as literais definidas no `po-table`. */
   @Input('p-literals') literals;
@@ -26,7 +24,17 @@ export class PoTableSubtitleFooterComponent implements AfterViewInit, DoCheck, O
   /** Propriedade que recebe as legendas definidas no `PoTableSubtitleCircleComponent`. */
   @Input('p-subtitles') subtitles: Array<PoTableSubtitleColumn>;
 
-  constructor(private element: ElementRef, public renderer: Renderer2) {}
+  showSubtitle: boolean;
+
+  protected resizeListener: () => void;
+
+  private isVisible: boolean;
+  private timeoutResize;
+
+  constructor(
+    private readonly element: ElementRef,
+    public renderer: Renderer2
+  ) {}
 
   ngAfterViewInit() {
     this.initializeResizeListener();

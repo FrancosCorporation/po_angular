@@ -2,8 +2,6 @@ import { Component, NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture, inject, TestBed } from '@angular/core/testing';
 
-import { configureTestSuite } from './../../util-test/util-expect.spec';
-
 import { PoComponentInjectorService } from './../po-component-injector/po-component-injector.service';
 import { PoDialogComponent } from './po-dialog.component';
 import { PoDialogService } from './po-dialog.service';
@@ -19,7 +17,8 @@ class TestModule {}
 
 @Component({
   template: ` test component `,
-  providers: [PoComponentInjectorService, PoDialogService]
+  providers: [PoComponentInjectorService, PoDialogService],
+  standalone: false
 })
 class TestComponent {
   constructor(poDialog: PoDialogService) {}
@@ -28,15 +27,13 @@ class TestComponent {
 describe('PoDialogService', () => {
   let fixture: ComponentFixture<TestComponent>;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [TestModule],
       providers: [PoDialogService],
       declarations: [TestComponent]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(TestComponent);
 
     const modalContainer = document.body.querySelectorAll('po-modal');
@@ -81,8 +78,7 @@ describe('PoDialogService', () => {
     const modalContainer = document.body.querySelector('po-modal');
     expect(modalContainer.querySelector('.po-modal-title').innerHTML).toContain(confirmOptions.title);
     expect(modalContainer.querySelector('.po-modal-body').innerHTML).toContain(confirmOptions.message);
-    expect(modalContainer.querySelector('.po-button-primary').innerHTML).toContain('Confirmar');
-    expect(modalContainer.querySelector('.po-button').innerHTML).toContain('Cancelar');
+    expect(modalContainer.querySelector('.po-button:not([p-kind="tertiary"])').innerHTML).toContain('Cancelar');
     modalContainer.remove();
   }));
 });

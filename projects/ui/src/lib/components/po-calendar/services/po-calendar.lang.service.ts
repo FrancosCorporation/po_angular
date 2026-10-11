@@ -2,11 +2,13 @@ import { Injectable } from '@angular/core';
 
 import { poLocales, poLocaleDefault } from '../../../services/po-language/po-language.constant';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoCalendarLangService {
   private language = poLocaleDefault;
 
-  private months = [
+  private readonly months = [
     {
       pt: 'Janeiro',
       en: 'January',
@@ -81,7 +83,7 @@ export class PoCalendarLangService {
     }
   ];
 
-  private shortWeekDays = [
+  private readonly shortWeekDays = [
     {
       pt: 'Dom',
       en: 'Sun',
@@ -126,18 +128,97 @@ export class PoCalendarLangService {
     }
   ];
 
-  private monthLabel = {
+  private readonly monthLabel = {
     pt: 'Mês',
     en: 'Month',
     es: 'Mes',
     ru: 'Месяц'
   };
 
-  private yearLabel = {
+  private readonly yearLabel = {
     pt: 'Ano',
     en: 'Year',
     es: 'Año',
     ru: 'Год'
+  };
+
+  private readonly todayLabel = {
+    pt: 'Hoje',
+    en: 'Today',
+    es: 'Hoy',
+    ru: 'Сегодня'
+  };
+
+  private readonly previousMonthLabel = {
+    pt: 'Mês anterior',
+    en: 'Previous month',
+    es: 'Mes anterior',
+    ru: 'Предыдущий месяц'
+  };
+
+  private readonly nextMonthLabel = {
+    pt: 'Próximo mês',
+    en: 'Next month',
+    es: 'Próximo mes',
+    ru: 'Следующий месяц'
+  };
+
+  readonly toCleanLabel = {
+    pt: 'Limpar',
+    en: 'To clean',
+    es: 'Para limpiar',
+    ru: 'Чистить'
+  };
+
+  private readonly presetLabels: { [key: string]: { pt: string; en: string; es: string; ru: string } } = {
+    tomorrow: {
+      pt: 'Amanhã',
+      en: 'Tomorrow',
+      es: 'Mañana',
+      ru: 'Завтра'
+    },
+    today: {
+      pt: 'Hoje',
+      en: 'Today',
+      es: 'Hoy',
+      ru: 'Сегодня'
+    },
+    yesterday: {
+      pt: 'Ontem',
+      en: 'Yesterday',
+      es: 'Ayer',
+      ru: 'Вчера'
+    },
+    '7days': {
+      pt: 'Últimos 7 dias',
+      en: 'Last 7 days',
+      es: 'Últimos 7 días',
+      ru: 'Последние 7 дней'
+    },
+    '14days': {
+      pt: 'Últimos 14 dias',
+      en: 'Last 14 days',
+      es: 'Últimos 14 días',
+      ru: 'Последние 14 дней'
+    },
+    '30days': {
+      pt: 'Últimos 30 dias',
+      en: 'Last 30 days',
+      es: 'Últimos 30 días',
+      ru: 'Последние 30 дней'
+    },
+    '3months': {
+      pt: 'Últimos 3 meses',
+      en: 'Last 3 months',
+      es: 'Últimos 3 meses',
+      ru: 'Последние 3 месяцев'
+    },
+    '6months': {
+      pt: 'Últimos 6 meses',
+      en: 'Last 6 months',
+      es: 'Últimos 6 meses',
+      ru: 'Последние 6 месяцев'
+    }
   };
 
   getMonth(month: number) {
@@ -163,13 +244,35 @@ export class PoCalendarLangService {
   getWeekDaysArray() {
     const arrWeekDays = Array();
     for (let i = 0; i < this.shortWeekDays.length; i++) {
-      arrWeekDays.push(this.shortWeekDays[i][this.language]);
+      const weekDay = this.shortWeekDays[i][this.language];
+      arrWeekDays.push(weekDay.toLowerCase());
     }
     return arrWeekDays;
   }
 
   getYearLabel() {
     return this.yearLabel[this.language];
+  }
+
+  getTodayLabel() {
+    return this.todayLabel[this.language];
+  }
+
+  getPreviousMonthLabel() {
+    return this.previousMonthLabel[this.language];
+  }
+
+  getNextMonthLabel() {
+    return this.nextMonthLabel[this.language];
+  }
+
+  getToCleanLabel() {
+    return this.toCleanLabel[this.language];
+  }
+
+  getPresetLabel(key: string): string {
+    const labels = this.presetLabels[key];
+    return labels ? labels[this.language] : key;
   }
 
   setLanguage(language: string) {

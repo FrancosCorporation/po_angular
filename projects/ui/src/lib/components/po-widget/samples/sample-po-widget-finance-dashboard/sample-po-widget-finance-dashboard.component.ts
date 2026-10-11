@@ -1,16 +1,31 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, inject } from '@angular/core';
 
-import { PoModalComponent, PoTableColumn } from '@po-ui/ng-components';
+import { PoModalComponent, PoMultiselectOption, PoNotificationService, PoTableColumn } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-widget-finance-dashboard',
-  templateUrl: './sample-po-widget-finance-dashboard.component.html'
+  templateUrl: './sample-po-widget-finance-dashboard.component.html',
+  styleUrls: ['./sample-po-widget-finance-dashboard.component.css'],
+  standalone: false
 })
 export class SamplePoWidgetFinanceDashboardComponent {
+  private readonly poNotification = inject(PoNotificationService);
+
+  @ViewChild('detailsModal', { static: true }) detailsModalElement: PoModalComponent;
+
   paymentLink: string = 'https://www.google.com.br/search?q=days+to+payment';
   itemsDetails: Array<any>;
   titleDetailsModal: string;
   typeChart: string = 'line';
+  myActions = [
+    { label: 'Detail', icon: 'an an-align-top', action: this.showAction.bind(this) },
+    { label: 'Remove', icon: 'an an-trash', type: 'danger', action: this.showAction.bind(this) }
+  ];
+
+  options: Array<PoMultiselectOption> = [
+    { value: 'poMultiselect1', label: 'Admin' },
+    { value: 'poMultiselect2', label: 'User' }
+  ];
 
   public readonly columnsDetails: Array<PoTableColumn> = [
     { property: 'dateUpdate', label: 'Date update', type: 'date' },
@@ -32,24 +47,26 @@ export class SamplePoWidgetFinanceDashboardComponent {
     { dateUpdate: '12-05-2017', statement: '2000' }
   ];
 
-  @ViewChild('detailsModal', { static: true }) detailsModalElement: PoModalComponent;
-
-  daysPayment() {
-    window.open(this.paymentLink, '_blank');
-  }
-
   openModal(type) {
     switch (type) {
       case 'savings':
-        this.titleDetailsModal = 'Total savings - Details';
+        this.titleDetailsModal = 'Revenue - Details';
         this.itemsDetails = this.itemsSavingsDetails;
         this.detailsModalElement.open();
         break;
       case 'account':
-        this.titleDetailsModal = 'Total checking account - Details';
+        this.titleDetailsModal = 'Total savings - Details';
         this.itemsDetails = this.itemsAccountDetails;
         this.detailsModalElement.open();
         break;
     }
+  }
+
+  openExternalLink(url) {
+    window.open(url, '_blank');
+  }
+
+  private showAction(): any {
+    this.poNotification.success(`Action clicked`);
   }
 }

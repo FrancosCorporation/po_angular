@@ -1,8 +1,6 @@
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { Component } from '@angular/core';
+import { Component, QueryList } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-
-import { configureTestSuite } from '../../util-test/util-expect.spec';
 
 import { PoAccordionComponent } from './po-accordion.component';
 import { PoAccordionModule } from './po-accordion.module';
@@ -10,11 +8,12 @@ import { PoAccordionService } from './services/po-accordion.service';
 
 @Component({
   template: `
-    <po-accordion>
+    <po-accordion p-show-manager-accordion="true">
       <po-accordion-item p-label="PO Accordion 1"> Item 1 </po-accordion-item>
       <po-accordion-item p-label="PO Accordion 2"> Item 2 </po-accordion-item>
     </po-accordion>
-  `
+  `,
+  standalone: false
 })
 class PoAccordionMockComponent {}
 
@@ -23,22 +22,20 @@ describe('PoAccordionComponent:', () => {
   let fixture: ComponentFixture<PoAccordionComponent>;
   let componentMock: PoAccordionMockComponent;
   let fixtureMock: ComponentFixture<PoAccordionMockComponent>;
-  let nativeElement: any;
+  let debugElement: any;
   let nativeElementMock: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       declarations: [PoAccordionMockComponent],
       providers: [PoAccordionService],
       imports: [PoAccordionModule, BrowserAnimationsModule]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoAccordionComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
-    nativeElement = fixture.debugElement.nativeElement;
+    debugElement = fixture.debugElement.nativeElement;
 
     fixtureMock = TestBed.createComponent(PoAccordionMockComponent);
     componentMock = fixtureMock.componentInstance;
@@ -57,6 +54,26 @@ describe('PoAccordionComponent:', () => {
       component.ngOnDestroy();
 
       expect(component['accordionServiceSubscription'].unsubscribe).toHaveBeenCalled();
+    });
+
+    it('collapse: should set `expanded` to `false` and emits `p-collapse` event', () => {
+      spyOn(component.collapseAllEvent, 'emit');
+
+      component.showManagerAccordion = true;
+      component.collapseAllItems();
+
+      expect(component.expandedAllItems).toBe(false);
+      expect(component.collapseAllEvent.emit).toHaveBeenCalled();
+    });
+
+    it('expand: should set `expanded` to `true` and emits `p-expand` event', () => {
+      spyOn(component.expandAllEvent, 'emit');
+
+      component.showManagerAccordion = true;
+      component.expandAllItems();
+
+      expect(component.expandedAllItems).toBe(true);
+      expect(component.expandAllEvent.emit).toHaveBeenCalled();
     });
 
     it('headerToggle: should call `toggle` with `poAccordionItem` and set `poAccordionItem.expanded` to true', () => {
@@ -79,6 +96,61 @@ describe('PoAccordionComponent:', () => {
       expect(component['toggle']).toHaveBeenCalledWith(<any>poAccordionItemExpected);
     });
 
+    it('changeVisibleAllItems: should call `toggle` with `poAccordionItem` and expand all items if not disabled', () => {
+      spyOn(component, <any>'toggle');
+      spyOn(component.expandAllEvent, 'emit');
+
+      const poAccordionList = [
+        {
+          expanded: false,
+          label: 'Test Label'
+        },
+        {
+          expanded: false,
+          label: 'Test Label'
+        },
+        {
+          expanded: false,
+          disabledItem: true,
+          label: 'Test Label'
+        }
+      ];
+
+      component.poAccordionItems = poAccordionList as any;
+
+      component.changeVisibleAllItems(false);
+
+      expect(component['toggle']).toHaveBeenCalled();
+      expect(component.expandAllEvent.emit).toHaveBeenCalled();
+      expect(component.expandedAllItems).toBe(true);
+      expect(component.poAccordionItems[0].expanded).toBe(true);
+      expect(component.poAccordionItems[2].expanded).toBe(false);
+    });
+
+    it('changeVisibleAllItems: should call `toggle` with `poAccordionItem` and collapse all items', () => {
+      spyOn(component, <any>'toggle');
+      spyOn(component.collapseAllEvent, 'emit');
+
+      const poAccordionList = [
+        {
+          expanded: true,
+          label: 'Test Label'
+        },
+        {
+          expanded: true,
+          label: 'Test Label'
+        }
+      ];
+
+      component.poAccordionItems = poAccordionList as any;
+
+      component.changeVisibleAllItems(true);
+
+      expect(component['toggle']).toHaveBeenCalled();
+      expect(component.collapseAllEvent.emit).toHaveBeenCalled();
+      expect(component.expandedAllItems).toBe(false);
+    });
+
     it('receiveFromChildAccordionSubscription: should call `toggle` if `receiveFromChildAccordionClicked` emit for a subscription', () => {
       const poAccordionItem = {
         expanded: false,
@@ -89,9 +161,7 @@ describe('PoAccordionComponent:', () => {
         toggle: arg => {},
         accordionServiceSubscription: undefined,
         accordionService: {
-          receiveFromChildAccordionClicked: () => {
-            return { subscribe: callback => callback(poAccordionItem) };
-          }
+          receiveFromChildAccordionClicked: () => ({ subscribe: callback => callback(poAccordionItem) })
         }
       };
 
@@ -100,6 +170,68 @@ describe('PoAccordionComponent:', () => {
       component['receiveFromChildAccordionSubscription'].call(fakeThis);
 
       expect(fakeThis['toggle']).toHaveBeenCalledWith(poAccordionItem);
+    });
+
+    it('toggle: should call `checkVisibleAllItems` and `expandedAllItems` is true', () => {
+      const currentAccordionItem = {
+        expanded: true
+      };
+
+      const poAccordionList = [
+        {
+          expanded: true,
+          label: 'Test Label'
+        },
+        {
+          expanded: true,
+          label: 'Test Label'
+        }
+      ];
+
+      const queryList = new QueryList<any>();
+      queryList.reset(poAccordionList);
+      component.showManagerAccordion = true;
+      component.poAccordionItems = queryList as any;
+      component.showManagerAccordion = true;
+
+      component['expandedActiveAccordionItem'] = <any>currentAccordionItem;
+
+      component['toggle'](<any>currentAccordionItem);
+
+      expect(component['expandedActiveAccordionItem']).toBe(<any>currentAccordionItem);
+    });
+
+    it('toggle: should call `checkVisibleAllItems` and `expandedAllItems` is false', () => {
+      const poAccordionList = [
+        {
+          expanded: false,
+          label: 'Test Label'
+        },
+        {
+          expanded: true,
+          label: 'Test Label'
+        },
+        {
+          expanded: false,
+          disabledItem: true,
+          label: 'Test Label'
+        }
+      ];
+
+      const poAccordionItem = {
+        expanded: false,
+        label: 'Test Label'
+      };
+
+      const queryList = new QueryList<any>();
+      queryList.reset(poAccordionList);
+      component.showManagerAccordion = true;
+      component.poAccordionItems = queryList as any;
+
+      component['toggle'](<any>poAccordionItem);
+
+      expect(component.expandedAllItems).toBe(false);
+      expect(component['expandedActiveAccordionItem']).toBeNull();
     });
 
     it('toggle: should set `expandedActiveAccordionItem` to null if current accordion is collapsed', () => {
@@ -127,6 +259,8 @@ describe('PoAccordionComponent:', () => {
 
       spyOn(expandedActiveAccordionItem, 'collapse');
 
+      component.allowExpandItems = false;
+      component.showManagerAccordion = false;
       component['expandedActiveAccordionItem'] = <any>expandedActiveAccordionItem;
 
       component['toggle'](<any>currentAccordionItem);
@@ -166,6 +300,13 @@ describe('PoAccordionComponent:', () => {
       const activeItem = nativeElementMock.querySelector('.po-accordion-item-active');
 
       expect(activeItem).toBeFalsy();
+    });
+
+    it('should contain `po-accordion-manager` if `showManagerAccordion` is active', () => {
+      fixture.detectChanges();
+      const managerAccordion = nativeElementMock.querySelector('.po-accordion-manager');
+
+      expect(managerAccordion).toBeTruthy();
     });
   });
 });

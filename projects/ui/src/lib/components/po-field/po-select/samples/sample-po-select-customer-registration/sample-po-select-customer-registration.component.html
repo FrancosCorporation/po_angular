@@ -40,7 +40,7 @@
     >
       <ng-template p-select-option-template let-option>
         <div class="sample-select-option-template-container">
-          <po-avatar p-size="xs" p-src="https://po-sample-api.herokuapp.com/v1/sampleSelect/{{ option.value }}.png">
+          <po-avatar p-size="xs" p-src="https://po-sample-api.onrender.com/v1/sampleSelect/{{ option.value }}.png">
           </po-avatar>
 
           <div class="sample-select-option-template-margin">
@@ -67,7 +67,7 @@
     <po-info class="po-md-6" [p-label]="documentLabel" [p-value]="document"> </po-info>
   </div>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-info class="po-md-6" [p-label]="nameLabel" [p-value]="name"> </po-info>
@@ -75,7 +75,7 @@
     <po-info class="po-md-6" p-label="Address" [p-value]="address"> </po-info>
   </div>
 
-  <hr />
+  <po-divider />
 
   <div class="po-row">
     <po-info class="po-md-6" p-label="State" [p-value]="getStateByValue(state)"> </po-info>

@@ -1,7 +1,6 @@
 {
   "name": "@po-ui/ng-templates",
   "version": "0.0.0-PLACEHOLDER",
-  "tag": "next",
   "description": "PO UI - Templates",
   "author": "PO UI",
   "license": "MIT",
@@ -14,19 +13,19 @@
   "dependencies": {
     "@po-ui/ng-components": "0.0.0-PLACEHOLDER",
     "@po-ui/ng-schematics": "0.0.0-PLACEHOLDER",
-    "tslib": "^2.0.0"
+    "tslib": "^2.6.2"
   },
   "peerDependencies": {
-    "@angular/animations": "~11.1.0",
-    "@angular/common": "~11.1.0",
-    "@angular/compiler": "~11.1.0",
-    "@angular/core": "~11.1.0",
-    "@angular/forms": "~11.1.0",
-    "@angular/platform-browser": "~11.1.0",
-    "@angular/platform-browser-dynamic": "~11.1.0",
-    "@angular/router": "~11.1.0",
+    "@angular/animations": "^21",
+    "@angular/common": "^21",
+    "@angular/compiler": "^21",
+    "@angular/core": "^21",
+    "@angular/forms": "^21",
+    "@angular/platform-browser": "^21",
+    "@angular/platform-browser-dynamic": "^21",
+    "@angular/router": "^21",
     "@po-ui/ng-components": "0.0.0-PLACEHOLDER",
-    "rxjs": "~6.6.0",
-    "zone.js": "~0.10.2"
+    "rxjs": "~7.8.1",
+    "zone.js": "~0.15.0"
   }
 }

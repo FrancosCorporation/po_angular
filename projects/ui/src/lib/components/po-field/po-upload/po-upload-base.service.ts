@@ -1,4 +1,4 @@
-import { Injectable, EventEmitter } from '@angular/core';
+import { Injectable, EventEmitter, inject } from '@angular/core';
 import {
   HttpClient,
   HttpEventType,
@@ -12,12 +12,14 @@ import { PoUploadFile } from './po-upload-file';
 
 import { Observable, Subscription } from 'rxjs';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoUploadBaseService {
+  private readonly http = inject(HttpClient);
+
   formField: string = 'files';
   requests: Array<any> = [];
-
-  constructor(private http: HttpClient) {}
 
   /**
    * Método responsável por enviar os arquivos ao servidor, conforme o parâmetro URL.
@@ -41,7 +43,10 @@ export class PoUploadBaseService {
     const filesLength = files.length;
     const uploadEvent: any = {
       data: {},
-      file: null
+      extraFormData: {},
+      file: null,
+      url: url,
+      headers: headers
     };
 
     for (let i = 0; i < filesLength; i++) {
@@ -56,7 +61,13 @@ export class PoUploadBaseService {
         uploadEvent['file'] = file;
         tOnUpload.emit(uploadEvent);
 
+        Object.keys(uploadEvent.extraFormData).forEach(key => {
+          formData.append(key, uploadEvent.extraFormData[key]);
+        });
+
         formData.append('data', JSON.stringify(uploadEvent.data));
+        url = uploadEvent.url;
+        headers = uploadEvent.headers;
       }
 
       this.sendFile(url, file, headers, formData, uploadCallback, successCallback, errorCallback);
@@ -72,7 +83,8 @@ export class PoUploadBaseService {
     successCallback: (file: PoUploadFile, event: any) => void,
     errorCallback: (file: PoUploadFile, event: any) => void
   ) {
-    const request = this.getRequest(url, headers, formData).subscribe(
+    let request: Subscription = new Subscription();
+    request = this.getRequest(url, headers, formData).subscribe(
       event => {
         if (event.type === HttpEventType.UploadProgress) {
           this.addRequest(file, request);
@@ -105,9 +117,7 @@ export class PoUploadBaseService {
   }
 
   public stopRequestByFile(file: any, callback: () => void) {
-    const requestObj = this.requests.find(req => {
-      return req.file.uid === file.uid;
-    });
+    const requestObj = this.requests.find(req => req.file.uid === file.uid);
 
     if (requestObj) {
       const request = requestObj.request;
@@ -123,9 +133,7 @@ export class PoUploadBaseService {
   }
 
   public addRequest(file: PoUploadFile, request: Subscription) {
-    const hasRequest = this.requests.some(req => {
-      return req.file.uid === file.uid;
-    });
+    const hasRequest = this.requests.some(req => req.file.uid === file.uid);
 
     if (!hasRequest) {
       this.requests.push({ file, request });

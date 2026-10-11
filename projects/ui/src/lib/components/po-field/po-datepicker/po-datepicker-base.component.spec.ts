@@ -1,31 +1,39 @@
 import { Directive } from '@angular/core';
-import { fakeAsync, tick } from '@angular/core/testing';
-import { FormControl } from '@angular/forms';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { FormControl, UntypedFormControl, Validators } from '@angular/forms';
 
-import * as UtilsFunctions from '../../../utils/util';
-import * as ValidatorsFunctions from './../validators';
-import { convertDateToISOExtended, formatYear, getShortBrowserLanguage, setYearFrom0To100 } from '../../../utils/util';
-import { expectSettersMethod, expectPropertiesValues } from '../../../util-test/util-expect.spec';
+import { expectPropertiesValues, expectSettersMethod } from '../../../util-test/util-expect.spec';
+import { convertIsoToDate, mapInputSizeToLoadingIcon, PoUtils as UtilsFunctions } from '../../../utils/util';
+import { PoValidators as ValidatorsFunctions } from './../validators';
 
-import { PoDatepickerBaseComponent } from './po-datepicker-base.component';
-import { PoDatepickerIsoFormat } from './enums/po-datepicker-iso-format.enum';
-import { PoMask } from '../po-input/po-mask';
+import { Subject } from 'rxjs';
+import { PoThemeA11yEnum } from '../../../services';
 import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { PoMask } from '../po-input/po-mask';
+import { PoDatepickerIsoFormat } from './enums/po-datepicker-iso-format.enum';
+import { PoDatepickerBaseComponent } from './po-datepicker-base.component';
 
 @Directive()
 class PoDatepickerComponent extends PoDatepickerBaseComponent {
   writeValue(value: any): void {}
   refreshValue(value: Date): void {}
+  replaceFormatSeparator(): any {}
 }
 
 describe('PoDatepickerBaseComponent:', () => {
   let component: PoDatepickerComponent;
-  let languageService: PoLanguageService;
-  languageService = new PoLanguageService();
 
-  beforeEach(() => {
-    component = new PoDatepickerComponent(languageService);
-    component['shortLanguage'] = 'pt';
+  const fakeSubscription = <any>{ unsubscribe: () => {} };
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({}).compileComponents();
+
+    const languageService = TestBed.inject(PoLanguageService);
+    const changeDetector = { detectChanges: () => {}, markForCheck: () => {} } as any;
+
+    component = TestBed.runInInjectionContext(() => new PoDatepickerComponent(languageService, changeDetector));
+
+    (component as any)['shortLanguage'] = 'pt';
   });
 
   it('should be created', () => {
@@ -37,36 +45,32 @@ describe('PoDatepickerBaseComponent:', () => {
     spyOn(component, <any>'validateModel');
     spyOn(UtilsFunctions, 'convertDateToISOExtended');
 
-    expectSettersMethod(component, 'setDisabled', '', 'disabled', true);
-    expectSettersMethod(component, 'setDisabled', 'true', 'disabled', true);
-    expectSettersMethod(component, 'setDisabled', 'false', 'disabled', false);
+    expectSettersMethod(component, 'setDisabled', true, 'disabled', true);
+    expectSettersMethod(component, 'setDisabled', false, 'disabled', false);
 
     expect(component['validateModel']).toHaveBeenCalled();
-    expect(convertDateToISOExtended).toHaveBeenCalled();
+    expect(UtilsFunctions.convertDateToISOExtended).toHaveBeenCalled();
   });
 
   it('should update property p-required', () => {
     spyOn(component, <any>'validateModel');
     spyOn(UtilsFunctions, 'convertDateToISOExtended');
 
-    expectSettersMethod(component, 'setRequired', '', 'required', true);
-    expectSettersMethod(component, 'setRequired', 'true', 'required', true);
-    expectSettersMethod(component, 'setRequired', 'false', 'required', false);
+    expectSettersMethod(component, 'setRequired', true, 'required', true);
+    expectSettersMethod(component, 'setRequired', false, 'required', false);
 
     expect(component['validateModel']).toHaveBeenCalled();
-    expect(convertDateToISOExtended).toHaveBeenCalled();
+    expect(UtilsFunctions.convertDateToISOExtended).toHaveBeenCalled();
   });
 
   it('should update property p-readonly', () => {
-    expectSettersMethod(component, 'setReadonly', '', 'readonly', true);
-    expectSettersMethod(component, 'setReadonly', 'true', 'readonly', true);
-    expectSettersMethod(component, 'setReadonly', 'false', 'readonly', false);
+    expectSettersMethod(component, 'setReadonly', true, 'readonly', true);
+    expectSettersMethod(component, 'setReadonly', false, 'readonly', false);
   });
 
   it('should update property p-clean', () => {
-    expectSettersMethod(component, 'setClean', '', 'clean', true);
-    expectSettersMethod(component, 'setClean', 'true', 'clean', true);
-    expectSettersMethod(component, 'setClean', 'false', 'clean', false);
+    expectSettersMethod(component, 'setClean', true, 'clean', true);
+    expectSettersMethod(component, 'setClean', false, 'clean', false);
   });
 
   it('should be update property p-min-date with 0 hours using string', () => {
@@ -128,6 +132,11 @@ describe('PoDatepickerBaseComponent:', () => {
     expectPropertiesValues(component, 'locale', 'ru', 'ru');
   });
 
+  it('should be update property date', () => {
+    const expectedValue = convertIsoToDate('2021/08/20', false, false);
+    expectPropertiesValues(component, 'date', '2021/08/20', expectedValue);
+  });
+
   it('should transform a String to Date', () => {
     component.format = 'dd/MM/yyyy';
 
@@ -137,7 +146,7 @@ describe('PoDatepickerBaseComponent:', () => {
   });
 
   it('should be null to invalid date', () => {
-    component['setRequired'] = 'false';
+    component['setRequired'] = false;
     component.format = 'dd/MM/yyyy';
 
     const date = component.getDateFromString('05/13/2017');
@@ -182,8 +191,12 @@ describe('PoDatepickerBaseComponent:', () => {
 
   it('setDisabledState: should set `component.disabled` with boolean parameter', () => {
     const expectedValue = true;
+    const markForCheck = spyOn(component['cd'], 'markForCheck');
+
     component.setDisabledState(expectedValue);
+
     expect(component.disabled).toBe(expectedValue);
+    expect(markForCheck).toHaveBeenCalled();
   });
 
   it('should be call callOnChange with minDate', () => {
@@ -324,7 +337,7 @@ describe('PoDatepickerBaseComponent:', () => {
 
       component.formatToDate(date);
 
-      expect(formatYear).toHaveBeenCalledWith(date.getFullYear());
+      expect(UtilsFunctions.formatYear).toHaveBeenCalledWith(date.getFullYear());
     });
 
     it('getDateFromString: should call `setYearFrom0To100`', () => {
@@ -333,7 +346,7 @@ describe('PoDatepickerBaseComponent:', () => {
 
       component.getDateFromString(date);
 
-      expect(setYearFrom0To100).toHaveBeenCalled();
+      expect(UtilsFunctions.setYearFrom0To100).toHaveBeenCalled();
     });
 
     describe('validate:', () => {
@@ -350,24 +363,27 @@ describe('PoDatepickerBaseComponent:', () => {
       it(`should invalidate form and set errorPattern with errorPattern value
         when has an errorPattern value and date is invalid`, () => {
         component.errorPattern = 'errorPattern';
-
-        expect(component.validate(new FormControl([]))).toEqual(invalidDateError);
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        expect(component.validate(new UntypedFormControl([]))).toEqual(invalidDateError);
         expect(component.errorPattern).toBe('errorPattern');
       });
 
       it(`should invalidate form and set errorPattern 'Data inválida' when
         doesn't have an errorPattern value and date is invalid`, () => {
+        component['cd'] = { markForCheck: () => {} } as any;
         component.errorPattern = '';
-
-        expect(component.validate(new FormControl([]))).toEqual(invalidDateError);
+        spyOn(component['cd'], 'markForCheck');
+        expect(component.validate(new UntypedFormControl([]))).toEqual(invalidDateError);
         expect(component.errorPattern).toBe('Data inválida');
       });
 
       it(`should invalidate form and set errorPattern 'Data inválida' when
         errorPattern is equal to 'Data fora do período' and date is invalid`, () => {
         component.errorPattern = 'Data fora do período';
-
-        expect(component.validate(new FormControl([]))).toEqual(invalidDateError);
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        expect(component.validate(new UntypedFormControl([]))).toEqual(invalidDateError);
         expect(component.errorPattern).toBe('Data inválida');
       });
 
@@ -378,8 +394,9 @@ describe('PoDatepickerBaseComponent:', () => {
           }
         };
         spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(true);
-
-        expect(component.validate(new FormControl(undefined))).toEqual(invalidRequiredError);
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        expect(component.validate(new UntypedFormControl(undefined))).toEqual(invalidRequiredError);
         expect(component.errorPattern).toBe('');
       });
 
@@ -387,34 +404,209 @@ describe('PoDatepickerBaseComponent:', () => {
         spyOn(UtilsFunctions, 'validateDateRange').and.returnValue(false);
 
         component['date'] = new Date(2018, 5, 5);
-
-        expect(component.validate(new FormControl('Tue Jun 05 2018 00:00:00'))).toEqual(invalidDateError);
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        expect(component.validate(new UntypedFormControl('Tue Jun 05 2018 00:00:00'))).toEqual(invalidDateError);
         expect(component.errorPattern).toBe('Data fora do período');
       });
 
       it(`should invalidate form and set errorPattern 'Data fora do período' when
         has a date out of range and errorPattern is 'Data inválida'`, () => {
+        component['cd'] = { markForCheck: () => {} } as any;
         spyOn(UtilsFunctions, 'validateDateRange').and.returnValue(false);
-
+        spyOn(component['cd'], 'markForCheck');
         component.errorPattern = 'Data inválida';
         component['date'] = new Date(2018, 5, 5);
 
-        expect(component.validate(new FormControl('Tue Jun 05 2018 00:00:00'))).toEqual(invalidDateError);
+        expect(component.validate(new UntypedFormControl('Tue Jun 05 2018 00:00:00'))).toEqual(invalidDateError);
         expect(component.errorPattern).toBe('Data fora do período');
       });
 
       it(`shouldn't invalidate form and set errorPattern '' when set a valid date and errorPattern is 'Data inválida'`, () => {
         component.errorPattern = 'Data inválida';
 
-        expect(component.validate(new FormControl('Tue Jun 05 2018 00:00:00'))).toEqual(null);
+        expect(component.validate(new UntypedFormControl('Tue Jun 05 2018 00:00:00'))).toEqual(null);
         expect(component.errorPattern).toBe('');
       });
 
       it(`shouldn't invalidate form and set errorPattern '' when set a valid date and errorPattern is 'Data fora do período'`, () => {
         component.errorPattern = 'Data fora do período';
 
-        expect(component.validate(new FormControl('Tue Jun 05 2018 00:00:00'))).toEqual(null);
+        expect(component.validate(new UntypedFormControl('Tue Jun 05 2018 00:00:00'))).toEqual(null);
         expect(component.errorPattern).toBe('');
+      });
+
+      it('should call markForCheck when status is INVALID', fakeAsync(() => {
+        component['cd'] = { markForCheck: () => {} } as any;
+        component.errorPattern = 'Erro inválido';
+        const controlMock = {
+          statusChanges: new Subject<string>()
+        } as any;
+
+        spyOn(component['cd'], 'markForCheck');
+
+        component.validate(controlMock);
+
+        controlMock.statusChanges.next('INVALID');
+        tick();
+
+        expect(component['cd'].markForCheck).toHaveBeenCalled();
+      }));
+
+      it('should set hasValidatorRequired to true if showErrorMessageRequired is true and control has required validator', () => {
+        component['hasValidatorRequired'] = false;
+        component.showErrorMessageRequired = true;
+
+        const controlMock = new FormControl('', Validators.required);
+
+        component.validate(controlMock);
+
+        expect(component['hasValidatorRequired']).toBeTrue();
+      });
+
+      // Tests for month-year mode validation
+      it('should NOT return error for valid month-year string "04/2025" when mode is month-year', () => {
+        component.mode = 'month-year';
+        expect(component.validate(new UntypedFormControl('04/2025'))).toEqual(null);
+      });
+
+      it('should NOT return error for valid month-year string "12/2000" when mode is month-year', () => {
+        component.mode = 'month-year';
+        expect(component.validate(new UntypedFormControl('12/2000'))).toEqual(null);
+      });
+
+      it('should return date error for invalid month "13/2025" when mode is month-year', () => {
+        component.mode = 'month-year';
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl('13/2025'));
+        expect(result).toEqual({ date: { valid: false } });
+      });
+
+      it('should return date error for invalid month "00/2025" when mode is month-year', () => {
+        component.mode = 'month-year';
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl('00/2025'));
+        expect(result).toEqual({ date: { valid: false } });
+      });
+
+      it('should return date error for non-string value when mode is month-year', () => {
+        component.mode = 'month-year';
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl(12345));
+        expect(result).toEqual({ date: { valid: false } });
+      });
+
+      it('should NOT return error for empty value when mode is month-year', () => {
+        component.mode = 'month-year';
+        expect(component.validate(new UntypedFormControl(''))).toEqual(null);
+      });
+
+      it('should NOT return error for null value when mode is month-year', () => {
+        component.mode = 'month-year';
+        expect(component.validate(new UntypedFormControl(null))).toEqual(null);
+      });
+
+      // Tests for year mode validation
+      it('should NOT return error for valid year string "2025" when mode is year', () => {
+        component.mode = 'year';
+        expect(component.validate(new UntypedFormControl('2025'))).toEqual(null);
+      });
+
+      it('should return date error for invalid year "0000" when mode is year', () => {
+        component.mode = 'year';
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl('0000'));
+        expect(result).toEqual({ date: { valid: false } });
+      });
+
+      it('should return date error for non-numeric year "abcd" when mode is year', () => {
+        component.mode = 'year';
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl('abcd'));
+        expect(result).toEqual({ date: { valid: false } });
+      });
+
+      it('should NOT return error for empty value when mode is year', () => {
+        component.mode = 'year';
+        expect(component.validate(new UntypedFormControl(''))).toEqual(null);
+      });
+
+      // Tests for month-year date range validation
+      it('should return date error when month-year date is before minDate', () => {
+        component.mode = 'month-year';
+        component['date'] = new Date(2024, 0, 1);
+        component['_minDate'] = new Date(2025, 0, 1);
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl('01/2024'));
+        expect(result).toEqual({ date: { valid: false } });
+        expect(component.errorPattern).toBe('Data fora do período');
+      });
+
+      it('should return date error when month-year date is after maxDate', () => {
+        component.mode = 'month-year';
+        component['date'] = new Date(2026, 5, 1);
+        component['_maxDate'] = new Date(2025, 11, 1);
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl('06/2026'));
+        expect(result).toEqual({ date: { valid: false } });
+        expect(component.errorPattern).toBe('Data fora do período');
+      });
+
+      it('should NOT return error when month-year date is within range', () => {
+        component.mode = 'month-year';
+        component['date'] = new Date(2025, 5, 1);
+        component['_minDate'] = new Date(2025, 0, 1);
+        component['_maxDate'] = new Date(2025, 11, 1);
+        const result = component.validate(new UntypedFormControl('06/2025'));
+        expect(result).toEqual(null);
+      });
+
+      // Tests for year date range validation
+      it('should return date error when year date is before minDate year', () => {
+        component.mode = 'year';
+        component['date'] = new Date(2024, 0, 1);
+        component['_minDate'] = new Date(2025, 0, 1);
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl('2024'));
+        expect(result).toEqual({ date: { valid: false } });
+        expect(component.errorPattern).toBe('Data fora do período');
+      });
+
+      it('should return date error when year date is after maxDate year', () => {
+        component.mode = 'year';
+        component['date'] = new Date(2026, 0, 1);
+        component['_maxDate'] = new Date(2025, 0, 1);
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl('2026'));
+        expect(result).toEqual({ date: { valid: false } });
+        expect(component.errorPattern).toBe('Data fora do período');
+      });
+
+      it('should NOT return error when year date is within range', () => {
+        component.mode = 'year';
+        component['date'] = new Date(2025, 0, 1);
+        component['_minDate'] = new Date(2020, 0, 1);
+        component['_maxDate'] = new Date(2030, 0, 1);
+        const result = component.validate(new UntypedFormControl('2025'));
+        expect(result).toEqual(null);
+      });
+
+      // Ensures default mode still uses dateFailed
+      it('should still use dateFailed for default mode (no mode set)', () => {
+        component.mode = undefined;
+        component['cd'] = { markForCheck: () => {} } as any;
+        spyOn(component['cd'], 'markForCheck');
+        const result = component.validate(new UntypedFormControl('04/2025'));
+        expect(result).toEqual({ date: { valid: false } });
       });
     });
 
@@ -424,6 +616,16 @@ describe('PoDatepickerBaseComponent:', () => {
       component.ngOnInit();
 
       expect(component['buildMask']).toHaveBeenCalled();
+    });
+
+    it('ngOnDestroy: should unsubscribe `subscription` on destroy', () => {
+      component['subscription'] = fakeSubscription;
+
+      spyOn(component['subscription'], <any>'unsubscribe');
+
+      component.ngOnDestroy();
+
+      expect(component['subscription'].unsubscribe).toHaveBeenCalled();
     });
 
     it('validateModel: shouldn`t call `validatorChange` when it is falsy', () => {
@@ -449,7 +651,7 @@ describe('PoDatepickerBaseComponent:', () => {
       expect(component['validatorChange']).toBe(registerOnValidatorChangeFn);
     });
 
-    it('callOnChange: should call `onChangeModel` with `value` param if `onChangeModel` is truthy', () => {
+    it('callOnChange: should call `onChangeModel` with `value` param if `onChangeModel` is truthy and `value` is different from the `previousValue`', () => {
       const expectedValue = '2019-04-04';
 
       const spyOnChangeModel = spyOn(component, <any>'onChangeModel');
@@ -457,6 +659,18 @@ describe('PoDatepickerBaseComponent:', () => {
       component.callOnChange(expectedValue);
 
       expect(spyOnChangeModel).toHaveBeenCalledWith(expectedValue);
+    });
+
+    it('callOnChange: shouldn`t call `onChangeModel` if `value` is equal to the `previousValue`', () => {
+      const expectedValue = '2019-04-04';
+
+      component['previousValue'] = '2019-04-04';
+
+      const spyOnChangeModel = spyOn(component, <any>'onChangeModel');
+
+      component.callOnChange(expectedValue);
+
+      expect(spyOnChangeModel).not.toHaveBeenCalled();
     });
 
     it('callOnChange: should call `callOnChange` only twice if `retry` param is true and `onChangeModel` is falsy', fakeAsync(() => {
@@ -488,17 +702,31 @@ describe('PoDatepickerBaseComponent:', () => {
       expect(component['onChangeModel']).toBe(undefined);
       expect(spyCallOnChange).toHaveBeenCalledTimes(1);
     }));
+
+    it('formatTimeAndHour: should call `formatTimeAndHour` with timezone negative', () => {
+      component.formatTimezoneAndHour(180);
+      expect(component['hour']).toBe('T00:00:00-03:00');
+    });
+
+    it('formatTimeAndHour: should call `formatTimeAndHour` with timezone positive', () => {
+      component.formatTimezoneAndHour(-180);
+      expect(component['hour']).toBe('T00:00:00+03:00');
+    });
   });
 
   describe('Properties:', () => {
-    it('p-no-autocomplete: should update property with valid values with valid values.', () => {
-      const invalidValues = [undefined, null, 0, 'false', 'string'];
-      expectPropertiesValues(component, 'noAutocomplete', invalidValues, false);
+    it('p-compact-label: should have default value as false', () => {
+      expect(component.compactLabel()).toBe(false);
     });
 
-    it('p-no-autocomplete: should update property with valid values with valid values.', () => {
-      const validValues = [true, 'true', 1, ' '];
-      expectPropertiesValues(component, 'noAutocomplete', validValues, true);
+    it('p-no-autocomplete: should update property to false.', () => {
+      component.noAutocomplete = false;
+      expect(component.noAutocomplete).toBeFalse();
+    });
+
+    it('p-no-autocomplete: should update property to true.', () => {
+      component.noAutocomplete = true;
+      expect(component.noAutocomplete).toBeTrue();
     });
 
     it('isExtendedISO: should be false.', () => {
@@ -559,7 +787,7 @@ describe('PoDatepickerBaseComponent:', () => {
       spyOn(UtilsFunctions, 'setYearFrom0To100');
 
       component.minDate = new Date();
-      expect(setYearFrom0To100).toHaveBeenCalled();
+      expect(UtilsFunctions.setYearFrom0To100).toHaveBeenCalled();
     });
 
     it('p-max-date: should set end date with year 1', () => {
@@ -576,7 +804,31 @@ describe('PoDatepickerBaseComponent:', () => {
 
       component.maxDate = new Date();
 
-      expect(setYearFrom0To100).toHaveBeenCalled();
+      expect(UtilsFunctions.setYearFrom0To100).toHaveBeenCalled();
+    });
+
+    it('should set loading to true and call markForCheck', () => {
+      const markForCheckSpy = spyOn(component['cd'], 'markForCheck');
+
+      component.loading = true;
+
+      expect(component.loading).toBeTrue();
+      expect(markForCheckSpy).toHaveBeenCalled();
+    });
+
+    it('should set loading to false and call markForCheck', () => {
+      const markForCheckSpy = spyOn(component['cd'], 'markForCheck');
+
+      component.loading = false;
+
+      expect(component.loading).toBeFalse();
+      expect(markForCheckSpy).toHaveBeenCalled();
+    });
+
+    it('should return the value from mapInputSizeToLoadingIcon', () => {
+      const result = component.mapSizeToIcon('md');
+
+      expect(result).toBe(mapInputSizeToLoadingIcon('md'));
     });
 
     it('p-iso-format: should update with valid value', () => {
@@ -601,6 +853,380 @@ describe('PoDatepickerBaseComponent:', () => {
       const invalidValues = [undefined, 0, 1, 3, 'valor', [], true, false];
 
       expectPropertiesValues(component, 'isoFormat', invalidValues, undefined);
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
+    it('p-year-range-limit: should accept a valid number', () => {
+      component.yearRangeLimit = 50;
+
+      expect(component.yearRangeLimit).toBe(50);
+    });
+
+    it('p-year-range-limit: should fallback to 150 when value is null', () => {
+      component.yearRangeLimit = null;
+
+      expect(component.yearRangeLimit).toBe(150);
+    });
+
+    it('p-year-range-limit: should fallback to 150 when value is undefined', () => {
+      component.yearRangeLimit = undefined;
+
+      expect(component.yearRangeLimit).toBe(150);
+    });
+
+    it('p-year-range-limit: should have default value of 150', () => {
+      expect(component.yearRangeLimit).toBe(150);
+    });
+  });
+
+  describe('Getters:', () => {
+    it('minDate getter should return _minDate', () => {
+      const date = new Date(2025, 0, 1);
+      component['_minDate'] = date;
+      expect(component.minDate).toBe(date);
+    });
+
+    it('maxDate getter should return _maxDate', () => {
+      const date = new Date(2025, 11, 31);
+      component['_maxDate'] = date;
+      expect(component.maxDate).toBe(date);
+    });
+
+    it('loading getter should return _loading', () => {
+      component['_loading'] = true;
+      expect(component.loading).toBeTrue();
+    });
+
+    it('isDisabled should return true when loading is true', () => {
+      component['_loading'] = true;
+      component['disabled'] = false;
+      expect(component.isDisabled).toBeTrue();
+    });
+
+    it('isDisabled should return true when disabled is true', () => {
+      component['_loading'] = false;
+      component['disabled'] = true;
+      expect(component.isDisabled).toBeTrue();
+    });
+
+    it('isDisabled should return false when both are false', () => {
+      component['_loading'] = false;
+      component['disabled'] = false;
+      expect(component.isDisabled).toBeFalse();
+    });
+  });
+
+  describe('date setter for month-year/year modes:', () => {
+    it('should parse month-year string correctly', () => {
+      component['mode'] = 'month-year';
+      component.date = '04/2025';
+      expect(component.date.getFullYear()).toBe(2025);
+      expect(component.date.getMonth()).toBe(3);
+    });
+
+    it('should parse year string correctly', () => {
+      component['mode'] = 'year';
+      component.date = '2025';
+      expect(component.date.getFullYear()).toBe(2025);
+      expect(component.date.getMonth()).toBe(0);
+    });
+  });
+
+  describe('ngOnInit for month-year/year modes:', () => {
+    it('should set mask for month-year mode', () => {
+      component['mode'] = 'month-year';
+      component.ngOnInit();
+      expect(component['objMask']).toBeDefined();
+    });
+
+    it('should set mask for year mode', () => {
+      component['mode'] = 'year';
+      component.ngOnInit();
+      expect(component['objMask']).toBeDefined();
+    });
+  });
+
+  describe('isMonthYearOrYearInvalid:', () => {
+    it('should return true for non-string value in month-year mode', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid'](12345)).toBeTrue();
+    });
+
+    it('should return true for invalid month in month-year mode', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('13/2025')).toBeTrue();
+    });
+
+    it('should return true for month 0 in month-year mode', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('00/2025')).toBeTrue();
+    });
+
+    it('should return false for valid month-year', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('06/2025')).toBeFalse();
+    });
+
+    it('should return true for invalid year in year mode', () => {
+      component['mode'] = 'year';
+      expect(component['isMonthYearOrYearInvalid']('abc')).toBeTrue();
+    });
+
+    it('should return false for valid year', () => {
+      component['mode'] = 'year';
+      expect(component['isMonthYearOrYearInvalid']('2025')).toBeFalse();
+    });
+
+    it('should return true for year 0 in year mode', () => {
+      component['mode'] = 'year';
+      expect(component['isMonthYearOrYearInvalid']('0')).toBeTrue();
+    });
+
+    it('should return false for empty string', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('')).toBeFalse();
+    });
+
+    it('should return false for null value', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid'](null)).toBeFalse();
+    });
+
+    it('should return false for undefined value', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid'](undefined)).toBeFalse();
+    });
+
+    it('should return true when month-year has no separator', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('2025')).toBeTrue();
+    });
+
+    it('should return true when month-year has too many parts', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('01/02/2025')).toBeTrue();
+    });
+
+    it('should return true when month-year year part is NaN', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('04/abc')).toBeTrue();
+    });
+
+    it('should return true when month-year month part is NaN', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('xx/2025')).toBeTrue();
+    });
+
+    it('should return true when month-year year is zero', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('04/0')).toBeTrue();
+    });
+
+    it('should return true when month-year year is negative', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('04/-1')).toBeTrue();
+    });
+
+    it('should return true for negative year in year mode', () => {
+      component['mode'] = 'year';
+      expect(component['isMonthYearOrYearInvalid']('-1')).toBeTrue();
+    });
+
+    it('should return false for valid boundary month 1 in month-year mode', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('01/2025')).toBeFalse();
+    });
+
+    it('should return false for valid boundary month 12 in month-year mode', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid']('12/2025')).toBeFalse();
+    });
+
+    it('should return false when mode is default (not month-year or year)', () => {
+      component['mode'] = undefined;
+      expect(component['isMonthYearOrYearInvalid']('anything')).toBeFalse();
+    });
+
+    it('should return true for boolean value', () => {
+      component['mode'] = 'month-year';
+      expect(component['isMonthYearOrYearInvalid'](true)).toBeTrue();
+    });
+
+    it('should return true for array value', () => {
+      component['mode'] = 'year';
+      expect(component['isMonthYearOrYearInvalid']([2025])).toBeTrue();
+    });
+  });
+
+  describe('validateMonthYearRange:', () => {
+    it('should return true when date is null', () => {
+      expect(component['validateMonthYearRange'](null, new Date(2025, 0, 1), new Date(2025, 11, 31))).toBeTrue();
+    });
+
+    it('should return false when date is before minDate', () => {
+      const date = new Date(2024, 11, 1);
+      const minDate = new Date(2025, 0, 1);
+      expect(component['validateMonthYearRange'](date, minDate, null)).toBeFalse();
+    });
+
+    it('should return false when date is after maxDate', () => {
+      const date = new Date(2026, 0, 1);
+      const maxDate = new Date(2025, 11, 31);
+      expect(component['validateMonthYearRange'](date, null, maxDate)).toBeFalse();
+    });
+
+    it('should return true when date is within range', () => {
+      const date = new Date(2025, 6, 1);
+      const minDate = new Date(2025, 0, 1);
+      const maxDate = new Date(2025, 11, 31);
+      expect(component['validateMonthYearRange'](date, minDate, maxDate)).toBeTrue();
+    });
+  });
+
+  describe('validateYearRange:', () => {
+    it('should return true when date is null', () => {
+      expect(component['validateYearRange'](null, new Date(2020, 0, 1), new Date(2030, 0, 1))).toBeTrue();
+    });
+
+    it('should return false when date year is before minDate year', () => {
+      const date = new Date(2019, 0, 1);
+      const minDate = new Date(2020, 0, 1);
+      expect(component['validateYearRange'](date, minDate, null)).toBeFalse();
+    });
+
+    it('should return false when date year is after maxDate year', () => {
+      const date = new Date(2031, 0, 1);
+      const maxDate = new Date(2030, 0, 1);
+      expect(component['validateYearRange'](date, null, maxDate)).toBeFalse();
+    });
+
+    it('should return true when date year is within range', () => {
+      const date = new Date(2025, 0, 1);
+      const minDate = new Date(2020, 0, 1);
+      const maxDate = new Date(2030, 0, 1);
+      expect(component['validateYearRange'](date, minDate, maxDate)).toBeTrue();
+    });
+  });
+
+  describe('p-change-model:', () => {
+    // Feature: p-change-model-fields, Property 1: Emission on new value
+    it('should emit changeModel when writeValue triggers callOnChange with a new date value (Property 1)', () => {
+      const newValue = '2023-05-15';
+      component.modelLastUpdate = undefined;
+      component['onChangeModel'] = (v: any) => {};
+      component['previousValue'] = undefined;
+
+      spyOn(component.changeModel, 'emit');
+
+      component.callOnChange(newValue);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith(newValue);
+      expect(component.modelLastUpdate).toBe(newValue);
+    });
+
+    // Feature: p-change-model-fields, Property 2: Deduplication
+    it('should NOT emit changeModel when callOnChange receives same value as modelLastUpdate (Property 2)', () => {
+      const sameValue = '2023-05-15';
+      component.modelLastUpdate = sameValue;
+      component['onChangeModel'] = (v: any) => {};
+      component['previousValue'] = undefined;
+
+      spyOn(component.changeModel, 'emit');
+
+      component.callOnChange(sameValue);
+
+      expect(component.changeModel.emit).not.toHaveBeenCalled();
+      expect(component.modelLastUpdate).toBe(sameValue);
+    });
+
+    // Feature: p-change-model-fields, Property 5: User interaction triggers emission (calendar selection)
+    it('should emit changeModel when calendar selection triggers callOnChange with new value (Property 5)', () => {
+      const newDateValue = '2023-08-20';
+      component.modelLastUpdate = '2023-05-15';
+      component['onChangeModel'] = (v: any) => {};
+      component['previousValue'] = '2023-05-15';
+
+      spyOn(component.changeModel, 'emit');
+
+      component.callOnChange(newDateValue);
+
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith(newDateValue);
+      expect(component.modelLastUpdate).toBe(newDateValue);
+    });
+
+    // Feature: p-change-model-fields, Property 6: WriteValue does not emit p-change
+    it('should NOT emit onchange (p-change) when callOnChange is invoked via writeValue flow (Property 6)', () => {
+      const newValue = '2023-05-15';
+      component.modelLastUpdate = undefined;
+      component['onChangeModel'] = (v: any) => {};
+      component['previousValue'] = undefined;
+
+      spyOn(component.onchange, 'emit');
+      spyOn(component.changeModel, 'emit');
+
+      component.callOnChange(newValue);
+
+      expect(component.onchange.emit).not.toHaveBeenCalled();
+      expect(component.changeModel.emit).toHaveBeenCalledOnceWith(newValue);
     });
   });
 });

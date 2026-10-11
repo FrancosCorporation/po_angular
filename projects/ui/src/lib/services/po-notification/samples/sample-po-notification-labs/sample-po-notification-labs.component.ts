@@ -1,30 +1,39 @@
-import { Component, ViewChild, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 
 import {
   PoModalComponent,
   PoNotification,
   PoNotificationService,
+  PoRadioGroupOption,
   PoToasterOrientation,
-  PoToasterType,
-  PoRadioGroupOption
+  PoToasterType
 } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-notification-labs',
   templateUrl: './sample-po-notification-labs.component.html',
-  providers: [PoNotificationService]
+  providers: [PoNotificationService],
+  standalone: false
 })
 export class SamplePoNotificationLabsComponent implements OnInit {
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+
   action: boolean;
   actionLabel: string;
   message: string;
   orientation: number;
-  type: number;
+  sizeActions: string;
+  type: PoToasterType;
   duration: number;
 
   public readonly orientationOptions: Array<PoRadioGroupOption> = [
     { label: 'Top', value: PoToasterOrientation.Top },
     { label: 'Bottom', value: PoToasterOrientation.Bottom }
+  ];
+
+  public readonly sizeActionsOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
   ];
 
   public readonly typeOptions: Array<PoRadioGroupOption> = [
@@ -33,8 +42,6 @@ export class SamplePoNotificationLabsComponent implements OnInit {
     { label: 'Warning', value: PoToasterType.Warning },
     { label: 'Information', value: PoToasterType.Information }
   ];
-
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
 
   constructor(private poNotification: PoNotificationService) {}
 
@@ -49,6 +56,7 @@ export class SamplePoNotificationLabsComponent implements OnInit {
     this.action = false;
     this.actionLabel = '';
     this.duration = undefined;
+    this.sizeActions = 'medium';
   }
 
   showNotification() {
@@ -57,7 +65,8 @@ export class SamplePoNotificationLabsComponent implements OnInit {
       orientation: this.orientation,
       action: undefined,
       actionLabel: this.actionLabel,
-      duration: this.duration
+      duration: this.duration,
+      sizeActions: this.sizeActions
     };
 
     if (this.action) {

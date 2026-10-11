@@ -1,14 +1,23 @@
-import { PoButtonGroupItem } from './po-button-group-item.interface';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PoButtonGroupBaseComponent } from './po-button-group-base.component';
+import { PoButtonGroupItem } from './po-button-group-item.interface';
 
+import { PoThemeA11yEnum } from '../../services';
 import { expectPropertiesValues } from '../../util-test/util-expect.spec';
 
 describe('PoButtonGroupBaseComponent', () => {
-  let component;
+  let component: PoButtonGroupBaseComponent;
+  let fixture: ComponentFixture<PoButtonGroupBaseComponent>;
   let fakeButtons: Array<PoButtonGroupItem>;
 
   beforeEach(() => {
-    component = new PoButtonGroupBaseComponent();
+    TestBed.configureTestingModule({
+      declarations: [PoButtonGroupBaseComponent]
+    });
+
+    fixture = TestBed.createComponent(PoButtonGroupBaseComponent);
+    component = fixture.componentInstance;
+
     fakeButtons = [
       {
         label: 'acao',
@@ -21,12 +30,12 @@ describe('PoButtonGroupBaseComponent', () => {
 
   it('should be created', () => {
     expect(component instanceof PoButtonGroupBaseComponent).toBeTruthy();
-    expect(component.buttons.length).toBe(0);
+    expect(component.buttons().length).toBe(0);
   });
 
   it('validate type of p-buttons (PoButtonGroupItem)', () => {
-    component.buttons = fakeButtons;
-    const buttonGroupItem = component.buttons[0];
+    fixture.componentRef.setInput('p-buttons', fakeButtons);
+    const buttonGroupItem = component.buttons()[0];
 
     expect(typeof buttonGroupItem.label).toBe('string');
     expect(typeof buttonGroupItem.disabled).toBe('boolean');
@@ -35,26 +44,16 @@ describe('PoButtonGroupBaseComponent', () => {
   });
 
   it('validate if action can be called', () => {
-    component.buttons = fakeButtons;
+    fixture.componentRef.setInput('p-buttons', fakeButtons);
 
-    spyOn(component.buttons[0], 'action');
-    component.buttons[0].action();
+    const buttons = component.buttons();
+    spyOn(buttons[0], 'action');
+    buttons[0].action();
 
-    expect(component.buttons[0].action).toHaveBeenCalled();
+    expect(buttons[0].action).toHaveBeenCalled();
   });
 
   describe('Properties: ', () => {
-    const booleanInvalidValues = [undefined, null, 2, 'string'];
-    const booleanValidTrueValues = [true, 'true', 1, ''];
-
-    it('p-small: should update property `p-small` with valid values.', () => {
-      expectPropertiesValues(component, 'small', booleanValidTrueValues, true);
-    });
-
-    it('p-small: should update property `p-small` with invalid values.', () => {
-      expectPropertiesValues(component, 'small', booleanInvalidValues, false);
-    });
-
     it('p-toggle: should update property `p-toggle` with valid values.', () => {
       const validValues = ['multiple', 'single', 'none'];
 
@@ -65,6 +64,66 @@ describe('PoButtonGroupBaseComponent', () => {
       const invalidValues = [false, true, {}, 'invalid', []];
 
       expectPropertiesValues(component, 'toggle', invalidValues, 'none');
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', 'AAA');
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
     });
   });
 
@@ -95,40 +154,43 @@ describe('PoButtonGroupBaseComponent', () => {
         }
       ];
 
-      component.buttons = buttons;
+      fixture.componentRef.setInput('p-buttons', buttons);
     });
 
     it('onButtonClick: should desselect all buttons and select clicked button when toogle is single.', () => {
       component.toggle = 'single';
 
-      component.onButtonClick(component.buttons[0], 0);
+      const buttonsValue = component.buttons();
+      component.onButtonClick(buttonsValue[0], 0);
 
-      expect(component.buttons[0].selected).toBeTruthy();
-      expect(component.buttons[1].selected).toBeFalsy();
-      expect(component.buttons[2].selected).toBeFalsy();
-      expect(component.buttons[3].selected).toBeFalsy();
+      expect(buttonsValue[0].selected).toBeTruthy();
+      expect(buttonsValue[1].selected).toBeFalsy();
+      expect(buttonsValue[2].selected).toBeFalsy();
+      expect(buttonsValue[3].selected).toBeFalsy();
     });
 
     it('onButtonClick: should not desselect all buttons and select clicked button when toogle is multiple.', () => {
       component.toggle = 'multiple';
 
-      component.onButtonClick(component.buttons[0], 0);
+      const buttonsValue = component.buttons();
+      component.onButtonClick(buttonsValue[0], 0);
 
-      expect(component.buttons[0].selected).toBeTruthy();
-      expect(component.buttons[1].selected).toBeTruthy();
-      expect(component.buttons[2].selected).toBeFalsy();
-      expect(component.buttons[3].selected).toBeTruthy();
+      expect(buttonsValue[0].selected).toBeTruthy();
+      expect(buttonsValue[1].selected).toBeTruthy();
+      expect(buttonsValue[2].selected).toBeFalsy();
+      expect(buttonsValue[3].selected).toBeTruthy();
     });
 
     it('onButtonClick: should desselect all buttons when tooggle is none.', () => {
       component.toggle = 'none';
 
-      component.onButtonClick(component.buttons[0], 0);
+      const buttonsValue = component.buttons();
+      component.onButtonClick(buttonsValue[0], 0);
 
-      expect(component.buttons[0].selected).toBeFalsy();
-      expect(component.buttons[1].selected).toBeFalsy();
-      expect(component.buttons[2].selected).toBeFalsy();
-      expect(component.buttons[3].selected).toBeFalsy();
+      expect(buttonsValue[0].selected).toBeFalsy();
+      expect(buttonsValue[1].selected).toBeFalsy();
+      expect(buttonsValue[2].selected).toBeFalsy();
+      expect(buttonsValue[3].selected).toBeFalsy();
     });
 
     it('checkSelecteds: should call deselectAllButtons when toggle is none', () => {
@@ -158,10 +220,10 @@ describe('PoButtonGroupBaseComponent', () => {
     it('deselectAllButtons: should sselect all buttons', () => {
       component['deselectAllButtons']();
 
-      expect(component.buttons[0].selected).toBeFalsy();
-      expect(component.buttons[1].selected).toBeFalsy();
-      expect(component.buttons[2].selected).toBeFalsy();
-      expect(component.buttons[3].selected).toBeFalsy();
+      expect(component.buttons()[0].selected).toBeFalsy();
+      expect(component.buttons()[1].selected).toBeFalsy();
+      expect(component.buttons()[2].selected).toBeFalsy();
+      expect(component.buttons()[3].selected).toBeFalsy();
     });
   });
 });

@@ -1,27 +1,29 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
+import { expectPropertiesValues, expectSettersMethod } from './../../../util-test/util-expect.spec';
 
-import { PoSwitchComponent } from './po-switch.component';
-import { PoSwitchLabelPosition } from './po-switch-label-position.enum';
+import { PoThemeA11yEnum } from '../../../services';
 import { PoFieldContainerBottomComponent } from './../po-field-container/po-field-container-bottom/po-field-container-bottom.component';
 import { PoFieldContainerComponent } from './../po-field-container/po-field-container.component';
+import { PoSwitchLabelPosition } from './po-switch-label-position.enum';
+import { PoSwitchComponent } from './po-switch.component';
+import { AbstractControl } from '@angular/forms';
+import { EventEmitter } from '@angular/core';
 
 describe('PoSwitchComponent', () => {
   let component: PoSwitchComponent;
   let fixture: ComponentFixture<PoSwitchComponent>;
   let nativeElement: any;
+  let labelField: any;
 
-  configureTestSuite(() => {
+  beforeEach(() => {
     TestBed.configureTestingModule({
       declarations: [PoSwitchComponent, PoFieldContainerComponent, PoFieldContainerBottomComponent]
     });
-  });
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoSwitchComponent);
     component = fixture.componentInstance;
-
+    labelField = document.getElementsByClassName('po-label');
     nativeElement = fixture.debugElement.nativeElement;
   });
 
@@ -29,109 +31,129 @@ describe('PoSwitchComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should have .po-switch-container-on', () => {
-    component.switchValue = true;
-    fixture.detectChanges();
-
-    expect(nativeElement.querySelector('.po-switch-container-on')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-container-off')).toBeFalsy();
-    expect(nativeElement.querySelector('.po-switch-container-disabled')).toBeFalsy();
+  it('should create a po-label for po-switch', () => {
+    expect(labelField).toBeTruthy();
   });
 
-  it('should have .po-switch-container-off', () => {
-    component.switchValue = false;
-    fixture.detectChanges();
+  describe('Properties:', () => {
+    it('should be update property p-label-on', () => {
+      expectSettersMethod(component, 'labelOn', '', 'labelOn', 'true');
+      expectSettersMethod(component, 'labelOn', 'On', 'labelOn', 'On');
+    });
 
-    expect(nativeElement.querySelector('.po-switch-container-off')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-container-on')).toBeFalsy();
-    expect(nativeElement.querySelector('.po-switch-container-disabled')).toBeFalsy();
-  });
+    it('should be update property p-label-off', () => {
+      expectSettersMethod(component, 'labelOff', '', 'labelOff', 'false');
+      expectSettersMethod(component, 'labelOff', 'Off', 'labelOff', 'Off');
+    });
 
-  it('should have .po-switch-container-disabled', () => {
-    component.switchValue = false;
-    component.disabled = true;
-    fixture.detectChanges();
+    it('should be update property p-label-position', () => {
+      expectSettersMethod(component, 'labelPosition', '', 'labelPosition', PoSwitchLabelPosition.Right);
+      expectSettersMethod(
+        component,
+        'labelPosition',
+        PoSwitchLabelPosition.Left,
+        'labelPosition',
+        PoSwitchLabelPosition.Left
+      );
+    });
 
-    expect(nativeElement.querySelector('.po-switch-container-disabled')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-container-on')).toBeFalsy();
-    expect(nativeElement.querySelector('.po-switch-container-off')).toBeFalsy();
-  });
+    it('should update property p-compact-label', () => {
+      fixture.componentRef.setInput('p-compact-label', true);
+      fixture.detectChanges();
+      expect(component.compactLabel()).toBe(true);
 
-  it('should have .po-switch-button-on', () => {
-    component.switchValue = true;
-    fixture.detectChanges();
+      fixture.componentRef.setInput('p-compact-label', false);
+      fixture.detectChanges();
+      expect(component.compactLabel()).toBe(false);
+    });
 
-    expect(nativeElement.querySelector('.po-icon-ok')).toBeTruthy();
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
 
-    expect(nativeElement.querySelector('.po-switch-button-on')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-button-off')).toBeFalsy();
-    expect(nativeElement.querySelector('.po-switch-button-disabled')).toBeFalsy();
-  });
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
 
-  it('should have .po-switch-button-off', () => {
-    component.switchValue = false;
-    fixture.detectChanges();
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
 
-    expect(nativeElement.querySelector('.po-icon-close')).toBeTruthy();
+        component.size = 'small';
+        expect(component.size).toBe('small');
 
-    expect(nativeElement.querySelector('.po-switch-button-off')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-button-on')).toBeFalsy();
-    expect(nativeElement.querySelector('.po-switch-button-disabled')).toBeFalsy();
-  });
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
 
-  it('should have .po-switch-button-disabled', () => {
-    component.switchValue = true;
-    component.disabled = true;
-    fixture.detectChanges();
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
 
-    expect(nativeElement.querySelector('.po-switch-button-disabled')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-button-on')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-button-off')).toBeFalsy();
-  });
+        component.size = 'small';
+        expect(component.size).toBe('medium');
 
-  it('should have p-label-position = default', () => {
-    component.labelPosition = undefined;
-    fixture.detectChanges();
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
 
-    expect(nativeElement.querySelector('.po-switch-label-right')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-container-right')).toBeFalsy();
-  });
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
 
-  it('should have p-label-position = left', () => {
-    component.labelPosition = PoSwitchLabelPosition.Left;
-    fixture.detectChanges();
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
 
-    expect(nativeElement.querySelector('.po-switch-label-left')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-container-right')).toBeTruthy();
-  });
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
 
-  it('should have p-label-position = right', () => {
-    component.labelPosition = PoSwitchLabelPosition.Right;
-    fixture.detectChanges();
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
 
-    expect(nativeElement.querySelector('.po-switch-label-right')).toBeTruthy();
-    expect(nativeElement.querySelector('.po-switch-container-right')).toBeFalsy();
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
+    describe('p-loading:', () => {
+      it('should set loading value and call markForCheck', () => {
+        const markForCheckSpy = spyOn(component['changeDetector'], 'markForCheck');
+
+        component.loading = true;
+
+        expect(component.loading).toBeTrue();
+        expect(markForCheckSpy).toHaveBeenCalled();
+      });
+
+      it('should set loading false correctly', () => {
+        component.loading = false;
+
+        expect(component.loading).toBeFalse();
+      });
+    });
   });
 
   describe('Methods:', () => {
-    it('ngAfterViewInit: should call `focus` if `autoFocus` is true.', () => {
-      component.autoFocus = true;
+    it(`ngOnChanges: should set displayAdditionalHelp false when label changes`, () => {
+      const changes: any = {
+        label: 'new label'
+      };
 
-      const spyFocus = spyOn(component, 'focus');
+      component.ngOnChanges(changes);
 
-      component.ngAfterViewInit();
-
-      expect(spyFocus).toHaveBeenCalled();
-    });
-
-    it('ngAfterViewInit: shouldn`t call `focus` if `autoFocus` is false.', () => {
-      component.autoFocus = false;
-
-      const spyFocus = spyOn(component, 'focus');
-
-      component.ngAfterViewInit();
-
-      expect(spyFocus).not.toHaveBeenCalled();
+      expect(component.displayAdditionalHelp).toBeFalse();
     });
 
     it('focus: should call `focus` of switch', () => {
@@ -172,6 +194,14 @@ describe('PoSwitchComponent', () => {
           which: 32,
           preventDefault: () => {}
         };
+
+        component.loading = false;
+
+        component.switchContainer = {
+          nativeElement: {}
+        } as any;
+
+        fixture.detectChanges();
       });
 
       it('should call preventDefault and eventClick when keycode and which equal to 32', () => {
@@ -206,6 +236,483 @@ describe('PoSwitchComponent', () => {
         expect(component.eventClick).not.toHaveBeenCalled();
         expect(fakeEvent.preventDefault).not.toHaveBeenCalled();
       });
+
+      it('should emit event when field is focused', () => {
+        const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+        component.switchContainer = {
+          nativeElement: {
+            focus: () => {}
+          }
+        };
+
+        spyOn(component.keydown, 'emit');
+        spyOnProperty(document, 'activeElement', 'get').and.returnValue(component.switchContainer.nativeElement);
+
+        component.onKeyDown(fakeEvent);
+
+        expect(component.keydown.emit).toHaveBeenCalledWith(fakeEvent);
+      });
+
+      it('should not emit event when field is not focused', () => {
+        const fakeEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+        component.switchContainer = {
+          nativeElement: {
+            focus: () => {}
+          }
+        };
+
+        spyOn(component.keydown, 'emit');
+        spyOnProperty(document, 'activeElement', 'get').and.returnValue(document.createElement('div'));
+        component.onKeyDown(fakeEvent);
+
+        expect(component.keydown.emit).not.toHaveBeenCalled();
+      });
+
+      it('should not throw error when switchContainer is undefined', () => {
+        const fakeEvent = new KeyboardEvent('keydown', { key: 'Tab' });
+        component.switchContainer = undefined;
+
+        const fnCall = () => component.onKeyDown(fakeEvent);
+
+        expect(fnCall).not.toThrow();
+      });
+
+      it('should not emit keydown event when switchContainer is undefined', () => {
+        const fakeEvent = new KeyboardEvent('keydown', { key: 'Tab' });
+        component.switchContainer = undefined;
+
+        spyOn(component.keydown, 'emit');
+        component.onKeyDown(fakeEvent);
+
+        expect(component.keydown.emit).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('onBlur', () => {
+      let setupTest;
+
+      beforeEach(() => {
+        setupTest = (tooltip: string, displayHelp: boolean, additionalHelpEvent: any) => {
+          component.additionalHelpTooltip = tooltip;
+          component.displayAdditionalHelp = displayHelp;
+          component.additionalHelp = additionalHelpEvent;
+          spyOn(component, 'showAdditionalHelp');
+        };
+      });
+
+      it('should call `onTouched` on blur', () => {
+        component['onTouched'] = value => {};
+
+        spyOn(component, <any>'onTouched');
+
+        component.onBlur();
+
+        expect(component['onTouched']).toHaveBeenCalledWith();
+      });
+
+      it('shouldn´t throw error if onTouched is falsy', () => {
+        component['onTouched'] = null;
+
+        const fnError = () => component.onBlur();
+
+        expect(fnError).not.toThrow();
+      });
+
+      it('should not call showAdditionalHelp when tooltip is not displayed', () => {
+        setupTest('Mensagem de apoio adicional.', false, { observed: false });
+        component.onBlur();
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+
+      it('should not call showAdditionalHelp when additionalHelp event is true', () => {
+        setupTest('Mensagem de apoio adicional.', true, { observed: true });
+        component.onBlur();
+        expect(component.showAdditionalHelp).not.toHaveBeenCalled();
+      });
+
+      it('should include additionalHelp when event is triggered', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        component.additionalHelp = new EventEmitter<any>();
+
+        const result = component.setHelper('label', 'tooltip');
+
+        expect(result).toBeDefined();
+      });
+
+      it('should call super.showAdditionalHelp when tooltip exists and displayAdditionalHelp is true', () => {
+        const helperEl = {} as any;
+        const helperCmp = {} as any;
+
+        (component as any).helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue(helperCmp);
+        spyOn(component as any, 'getAdditionalHelpTooltip').and.returnValue('getAdditionalHelpTooltip');
+        component.displayAdditionalHelp = true;
+        const superProto = Object.getPrototypeOf(Object.getPrototypeOf(component));
+        const superSpy = spyOn(superProto, 'showAdditionalHelp').and.returnValue(true);
+
+        component.onBlur();
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(superSpy).toHaveBeenCalledWith(helperEl, helperCmp);
+      });
+
+      it('should not call super.showAdditionalHelp when tooltip is empty even if displayAdditionalHelp is true', () => {
+        const helperEl = {} as any;
+        const helperCmp = {} as any;
+
+        (component as any).helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue(helperCmp);
+        spyOn(component as any, 'getAdditionalHelpTooltip').and.returnValue('');
+        component.displayAdditionalHelp = true;
+        const superProto = Object.getPrototypeOf(Object.getPrototypeOf(component));
+        const superSpy = spyOn(superProto, 'showAdditionalHelp').and.returnValue(true);
+
+        component.onBlur();
+        expect(superSpy).not.toHaveBeenCalled();
+      });
+    });
+
+    it('changeValue: shouldn`t call `change.emit` and `updateModel` if switch value is not changed', () => {
+      component.value = true;
+
+      spyOn(component.change, 'emit');
+      spyOn(component, <any>'updateModel');
+
+      component.changeValue(true);
+      expect(component['updateModel']).not.toHaveBeenCalled();
+      expect(component.change.emit).not.toHaveBeenCalled();
+    });
+
+    it('changeValue: should call `updateModel` and `change.emit` if switch value is changed', () => {
+      component.value = true;
+
+      spyOn(component.change, 'emit');
+      spyOn(component, <any>'updateModel');
+      component.changeValue(false);
+
+      expect(component['updateModel']).toHaveBeenCalledWith(false);
+      expect(component.change.emit).toHaveBeenCalledWith(false);
+    });
+
+    it('changeValue: should call `updateModel` and `change.emit` if switch value is changed with p-model-format is `true`', () => {
+      component.value = true;
+      component.formatModel = true;
+
+      spyOn(component.change, 'emit');
+      spyOn(component, <any>'updateModel');
+
+      component.changeValue(false);
+      expect(component['updateModel']).toHaveBeenCalledWith('false');
+      expect(component.change.emit).toHaveBeenCalledWith(false);
+
+      component.changeValue(true);
+      expect(component['updateModel']).toHaveBeenCalledWith('true');
+      expect(component.change.emit).toHaveBeenCalledWith(true);
+    });
+
+    it('onWriteValue: should updated value and call `markForCheck`', () => {
+      const expectedValue = false;
+
+      component.value = true;
+
+      spyOn(component['changeDetector'], 'markForCheck').and.callFake(() => {});
+
+      component.onWriteValue(expectedValue);
+
+      expect(component['changeDetector'].markForCheck).toHaveBeenCalled();
+      expect(component.value).toBe(expectedValue);
+    });
+
+    it('onWriteValue: should updated value on first time and call `markForCheck` with p-model-format is `true`', () => {
+      const expectedValue = false;
+
+      component.value = false;
+      component.formatModel = true;
+
+      spyOn(component['changeDetector'], 'markForCheck').and.callFake(() => {});
+
+      component.onWriteValue(null);
+
+      expect(component['changeDetector'].markForCheck).toHaveBeenCalled();
+      expect(component.value).toBe(expectedValue);
+    });
+
+    it('onWriteValue: should updated value and call `markForCheck` with p-model-format is `true`', () => {
+      const expectedValue = true;
+
+      component.value = false;
+      component.formatModel = true;
+
+      spyOn(component['changeDetector'], 'markForCheck').and.callFake(() => {});
+
+      component.onWriteValue('true');
+
+      expect(component['changeDetector'].markForCheck).toHaveBeenCalled();
+      expect(component.value).toBe(expectedValue);
+    });
+
+    it('onWriteValue: shouldn`t updated value if new value equals old value', () => {
+      const expectedValue = true;
+
+      component.value = expectedValue;
+
+      spyOn(component['changeDetector'], 'markForCheck').and.callFake(() => {});
+
+      component.onWriteValue(expectedValue);
+
+      expect(component['changeDetector'].markForCheck).not.toHaveBeenCalled();
+      expect(component.value).toBe(expectedValue);
+    });
+
+    it('eventClick: shouldn`t call changeValue if disabled is true', () => {
+      component.disabled = true;
+
+      spyOn(component, 'changeValue');
+
+      component.eventClick();
+
+      expect(component.changeValue).not.toHaveBeenCalled();
+    });
+
+    it('eventClick: should call changeValue', () => {
+      component.disabled = false;
+
+      spyOn(component, 'changeValue');
+
+      component.eventClick();
+
+      expect(component.changeValue).toHaveBeenCalled();
+    });
+
+    describe('validate:', () => {
+      it('should return `{ required: true }` when `invalidValue` is false, `fieldErrorMessage` is set, and value matches `invalidValue`', () => {
+        component.invalidValue = false;
+        component.fieldErrorMessage = 'Required field';
+        component.value = false;
+
+        const result = component.validate({} as AbstractControl);
+
+        expect(result).toEqual({ required: true });
+      });
+
+      it('should return `null` when `invalidValue` is true, `fieldErrorMessage` is set, and value does not match `invalidValue`', () => {
+        component.invalidValue = false;
+        component.fieldErrorMessage = 'Required field';
+        component.value = true;
+
+        const result = component.validate({} as AbstractControl);
+
+        expect(result).toBeNull();
+      });
+
+      it('should return `null` when `fieldErrorMessage` is set and value is true', () => {
+        component.invalidValue = undefined;
+        component.fieldErrorMessage = 'Required field';
+        component.value = true;
+
+        const result = component.validate({} as AbstractControl);
+
+        expect(result).toBeNull();
+      });
+
+      it('should return `{ required: true }` when `fieldErrorMessage` is set and value is false', () => {
+        component.invalidValue = undefined;
+        component.fieldErrorMessage = 'Required field';
+        component.value = false;
+
+        const result = component.validate({} as AbstractControl);
+
+        expect(result).toEqual({ required: true });
+      });
+
+      it('should return `null` when no `fieldErrorMessage` is set', () => {
+        component.invalidValue = undefined;
+        component.fieldErrorMessage = undefined;
+        component.value = false;
+
+        const result = component.validate({} as AbstractControl);
+
+        expect(result).toBeNull();
+      });
+
+      it('should return `{ required: true }` when value equals `invalidValue` (true)', () => {
+        component.invalidValue = true;
+        component.fieldErrorMessage = 'Campo obrigatório';
+        component.value = true;
+
+        const result = component.validate({} as AbstractControl);
+
+        expect(result).toEqual({ required: true });
+      });
+
+      it('should return `null` when value does NOT equal `invalidValue` (true)', () => {
+        component.invalidValue = true;
+        component.fieldErrorMessage = 'Campo obrigatório';
+        component.value = false;
+
+        const result = component.validate({} as AbstractControl);
+
+        expect(result).toBeNull();
+      });
+
+      it('should return `fieldErrorMessage` when `fieldErrorMessage` is set and `hasInvalidClass` is true', () => {
+        component.fieldErrorMessage = 'Campo obrigatório';
+
+        spyOn(component, 'hasInvalidClass').and.returnValue(true);
+
+        const result = component.getErrorPattern();
+
+        expect(result).toBe('Campo obrigatório');
+      });
+
+      it('should return empty string when `fieldErrorMessage` is set but `hasInvalidClass` is false', () => {
+        component.fieldErrorMessage = 'Campo obrigatório';
+
+        spyOn(component, 'hasInvalidClass').and.returnValue(false);
+
+        const result = component.getErrorPattern();
+
+        expect(result).toBe('');
+      });
+
+      it('should return empty string when `fieldErrorMessage` is not set', () => {
+        component.fieldErrorMessage = undefined;
+
+        const result = component.getErrorPattern();
+
+        expect(result).toBe('');
+      });
+    });
+
+    describe('hasInvalidClass:', () => {
+      let nativeEl: HTMLElement;
+
+      beforeEach(() => {
+        fixture.detectChanges();
+        nativeEl = fixture.debugElement.nativeElement;
+      });
+
+      it('should return true when both `ng-invalid` and `ng-dirty` are present', () => {
+        nativeEl.classList.add('ng-invalid');
+        nativeEl.classList.add('ng-dirty');
+
+        const result = component.hasInvalidClass();
+
+        expect(result).toBeTrue();
+      });
+
+      it('should return false when only `ng-invalid` is present', () => {
+        nativeEl.classList.add('ng-invalid');
+        nativeEl.classList.remove('ng-dirty');
+
+        const result = component.hasInvalidClass();
+
+        expect(result).toBeFalse();
+      });
+
+      it('should return false when only `ng-dirty` is present', () => {
+        nativeEl.classList.remove('ng-invalid');
+        nativeEl.classList.add('ng-dirty');
+
+        const result = component.hasInvalidClass();
+
+        expect(result).toBeFalse();
+      });
+
+      it('should return false when neither `ng-invalid` nor `ng-dirty` are present', () => {
+        nativeEl.classList.remove('ng-invalid');
+        nativeEl.classList.remove('ng-dirty');
+
+        const result = component.hasInvalidClass();
+
+        expect(result).toBeFalse();
+      });
+    });
+
+    describe('showAdditionalHelp:', () => {
+      it('should call super.showAdditionalHelp with (helperEl, poHelperComponent()) and return true', () => {
+        const helperEl = {} as any;
+        const helperCmp = {} as any;
+
+        (component as any).helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue(helperCmp);
+        const superProto = Object.getPrototypeOf(Object.getPrototypeOf(component));
+        const superSpy = spyOn(superProto, 'showAdditionalHelp').and.returnValue(true);
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).poHelperComponent).toHaveBeenCalled();
+        expect(superSpy).toHaveBeenCalledWith(helperEl, helperCmp);
+        expect(result).toBeTrue();
+      });
+
+      it('should return false when super.showAdditionalHelp returns false', () => {
+        const helperEl = {} as any;
+        const helperCmp = {} as any;
+        (component as any).helperEl = helperEl;
+        spyOn(component as any, 'poHelperComponent').and.returnValue(helperCmp);
+        const superProto = Object.getPrototypeOf(Object.getPrototypeOf(component));
+        spyOn(superProto, 'showAdditionalHelp').and.returnValue(false);
+        const result = component.showAdditionalHelp();
+        expect(result).toBeFalse();
+      });
+    });
+
+    describe('mapSizeToIcon:', () => {
+      it('should return mapped icon size based on input size', () => {
+        const result = component.mapSizeToIcon('small');
+
+        expect(result).toBe('xs');
+      });
+    });
+  });
+
+  describe('p-change-model:', () => {
+    it('should emit changeModel when writeValue receives a new value different from modelLastUpdate', () => {
+      component.modelLastUpdate = undefined;
+      component.value = false;
+
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(true);
+
+      expect(component.changeModel.emit).toHaveBeenCalledWith(true);
+      expect(component.modelLastUpdate).toBe(true);
+    });
+
+    it('should NOT emit changeModel when writeValue receives the same value as modelLastUpdate', () => {
+      component.value = true;
+      component.modelLastUpdate = true;
+
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(true);
+
+      expect(component.changeModel.emit).not.toHaveBeenCalled();
+    });
+
+    it('should emit changeModel when user clicks to toggle value via eventClick', () => {
+      component.value = false;
+      component.disabled = false;
+      component.modelLastUpdate = false;
+
+      spyOn(component.changeModel, 'emit');
+
+      component.eventClick();
+
+      expect(component.changeModel.emit).toHaveBeenCalledWith(true);
+      expect(component.modelLastUpdate).toBe(true);
+    });
+
+    it('should NOT emit change event when writeValue is called (only changeModel should emit)', () => {
+      component.modelLastUpdate = undefined;
+      component.value = false;
+
+      spyOn(component.change, 'emit');
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(true);
+
+      expect(component.change.emit).not.toHaveBeenCalled();
+      expect(component.changeModel.emit).toHaveBeenCalledWith(true);
     });
   });
 
@@ -214,14 +721,91 @@ describe('PoSwitchComponent', () => {
       component.disabled = true;
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('div.po-switch-container.po-clickable[tabindex="-1"]')).toBeTruthy();
+      expect(nativeElement.querySelector('[tabindex="-1"]')).toBeTruthy();
     });
 
     it('should set tabindex to 0 when switch disabled is false', () => {
       component.disabled = false;
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('div.po-switch-container.po-clickable[tabindex="0"]')).toBeTruthy();
+      expect(nativeElement.querySelector('[tabindex="0"]')).toBeTruthy();
+    });
+
+    it('should set attribute `aria-checked` with `true`', () => {
+      component.value = true;
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('[aria-checked="true"]')).toBeTruthy();
+    });
+
+    it('should set attribute `aria-checked` with `false`', () => {
+      component.value = false;
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('[aria-checked="false"]')).toBeTruthy();
+    });
+
+    it('should set attribute `aria-disabled` with `true`', () => {
+      component.disabled = true;
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('[aria-disabled="true"]')).toBeTruthy();
+    });
+
+    it('should have p-label-position = default', () => {
+      component['_labelPosition'] = undefined;
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('[data-label-position="right"]')).toBeTruthy();
+    });
+
+    it('should set attribute `data-label-position` with `left`', () => {
+      component.labelPosition = PoSwitchLabelPosition.Left;
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('[data-label-position="left"]')).toBeTruthy();
+    });
+
+    it('should set attribute `data-label-position` with `right`', () => {
+      component.labelPosition = PoSwitchLabelPosition.Right;
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('[data-label-position="right"]')).toBeTruthy();
+    });
+
+    describe('p-loading:', () => {
+      it('should display loading icon and hide switch when loading is true', () => {
+        component.loading = true;
+        fixture.detectChanges();
+
+        const loadingContainer = nativeElement.querySelector('.po-switch-loading-container');
+
+        const loadingIcon = nativeElement.querySelector('po-loading-icon');
+
+        const switchTrack = nativeElement.querySelector('.po-switch-track');
+
+        const label = nativeElement.querySelector('.po-switch-label');
+
+        expect(loadingContainer).toBeTruthy();
+        expect(loadingIcon).toBeTruthy();
+        expect(switchTrack).toBeFalsy();
+        expect(label).toBeFalsy();
+      });
+
+      it('should display switch and hide loading icon when loading is false', () => {
+        component.loading = false;
+        fixture.detectChanges();
+
+        const loadingContainer = nativeElement.querySelector('.po-switch-loading-container');
+
+        const switchContainer = nativeElement.querySelector('.po-switch-container');
+
+        const label = nativeElement.querySelector('.po-switch-label');
+
+        expect(loadingContainer).toBeFalsy();
+        expect(switchContainer).toBeTruthy();
+        expect(label).toBeTruthy();
+      });
     });
   });
 });

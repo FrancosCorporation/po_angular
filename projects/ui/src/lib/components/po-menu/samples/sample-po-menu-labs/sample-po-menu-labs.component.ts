@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnInit, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, ViewChild, inject } from '@angular/core';
 
 import {
   PoButtonGroupItem,
@@ -11,22 +11,14 @@ import {
 @Component({
   selector: 'sample-po-menu-labs',
   templateUrl: './sample-po-menu-labs.component.html',
-  styles: [
-    `
-      .sample-menu-circle {
-        border-radius: 14px;
-        display: inline-block;
-        height: 20px;
-        width: 20px;
-      }
-
-      .sample-menu-vertical-middle {
-        vertical-align: middle;
-      }
-    `
-  ]
+  styleUrls: ['./sample-po-menu-labs.component.css'],
+  standalone: false
 })
 export class SamplePoMenuLabsComponent implements OnInit {
+  private changeDetector = inject(ChangeDetectorRef);
+
+  @ViewChild(PoMenuComponent, { static: true }) menu: PoMenuComponent;
+
   badgeColor: string;
   badgeValue: number;
   buttons: Array<PoButtonGroupItem> = [
@@ -34,12 +26,14 @@ export class SamplePoMenuLabsComponent implements OnInit {
     { label: 'Expand', action: this.expand.bind(this) },
     { label: 'Toggle', action: this.toggle.bind(this) }
   ];
+  componentsSize: string;
   filter: boolean;
   icon: string;
   label: string;
   link: string;
   logo: string;
-  maxBadgeValue = 99999999999999999999;
+  logoLink: string;
+  maxBadgeValue = 999999999999999;
   menuItems: Array<PoMenuItem>;
   menuItemSelected: string;
   menuParams: string;
@@ -49,6 +43,7 @@ export class SamplePoMenuLabsComponent implements OnInit {
   service: string;
   shortLabel: string;
   shortLogo: string;
+  searchTreeItems: boolean;
 
   public readonly badgeColorList: Array<PoSelectOption> = [
     { label: 'color-01', value: 'color-01' },
@@ -65,18 +60,21 @@ export class SamplePoMenuLabsComponent implements OnInit {
     { label: 'color-12', value: 'color-12' }
   ];
 
-  public readonly iconsOptions: Array<PoRadioGroupOption> = [
-    { label: 'po-icon-news', value: 'po-icon-news' },
-    { label: 'po-icon-camera', value: 'po-icon-camera' },
-    { label: 'po-icon-calendar', value: 'po-icon-calendar' },
-    { label: 'po-icon-user', value: 'po-icon-user' },
-    { label: 'po-icon-message', value: 'po-icon-message' },
-    { label: 'po-icon-stock', value: 'po-icon-stock' }
+  public readonly componentsSizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
   ];
 
-  @ViewChild(PoMenuComponent, { static: true }) menu: PoMenuComponent;
-
-  constructor(private changeDetector: ChangeDetectorRef) {}
+  public readonly iconsOptions: Array<PoSelectOption> = [
+    { label: 'an an-newspaper', value: 'an an-newspaper' },
+    { label: 'an an-camera', value: 'an an-camera' },
+    { label: 'an an-calendar-dots', value: 'an an-calendar-dots' },
+    { label: 'an an-user', value: 'an an-user' },
+    { label: 'an an-chat', value: 'an an-chat' },
+    { label: 'an an-package', value: 'an an-package' },
+    { value: 'fa fa-calculator', label: 'fa fa-calculator' },
+    { value: 'fa fa-podcast', label: 'fa fa-podcast' }
+  ];
 
   ngOnInit(): void {
     this.restore();
@@ -131,12 +129,14 @@ export class SamplePoMenuLabsComponent implements OnInit {
     this.badgeColor = undefined;
     this.badgeValue = undefined;
     this.logo = undefined;
+    this.logoLink = undefined;
     this.params = undefined;
     this.parentList = [];
     this.menuItems = [];
     this.menuParams = undefined;
     this.service = '';
     this.shortLogo = undefined;
+    this.searchTreeItems = false;
 
     this.updateMenuItems();
   }
@@ -156,6 +156,7 @@ export class SamplePoMenuLabsComponent implements OnInit {
   private formReset() {
     this.badgeColor = undefined;
     this.badgeValue = undefined;
+    this.componentsSize = 'medium';
     this.icon = undefined;
     this.label = 'PO Menu';
     this.link = undefined;
@@ -206,5 +207,12 @@ export class SamplePoMenuLabsComponent implements OnInit {
         });
       }
     });
+  }
+
+  onFilterChange(newValue: boolean) {
+    this.filter = newValue;
+    if (!this.filter && this.searchTreeItems) {
+      this.searchTreeItems = false;
+    }
   }
 }

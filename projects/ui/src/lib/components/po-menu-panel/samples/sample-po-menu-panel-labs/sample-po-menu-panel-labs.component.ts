@@ -4,7 +4,8 @@ import { PoMenuPanelItem, PoRadioGroupOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-menu-panel-labs',
-  templateUrl: './sample-po-menu-panel-labs.component.html'
+  templateUrl: './sample-po-menu-panel-labs.component.html',
+  standalone: false
 })
 export class SamplePoMenuPanelLabsComponent implements OnInit {
   menuItem: PoMenuPanelItem = { icon: undefined, label: undefined };
@@ -13,12 +14,12 @@ export class SamplePoMenuPanelLabsComponent implements OnInit {
   logo: string;
 
   public readonly iconsOptions: Array<PoRadioGroupOption> = [
-    { label: 'po-icon-news', value: 'po-icon-news' },
-    { label: 'po-icon-camera', value: 'po-icon-camera' },
-    { label: 'po-icon-calendar', value: 'po-icon-calendar' },
-    { label: 'po-icon-user', value: 'po-icon-user' },
-    { label: 'po-icon-message', value: 'po-icon-message' },
-    { label: 'po-icon-stock', value: 'po-icon-stock' }
+    { label: 'an an-newspaper', value: 'an an-newspaper' },
+    { label: 'an an-camera', value: 'an an-camera' },
+    { label: 'an an-calendar-dots', value: 'an an-calendar-dots' },
+    { label: 'an an-user', value: 'an an-user' },
+    { label: 'an an-chat', value: 'an an-chat' },
+    { label: 'an an-package', value: 'an an-package' }
   ];
 
   ngOnInit(): void {

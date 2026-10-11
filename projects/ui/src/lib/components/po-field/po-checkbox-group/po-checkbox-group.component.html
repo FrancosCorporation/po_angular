@@ -1,37 +1,50 @@
-<po-field-container [p-help]="help" [p-label]="label" [p-optional]="!required && optional">
-  <div class="po-field-container-content po-checkbox-group-content">
-    <div class="po-row po-pt-1 po-pb-1">
-      <div
-        *ngFor="let option of checkboxGroupOptionsView; trackBy: trackByFn"
-        class="po-checkbox-group-item po-md-{{ mdColumns }} po-lg-{{ columns }}"
-        [class.po-checkbox-group-item-disabled]="option.disabled || disabled"
-      >
-        <input
-          class="po-input po-checkbox-group-input"
-          type="checkbox"
-          [class.po-checkbox-group-input-checked]="checkedOptions[option.value]"
-          [class.po-checkbox-group-input-indeterminate]="checkedOptions[option.value] === null"
-          [checked]="option.value"
-          [disabled]="option.disabled || disabled"
-          [id]="option.id"
-          [required]="required"
-          [value]="option.value"
-        />
-
-        <label
-          #checkboxLabel
-          class="po-checkbox-group-label"
-          [class.po-clickable]="!option.disabled && !disabled"
-          [for]="option.id"
-          [tabindex]="option.disabled || disabled ? -1 : 0"
-          (click)="checkOption(option)"
-          (keydown)="onKeyDown($event, option)"
-        >
-          {{ option.label }}
-        </label>
-      </div>
+@let poHelper = setHelper(label, additionalHelpTooltip);
+<po-field-container
+  [p-disabled]="disabled"
+  [p-label]="label"
+  [p-optional]="optional"
+  [p-required]="required"
+  [p-show-required]="showRequired"
+  [p-helper]="label ? poHelper.helperSettings : undefined"
+  [p-show-helper]="label ? displayAdditionalHelp : undefined"
+  [p-size]="size"
+  [p-text-wrap]="labelTextWrap()"
+  [p-compact-label]="compactLabel()"
+>
+  <div role="group" class="po-checkbox-group-content" [attr.aria-label]="label">
+    <div class="po-field-container-content" [attr.name]="name">
+      <ul class="po-row">
+        @for (option of checkboxGroupOptionsView; track trackByFn($index)) {
+          <li
+            class="po-checkbox-group-item po-md-{{ mdColumns }} po-lg-{{ columns }}"
+            [class.po-checkbox-group-item-disabled]="option.disabled || disabled"
+          >
+            <po-checkbox
+              #checkboxLabel
+              [p-label]="option.label"
+              [p-disabled]="option.disabled || disabled"
+              (p-blur)="onBlur(checkboxLabel)"
+              (click)="checkOption(option)"
+              (keydown)="onKeyDown($event, option, checkboxLabel)"
+              [p-checkboxValue]="checkedOptions[option.value] === null ? 'mixed' : checkedOptions[option.value]"
+              [p-required]="required"
+              [p-label-text-wrap]="true"
+              [p-size]="size"
+            >
+            </po-checkbox>
+          </li>
+        }
+      </ul>
     </div>
   </div>
-
-  <po-field-container-bottom></po-field-container-bottom>
+  <po-field-container-bottom
+    [p-append-in-body]="appendBox"
+    [p-help]="help"
+    [p-disabled]="disabled"
+    [p-error-limit]="errorLimit"
+    [p-error-pattern]="getErrorPattern()"
+    [p-size]="size"
+    [p-helper]="!label ? poHelper.helperSettings : undefined"
+    [p-show-helper]="!label ? displayAdditionalHelp : undefined"
+  ></po-field-container-bottom>
 </po-field-container>

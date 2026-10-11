@@ -1,6 +1,5 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClientModule } from '@angular/common/http';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
 import { PoModule, PoI18nModule } from '@po-ui/ng-components';
@@ -13,10 +12,8 @@ import { HighlightCodeDirective } from './../documentation/documentation-code.di
 @NgModule({
   imports: [
     CommonModule,
-    HttpClientModule,
     FormsModule,
     ReactiveFormsModule,
-
     PoModule,
     PoTemplatesModule,
     PoI18nModule.config({
@@ -25,9 +22,9 @@ import { HighlightCodeDirective } from './../documentation/documentation-code.di
           en: {
             loginErrorPattern: 'Invalid ID',
             loginPlaceholder: 'Insert your ID',
-            // tslint:disable-next-line:no-hardcoded-credentials
+            // eslint-disable-next-line
             passwordErrorPattern: 'Invalid PIN',
-            // tslint:disable-next-line:no-hardcoded-credentials
+            // eslint-disable-next-line
             passwordPlaceholder: 'Insert your PIN',
             submitLabel: 'Access your account',
             forgotPassword: 'Forgot your ID or PIN?',
@@ -36,9 +33,9 @@ import { HighlightCodeDirective } from './../documentation/documentation-code.di
           es: {
             loginErrorPattern: 'ID invalido',
             loginPlaceholder: 'Inserte su ID',
-            // tslint:disable-next-line:no-hardcoded-credentials
+            // eslint-disable-next-line
             passwordErrorPattern: 'Contraseña incorrecta',
-            // tslint:disable-next-line:no-hardcoded-credentials
+            // eslint-disable-next-line
             passwordPlaceholder: 'Inserte su contraseña',
             submitLabel: 'Accede a su cuenta',
             forgotPassword: '¿Olvidó su ID o contraseña?',
@@ -47,9 +44,9 @@ import { HighlightCodeDirective } from './../documentation/documentation-code.di
           pt: {
             loginErrorPattern: 'ID inválido',
             loginPlaceholder: 'Insira seu ID',
-            // tslint:disable-next-line:no-hardcoded-credentials
+            // eslint-disable-next-line
             passwordErrorPattern: 'Senha incorreta',
-            // tslint:disable-next-line:no-hardcoded-credentials
+            // eslint-disable-next-line
             passwordPlaceholder: 'Insira sua senha',
             submitLabel: 'Acesse a sua conta',
             forgotPassword: 'Esqueceu seu ID ou sua senha?',
@@ -62,17 +59,14 @@ import { HighlightCodeDirective } from './../documentation/documentation-code.di
         cache: true
       }
     }),
-
     PoCodeEditorModule.forRegister(customLanguage)
   ],
   declarations: [HighlightCodeDirective],
   exports: [
     CommonModule,
-    HttpClientModule,
     FormsModule,
     ReactiveFormsModule,
     HighlightCodeDirective,
-
     PoModule,
     PoTemplatesModule,
     PoCodeEditorModule

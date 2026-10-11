@@ -1,16 +1,10 @@
-import { ViewContainerRef } from '@angular/core';
-import { poLocales, poLocaleDefault } from '../services/po-language/po-language.constant';
-
-/**
- * @deprecated
- * Utilize o método `getShortBrowserLanguage`.
- *
- * @description
- * Retorna idioma do browser ou o idioma padrão.
- */
-export function browserLanguage() {
-  return getShortBrowserLanguage();
-}
+import { PoDensityMode } from '../enums/po-density-mode.enum';
+import { PoFieldSize } from '../enums/po-field-size.enum';
+import { poLocaleDefault, poLocales } from '../services/po-language/po-language.constant';
+import { ElementRef } from '@angular/core';
+import { PoThemeA11yEnum } from '../services/po-theme/enum/po-theme-a11y.enum';
+import { PoThemeService } from '../services/po-theme/po-theme.service';
+import { PoTableColumnSpacing } from '../components/po-table/enums/po-table-spacing.enum';
 
 /**
  * Converte e formata os bytes em formato mais legível para o usuário.
@@ -48,6 +42,22 @@ export function getBrowserLanguage(): string {
 }
 
 /**
+ * @deprecated use getDefaultSizeFn
+ *
+ * Retorna o tamanho padrão dos componentes conforme o nível de acessibilidade.
+ */
+export function getDefaultSize<T>(poThemeService: PoThemeService, sizeEnum: T): T[keyof T] {
+  return poThemeService.getA11yDefaultSize() === 'small' ? sizeEnum['Small'] : sizeEnum['Medium'];
+}
+
+/**
+ * Retorna o tamanho padrão dos componentes conforme o nível de acessibilidade.
+ */
+export function getDefaultSizeFn<T>(sizeEnum: T): T[keyof T] {
+  return getA11yDefaultSize() === 'small' ? sizeEnum['Small'] : sizeEnum['Medium'];
+}
+
+/**
  * Retorna o idioma do navegador, com somente as duas primeiras letras. Por exemplo: "pt" ou "es".
  *
  * Caso o valor retornado pelo navegador não estiver dentro dos idiomas suportados pelo PO,
@@ -79,7 +89,15 @@ export function isLanguage(value) {
 
 /* istanbul ignore next */
 export function reloadCurrentPage() {
-  window.location.assign(location.href);
+  const currentUrl = window.location.origin + window.location.pathname;
+
+  if (isValidUrl(currentUrl)) {
+    window.location.assign(currentUrl);
+  }
+}
+
+export function isValidUrl(url: string, location: Location = window.location): boolean {
+  return url === location.origin + location.pathname;
 }
 
 export function convertToBoolean(val: any): boolean {
@@ -127,6 +145,7 @@ export function convertIsoToDate(value: string, start: boolean, end: boolean) {
     const day = parseInt(value.substring(8, 10), 10);
     const month = parseInt(value.substring(5, 7), 10);
     const year = parseInt(value.substring(0, 4), 10);
+
     if (start) {
       const date = new Date(year, month - 1, day, 0, 0, 0);
 
@@ -140,9 +159,7 @@ export function convertIsoToDate(value: string, start: boolean, end: boolean) {
 
       return date;
     } else {
-      const milliseconds = Date.parse(value);
-      const timezone = new Date().getTimezoneOffset() * 60000;
-      return new Date(milliseconds + timezone);
+      return new Date(year, month - 1, day);
     }
   }
 }
@@ -192,6 +209,7 @@ export function convertDateToISOExtended(date: Date, time?: string) {
 
 /**
  * Transforma o ano em uma string no formato yyyy e caso o ano seja menor que 1000 preenche com zeros a esquerda.
+ *
  * @param year Ano
  */
 export function formatYear(year: number) {
@@ -211,6 +229,7 @@ export function formatYear(year: number) {
     return `000${year}`;
   }
 }
+
 // Verifica se o navegador em que está sendo usado é Internet Explorer ou Edge
 export function isIEOrEdge() {
   const userAgent = window.navigator.userAgent;
@@ -232,6 +251,13 @@ export function isFirefox() {
   return userAgent.toLowerCase().indexOf('firefox') > -1;
 }
 
+// Verifica se o navegador em que está sendo usado é Safari
+export function isSafari() {
+  const userAgent = window.navigator.userAgent;
+
+  return /^(?!.*chrome).*safari.*$/.test(userAgent.toLocaleLowerCase());
+}
+
 // Verifica qual o dispositivo que está sendo usado
 export function isMobile() {
   const userAgent = window.navigator.userAgent;
@@ -247,8 +273,13 @@ export function isKeyCodeEnter(event: any): boolean {
   return event.keyCode === 13 || event.which === 13;
 }
 
+export function isKeyCodeSpace(event: any): boolean {
+  return event.keyCode === 32 || event.which === 32;
+}
+
 /**
  * Caso o ano original da data seja entre 0 e 100 atribui esse valor ao ano, pois o `new Date` do javascript transforma o ano para 190X.
+ *
  * @param date Data
  * @param year Ano original
  */
@@ -324,9 +355,31 @@ export function removeDuplicatedOptions(list: Array<any>) {
   }
 }
 
+export function removeDuplicatedOptionsWithFieldValue(list: Array<any>, newValue) {
+  for (let i = 0; i < list.length; i++) {
+    if (i === 0) {
+      continue;
+    }
+
+    if (list.findIndex(op => op[newValue] === list[i][newValue]) !== i) {
+      list.splice(i, 1);
+      i--;
+    }
+  }
+}
+
 export function removeUndefinedAndNullOptions(list: Array<any>) {
   for (let i = 0; i < list.length; i++) {
     if (list[i].value === undefined || list[i].value === null) {
+      list.splice(i, 1);
+      i--;
+    }
+  }
+}
+
+export function removeUndefinedAndNullOptionsWithFieldValue(list: Array<any>, newValue) {
+  for (let i = 0; i < list.length; i++) {
+    if (list[i][newValue] === undefined || list[i][newValue] === null) {
       list.splice(i, 1);
       i--;
     }
@@ -520,6 +573,18 @@ export function convertImageToBase64(file: File): Promise<any> {
 }
 
 /**
+ * Valida se a imagem é do tipo base64 valida
+ *
+ */
+export function isValidImageBase64(value: string): boolean {
+  try {
+    return !!value.match(/^data:image\/([a-zA-Z]*);base64,([^\"]*)$/);
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
  * Converte um número em decimal baseado na quantidade de casas decimais.
  *
  * Caso o valor seja inválido, será retornado o valor `undefined`.
@@ -575,3 +640,312 @@ export function getFocusableElements(parentElement: Element): NodeListOf<Element
   const focusableElements = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"]';
   return parentElement.querySelectorAll(focusableElements);
 }
+
+// Retorna o formato de acordo com o locale.
+export function replaceFormatSeparator(format: string, separator: string) {
+  let newFormat = format;
+  if (separator !== '/') {
+    newFormat = newFormat.replace(/\//g, separator);
+  }
+  return newFormat;
+}
+
+/**
+ * Recebe um array de objetos para ordenação utilizando chave como comparativo e
+ * se a order é crescente(true) ou descrescente(false)
+ *
+ * Exemplo:
+ *
+ * ```
+ * items: [{country: 'japao'}, {country: 'brasil'} , {country: 'china'}]
+ * key: 'country'
+ * isAscendingOrder: true
+ * Resultado do retorno:
+ *    [{country: 'brasil'}, {country: 'china'} , {country: 'japao'}]
+ * ```
+ *
+ *
+ * @param items : lista de itens.
+ * @param key : propriedade utilizada na comparação.
+ * @param isAscendingOrder : ordenação crescente ou descrescente.
+ */
+export function sortArrayOfObjects(items, key, isAscendingOrder) {
+  if (items) {
+    return items.sort((a, b) => {
+      const valueA = a[key];
+      const valueB = b[key];
+
+      if (typeof valueA === 'number' && typeof valueB === 'number') {
+        return isAscendingOrder ? valueA - valueB : valueB - valueA;
+      } else {
+        const compareResult = valueA.toString().localeCompare(valueB.toString());
+        return isAscendingOrder ? compareResult : -compareResult;
+      }
+    });
+  }
+}
+
+/**
+ * @deprecated use validateSizeFn
+ *
+ * Valida e retorna um tamanho permitido para os componentes, considerando a acessibilidade.
+ */
+export function validateSize<T>(value: string, poThemeService: PoThemeService, sizeEnum: T): T[keyof T] {
+  const validSizes = Object.values(sizeEnum) as Array<string>;
+
+  if (value && validSizes.includes(value)) {
+    if (value === sizeEnum['Small'] && poThemeService.getA11yLevel() === PoThemeA11yEnum.AAA) {
+      return sizeEnum['Medium'];
+    }
+    return value as T[keyof T];
+  }
+
+  return getDefaultSize(poThemeService, sizeEnum);
+}
+
+/**
+ * Valida e retorna um tamanho permitido para os componentes, considerando a acessibilidade.
+ */
+export function validateSizeFn<T>(value: string, sizeEnum: T): T[keyof T] {
+  const validSizes = Object.values(sizeEnum) as Array<string>;
+
+  if (value && validSizes.includes(value)) {
+    if (value === sizeEnum['Small'] && getA11yLevel() === PoThemeA11yEnum.AAA) {
+      return sizeEnum['Medium'];
+    }
+    return value as T[keyof T];
+  }
+
+  return getDefaultSizeFn(sizeEnum);
+}
+
+/**
+ * Retorna a preferência global de tamanho dos componentes.
+ *
+ * @returns `'small'` ou `'medium'`.
+ */
+export function getA11yDefaultSize(): string {
+  const defaultSize =
+    document.documentElement.getAttribute('data-default-size') || localStorage.getItem('po-default-size');
+  const a11yLevel = document.documentElement.getAttribute('data-a11y');
+  return defaultSize === PoFieldSize.Small && a11yLevel === PoThemeA11yEnum.AA ? PoFieldSize.Small : PoFieldSize.Medium;
+}
+
+/**
+ * Retorna o nível de acessibilidade configurado no tema.
+ * Se não estiver configurado, retorna `AAA` como padrão.
+ * @returns {PoThemeA11yEnum} O nível de acessibilidade, que pode ser `AA` ou `AAA`.
+ */
+export function getA11yLevel(): PoThemeA11yEnum {
+  const a11yLevel = document.documentElement.getAttribute('data-a11y');
+
+  if (a11yLevel === PoThemeA11yEnum.AA) {
+    return PoThemeA11yEnum.AA;
+  }
+
+  localStorage.setItem('po-default-size', PoFieldSize.Medium);
+  return PoThemeA11yEnum.AAA;
+}
+
+/**
+ * Retorna o modo de adensamento dos componentes agrupadores.
+ * Se não estiver configurado, retorna `medium` como padrão.
+ * @returns {PoDensityMode} O modo de adensamento, que pode ser `small` ou `medium`.
+ */
+export function getDensityMode(): PoDensityMode {
+  const densityMode = document.documentElement.getAttribute('po-density-mode');
+
+  if (densityMode === PoDensityMode.Small) {
+    return PoDensityMode.Small;
+  }
+
+  return PoDensityMode.Medium;
+}
+
+/**
+ * Realiza a tradução das propriedades de ajuda dos componentes.
+ * Type do Helper default é 'help' e size 'medium'.
+ * @returns Objeto {helperSettings} com as propriedades do helper
+ * @returns Propriedade {hideAdditionalHelp} para controle ao esconder o ícone de ajuda adicional depreciado.
+ */
+export function setHelperSettings(
+  label: string,
+  additionalHelpTooltip: string,
+  poHelperComponent?: any,
+  size?: string,
+  onClick?: any
+): { hideAdditionalHelp: boolean; helperSettings?: any } {
+  const baseSize = size ?? poHelperComponent?.size ?? 'medium';
+  const resolvedSize = baseSize === 'large' ? 'medium' : baseSize;
+  const defaulWithoutLabel = { hideAdditionalHelp: false, helperSettings: null };
+
+  if (onClick) {
+    return {
+      hideAdditionalHelp: true,
+      helperSettings: {
+        type: 'help',
+        eventOnClick: onClick,
+        size: resolvedSize
+      }
+    };
+  }
+  if (additionalHelpTooltip && !poHelperComponent) {
+    return {
+      hideAdditionalHelp: true,
+      helperSettings: {
+        content: additionalHelpTooltip,
+        type: 'help',
+        size: resolvedSize
+      }
+    };
+  }
+  if (poHelperComponent) {
+    if (poHelperComponent.eventOnClick) {
+      return {
+        hideAdditionalHelp: true,
+        helperSettings: {
+          type: poHelperComponent.type || 'help',
+          eventOnClick: poHelperComponent.eventOnClick,
+          size: resolvedSize
+        }
+      };
+    }
+    if (typeof poHelperComponent === 'string' && poHelperComponent.trim() !== '') {
+      return {
+        hideAdditionalHelp: true,
+        helperSettings: { content: poHelperComponent, size: resolvedSize }
+      };
+    }
+    return {
+      hideAdditionalHelp: true,
+      helperSettings: { ...poHelperComponent, size: resolvedSize }
+    };
+  }
+  return defaulWithoutLabel;
+}
+
+/** Atualiza o estado do tooltip baseado na propriedade scrollWidth e clientWidth do labelElement.
+ * @param isTooltipActive Indica se o tooltip já está ativo
+ * @param labelElement ElementRef do label que será verificado se está com ellipsis
+ * @returns boolean indicando se o tooltip deve ser ativado ou desativado
+ */
+export function updateTooltip(isTooltipActive: boolean, labelElement: ElementRef<HTMLElement>): boolean {
+  const el = getMeasurableEl(labelElement);
+  if (!el) return false;
+
+  const isEllipsed = el.scrollWidth > el.clientWidth;
+  if (isTooltipActive !== isEllipsed) {
+    return isEllipsed;
+  } else {
+    return isTooltipActive;
+  }
+}
+
+/**
+ * Retorna o elemento label que deve ser medido para verificar se está com ellipsis.
+ * @param labelElement ElementRef do label que será verificado se está com ellipsis
+ * @returns O elemento que deve ser medido para verificar se está com ellipsis.
+ */
+export function getMeasurableEl(labelElement: ElementRef<HTMLElement>): Element {
+  const host = labelElement?.nativeElement;
+  if (!host) return null;
+  const inner = host.querySelector('.po-label, label, .po-label-title, .po-field-title .po-checkbox-label');
+  return inner ?? host;
+}
+
+/**
+ * Retorna a cor do texto baseada no tema atual.
+ * @param type Tipo de cor do texto, pode ser 'lightest' ou 'darkest'.
+ * @returns Valor da cor no formato definido pela propriedade customizada CSS (por exemplo, '#ffffff', 'rgb(255,255,255)').
+ */
+export function getTextColor(type: 'lightest' | 'darkest') {
+  const isLightTheme = !document.documentElement.className.includes('-dark-');
+  let token = '';
+
+  if (type === 'lightest') {
+    token = isLightTheme ? '--color-neutral-light-00' : '--color-neutral-dark-95';
+  } else {
+    token = isLightTheme ? '--color-neutral-dark-95' : '--color-neutral-light-00';
+  }
+
+  return getComputedStyle(document.documentElement).getPropertyValue(token);
+}
+
+/**
+ * Retorna a cor do texto baseada na cor de fundo informada.
+ * @param backgroundColor Cor de fundo em formato 'rgb(r,g,b)' ou 'rgba(r,g,b,a)'.
+ * @returns Valor da cor do texto (por exemplo, '#ffffff', 'rgb(255,255,255)') baseado no brilho percebido da cor de fundo usando a fórmula do espaço de cor YIQ.
+ */
+export function getTextColorFromBackgroundColor(backgroundColor: string): string {
+  const rgbValues = backgroundColor
+    .replaceAll(/(?:^rgba?\(|\s+|\)$)/g, '')
+    .split(',')
+    .map(value => Number.parseInt(value, 10));
+
+  const r = rgbValues[0];
+  const g = rgbValues[1];
+  const b = rgbValues[2];
+
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+
+  return yiq >= 128 ? getTextColor('darkest') : getTextColor('lightest');
+}
+
+/**
+ * Retorna o tamanho do ícone de loading baseado no tamanho do field.
+ *
+ * @param size Tamanho do campo (`small`, `medium` ou outros valores).
+ * @returns Tamanho do ícone de loading correspondente:
+ * - `small` → `xs`
+ * - `medium` → `sm`
+ * - qualquer outro valor → `sm`
+ */
+export function mapInputSizeToLoadingIcon(size?: string): string {
+  const sizeMap: Record<string, string> = {
+    small: 'xs',
+    medium: 'sm'
+  };
+
+  return sizeMap[size ?? ''] || 'sm';
+}
+
+export const PoUtils = {
+  capitalizeFirstLetter,
+  convertDateToISODate,
+  convertDateToISOExtended,
+  convertImageToBase64,
+  convertToBoolean,
+  convertToInt,
+  formatYear,
+  getA11yLevel,
+  getBrowserLanguage,
+  getDensityMode,
+  getShortBrowserLanguage,
+  isExternalLink,
+  isFirefox,
+  isIE,
+  isIEOrEdge,
+  isKeyCodeEnter,
+  isLanguage,
+  isMobile,
+  isTypeof,
+  openExternalLink,
+  reloadCurrentPage,
+  removeDuplicatedOptions,
+  removeDuplicatedOptionsWithFieldValue,
+  removeUndefinedAndNullOptions,
+  removeUndefinedAndNullOptionsWithFieldValue,
+  replaceFormatSeparator,
+  setYearFrom0To100,
+  sortOptionsByProperty,
+  sortValues,
+  uuid,
+  validateDateRange
+};
+
+export const PO_TABLE_ROW_HEIGHT_BY_SPACING = {
+  [PoTableColumnSpacing.ExtraSmall]: 32,
+  [PoTableColumnSpacing.Small]: 40,
+  [PoTableColumnSpacing.Medium]: 48,
+  [PoTableColumnSpacing.Large]: 56
+};

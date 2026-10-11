@@ -1,11 +1,14 @@
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { FormControl } from '@angular/forms';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { UntypedFormControl } from '@angular/forms';
 
 import { throwError } from 'rxjs';
 
 import { getObservable } from '../../util-test/util-expect.spec';
 
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { PoStepperOrientation, PoThemeA11yEnum } from '@po-ui/ng-components';
+import { expectPropertiesValues } from './../../util-test/util-expect.spec';
 import { PoJobSchedulerInternal } from './interfaces/po-job-scheduler-internal.interface';
 import { PoPageJobSchedulerBaseComponent } from './po-page-job-scheduler-base.component';
 import { PoPageJobSchedulerInternal } from './po-page-job-scheduler-internal';
@@ -17,8 +20,8 @@ describe('PoPageJobSchedulerBaseComponent:', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [PoPageJobSchedulerService]
+      imports: [],
+      providers: [PoPageJobSchedulerService, provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
     });
 
     serviceJobScheduler = TestBed.inject(PoPageJobSchedulerService);
@@ -30,7 +33,108 @@ describe('PoPageJobSchedulerBaseComponent:', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('Properties:', () => {
+    it('value: should set `model`', fakeAsync(() => {
+      const returnValue: PoJobSchedulerInternal = {
+        firstExecution: new Date('2019-02-04'),
+        firstExecutionHour: '06:45',
+        periodicity: 'single',
+        recurrent: true
+      };
+      const jobSchedulerInternal = {
+        firstExecution: new Date('2019-02-04'),
+        periodicity: 'single',
+        recurrent: true
+      };
+
+      spyOn(component['poPageJobSchedulerService'], 'convertToJobSchedulerInternal').and.returnValue(returnValue);
+      component.value = jobSchedulerInternal;
+
+      expect(component.model).toEqual(returnValue);
+    }));
+
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
+    it('p-orientation: should update property with `undefined` when invalid values', () => {
+      const invalidValues = [undefined, null, '', true, false, 0, 1, 'string', [], {}];
+
+      expectPropertiesValues(component, 'stepperDefaultOrientation', invalidValues, undefined);
+    });
+
+    it('p-orientation: should update property with valid values', () => {
+      const validValues = (<any>Object).values(PoStepperOrientation);
+
+      expectPropertiesValues(component, 'stepperDefaultOrientation', validValues, validValues);
+    });
+  });
+
   describe('Methods:', () => {
+    it('ngOnDestroy: should call unsubscribe', () => {
+      const spyUnsubscribe = spyOn(component['_subscription'], 'unsubscribe');
+
+      component.ngOnDestroy();
+
+      expect(spyUnsubscribe).toHaveBeenCalled();
+    });
+
     it('loadData: should set `model` with `new PoPageJobSchedulerInternal()` and exit of method if `id` is invalid.', () => {
       const invalidId = 0;
       component.model = undefined;
@@ -85,7 +189,7 @@ describe('PoPageJobSchedulerBaseComponent:', () => {
     }));
 
     it(`markAsDirtyInvalidControls: should not call 'markAsDirty()' if 'control.invalid' is 'false'.`, () => {
-      const value = { login: new FormControl(null) };
+      const value = { login: new UntypedFormControl(null) };
 
       spyOn(value.login, 'markAsDirty');
 
@@ -96,7 +200,7 @@ describe('PoPageJobSchedulerBaseComponent:', () => {
 
     it(`markAsDirtyInvalidControls: should call 'hasOwnProperty()' with key value 'login' and not call
       'markAsDirty()' if 'control.invalid' is 'false'.`, () => {
-      const value = { login: new FormControl(null) };
+      const value = { login: new UntypedFormControl(null) };
 
       spyOn(value, <any>'hasOwnProperty');
       spyOn(value.login, 'markAsDirty');
@@ -108,7 +212,7 @@ describe('PoPageJobSchedulerBaseComponent:', () => {
     });
 
     it('markAsDirtyInvalidControls: should call `markAsDirty()` if `control.invalid` is `true`.', () => {
-      const value = { login: new FormControl(null) };
+      const value = { login: new UntypedFormControl(null) };
       value.login.setErrors({ invalid: true });
 
       spyOn(value.login, 'markAsDirty');

@@ -1,14 +1,19 @@
-import { Directive } from '@angular/core';
 import { TestBed, waitForAsync } from '@angular/core/testing';
 import { throwError } from 'rxjs';
 
 import { expectPropertiesValues, getObservable } from '../../util-test/util-expect.spec';
-import * as UtilFunctions from './../../utils/util';
+import { PoUtils as UtilFunctions } from './../../utils/util';
 
-import { PoPageLoginBaseComponent, poPageLoginLiteralsDefault } from './po-page-login-base.component';
+import {
+  PoLanguage,
+  poLanguageDefault,
+  PoLanguageService,
+  poLocaleDefault,
+  PoThemeA11yEnum
+} from '@po-ui/ng-components';
 import { PoPageLoginCustomField } from './interfaces/po-page-login-custom-field.interface';
+import { PoPageLoginBaseComponent, poPageLoginLiteralsDefault } from './po-page-login-base.component';
 import { PoPageLoginService } from './po-page-login.service';
-import { PoLanguage, poLanguageDefault, PoLanguageService, poLocaleDefault } from '@po-ui/ng-components';
 
 const routerStub = {
   navigate: jasmine.createSpy('navigate')
@@ -25,14 +30,12 @@ describe('PoPageLoginBaseComponent: ', () => {
   let servicePageLogin: PoPageLoginService;
   let languageService: PoLanguageService;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        declarations: [],
-        providers: [PoPageLoginService, PoLanguageService]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [],
+      providers: [PoPageLoginService, PoLanguageService]
+    }).compileComponents();
+  }));
 
   const booleanValidTrueValues = [true, 'true', 1, ''];
   const booleanValidFalseValues = [false, 'false', 0];
@@ -75,6 +78,66 @@ describe('PoPageLoginBaseComponent: ', () => {
   });
 
   describe('Properties: ', () => {
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
     it('p-custom-field: should update with string values', () => {
       const validValuesCustomField = ['customField', 'domain'];
 

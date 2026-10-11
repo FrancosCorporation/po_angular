@@ -1,13 +1,19 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, inject } from '@angular/core';
 import { NgForm } from '@angular/forms';
 
 import { PoModalAction, PoModalComponent, PoNotificationService, PoSelectOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-combo-transfer',
-  templateUrl: './sample-po-combo-transfer.component.html'
+  templateUrl: './sample-po-combo-transfer.component.html',
+  standalone: false
 })
 export class SamplePoComboTransferComponent {
+  private poNotification = inject(PoNotificationService);
+
+  @ViewChild('transferForm', { static: true }) form: NgForm;
+  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
+
   contact: any;
   dateTransfer: Date = new Date();
   typeAccount: string = 'Checking Account';
@@ -27,11 +33,6 @@ export class SamplePoComboTransferComponent {
     { label: 'Checking Account', value: 'Checking Account' },
     { label: 'Savings Account', value: 'Savings Account' }
   ];
-
-  @ViewChild('transferForm', { static: true }) form: NgForm;
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
-
-  constructor(private poNotification: PoNotificationService) {}
 
   confirmTransfer() {
     this.poModal.close();

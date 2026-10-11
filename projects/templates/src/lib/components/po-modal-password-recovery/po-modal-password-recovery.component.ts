@@ -1,4 +1,4 @@
-import { Component, OnDestroy, ViewChild } from '@angular/core';
+import { Component, OnDestroy, ViewChild, inject } from '@angular/core';
 import { AbstractControl, NgForm } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -11,13 +11,13 @@ import {
   PoRadioGroupOption
 } from '@po-ui/ng-components';
 
-import { isExternalLink } from '../../utils/util';
+import { PoUtils } from '../../utils/util';
 
+import { PoModalPasswordRecoveryModalContent } from './enums/po-modal-password-recovery-modal-content.enum';
+import { PoModalPasswordRecoveryType } from './enums/po-modal-password-recovery-type.enum';
 import { PoModalPasswordRecovery } from './interfaces/po-modal-password-recovery.interface';
 import { PoModalPasswordRecoveryBaseComponent } from './po-modal-password-recovery-base.component';
-import { PoModalPasswordRecoveryModalContent } from './enums/po-modal-password-recovery-modal-content.enum';
 import { PoModalPasswordRecoveryService } from './po-modal-password-recovery.service';
-import { PoModalPasswordRecoveryType } from './enums/po-modal-password-recovery-type.enum';
 
 /**
  * @docsExtends PoModalPasswordRecoveryBaseComponent
@@ -42,9 +42,20 @@ import { PoModalPasswordRecoveryType } from './enums/po-modal-password-recovery-
 
 @Component({
   selector: 'po-modal-password-recovery',
-  templateUrl: './po-modal-password-recovery.component.html'
+  templateUrl: './po-modal-password-recovery.component.html',
+  standalone: false
 })
 export class PoModalPasswordRecoveryComponent extends PoModalPasswordRecoveryBaseComponent implements OnDestroy {
+  private readonly router = inject(Router);
+  private readonly poI18nPipe = inject(PoI18nPipe);
+  private readonly poModalPasswordRecoveryService = inject(PoModalPasswordRecoveryService);
+
+  @ViewChild('emailForm') emailForm: NgForm;
+
+  @ViewChild('recoveryModal', { static: true }) recoveryModalElement: PoModalComponent;
+
+  @ViewChild('smsCodeForm') smsCodeForm: NgForm;
+
   chosenTypeFormOption: string = PoModalPasswordRecoveryType.Email;
   codeMask: string = '9 9 9 9 9 9';
   control: AbstractControl;
@@ -60,16 +71,6 @@ export class PoModalPasswordRecoveryComponent extends PoModalPasswordRecoveryBas
   submittedCodeValue = {} as PoModalPasswordRecovery;
   submittedContactValue = {} as PoModalPasswordRecovery;
 
-  private passwordRecoverySubscription: Subscription;
-  private smsBodyResponse;
-  private smsCodeSubscription: Subscription;
-
-  @ViewChild('emailForm') emailForm: NgForm;
-
-  @ViewChild('recoveryModal', { static: true }) recoveryModalElement: PoModalComponent;
-
-  @ViewChild('smsCodeForm') smsCodeForm: NgForm;
-
   primaryAction: PoModalAction = { label: undefined, action: () => {} };
 
   secondaryAction: PoModalAction = { label: undefined, action: () => {} };
@@ -79,12 +80,13 @@ export class PoModalPasswordRecoveryComponent extends PoModalPasswordRecoveryBas
     { label: 'SMS', value: PoModalPasswordRecoveryType.SMS }
   ];
 
-  constructor(
-    private router: Router,
-    private poI18nPipe: PoI18nPipe,
-    private poModalPasswordRecoveryService: PoModalPasswordRecoveryService,
-    poLanguageService: PoLanguageService
-  ) {
+  private passwordRecoverySubscription: Subscription;
+  private smsBodyResponse;
+  private smsCodeSubscription: Subscription;
+
+  constructor() {
+    const poLanguageService = inject(PoLanguageService);
+
     super(poLanguageService);
   }
 
@@ -139,6 +141,7 @@ export class PoModalPasswordRecoveryComponent extends PoModalPasswordRecoveryBas
       this.literals.closeButton,
       this.submitAction,
       this.literals.resendEmailButton,
+      this.componentsSize,
       false
     );
   }
@@ -151,6 +154,7 @@ export class PoModalPasswordRecoveryComponent extends PoModalPasswordRecoveryBas
       this.literals.continueButton,
       this.cancelAction,
       this.literals.cancelButton,
+      this.componentsSize,
       true
     );
 
@@ -234,7 +238,7 @@ export class PoModalPasswordRecoveryComponent extends PoModalPasswordRecoveryBas
   private redirectToChangePassword(recoveryToken: PoModalPasswordRecovery) {
     const urlChangePassword = recoveryToken.urlChangePassword;
     if (urlChangePassword) {
-      isExternalLink(urlChangePassword)
+      PoUtils.isExternalLink(urlChangePassword)
         ? this.openExternalLink(urlChangePassword, recoveryToken.token)
         : this.openInternalLink(this.urlRecovery, urlChangePassword, recoveryToken.token);
     } else {
@@ -250,11 +254,12 @@ export class PoModalPasswordRecoveryComponent extends PoModalPasswordRecoveryBas
     this.smsCode = undefined;
   }
 
-  private setActions(primaryAction, primarylabel, secondaryAction, secondaryLabel, disabled) {
+  private setActions(primaryAction, primarylabel, secondaryAction, secondaryLabel, componentsSize, disabled) {
     this.primaryAction.action = () => primaryAction.call(this);
     this.primaryAction.label = primarylabel;
     this.secondaryAction.action = () => secondaryAction.call(this);
     this.secondaryAction.label = secondaryLabel;
+    this.componentsSize = componentsSize;
     this.primaryAction.disabled = disabled;
   }
 
@@ -262,7 +267,14 @@ export class PoModalPasswordRecoveryComponent extends PoModalPasswordRecoveryBas
     this.modalTitle = this.literals.forgotPasswordTitle;
     this.pipeModalPhrases();
     this.modalPasswordRecoveryTypeAll = this.type === PoModalPasswordRecoveryType.All;
-    this.setActions(this.submitAction, this.literals.sendButton, this.cancelAction, this.literals.cancelButton, true);
+    this.setActions(
+      this.submitAction,
+      this.literals.sendButton,
+      this.cancelAction,
+      this.literals.cancelButton,
+      this.componentsSize,
+      true
+    );
   }
 
   private setRequestEndpoint(urlValidationCode?: string) {

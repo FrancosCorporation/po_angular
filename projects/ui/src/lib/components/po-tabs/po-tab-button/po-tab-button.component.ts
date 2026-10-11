@@ -1,4 +1,16 @@
-import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  OnChanges,
+  Output,
+  SimpleChanges,
+  ViewChild,
+  inject
+} from '@angular/core';
 
 import { convertToBoolean } from '../../../utils/util';
 
@@ -11,11 +23,36 @@ import { convertToBoolean } from '../../../utils/util';
  */
 @Component({
   selector: 'po-tab-button',
-  templateUrl: './po-tab-button.component.html'
+  templateUrl: './po-tab-button.component.html',
+  standalone: false
 })
-export class PoTabButtonComponent implements OnChanges {
+export class PoTabButtonComponent implements OnChanges, AfterViewInit {
+  changeDetector = inject(ChangeDetectorRef);
+  private readonly elementRef = inject(ElementRef);
+
+  @ViewChild('tabButtom', { static: true }) tabButtom: ElementRef;
+
+  // Desabilita o botão
+  @Input('p-disabled') disabled: boolean;
+
+  // Identificador do componente
+  @Input('p-id') id: string;
+
+  // Rótulo do botão
+  @Input('p-label') label: string;
+
+  // Função sera emitida quando a tab ficar ativada
+  @Output('p-activated') activated = new EventEmitter();
+
+  // Função sera emitida quando a tab ficar desabilitada ou escondida
+  @Output('p-change-state') changeState = new EventEmitter();
+
+  // Método recebido do usuário para ser disparado quando clicar na aba
+  @Output('p-click') click = new EventEmitter();
+
   private _active: boolean;
   private _hide: boolean;
+  widthButton;
 
   // Ativa o botão
   @Input('p-active') set active(value: boolean) {
@@ -28,9 +65,6 @@ export class PoTabButtonComponent implements OnChanges {
     return this._active;
   }
 
-  // Desabilita o botão
-  @Input('p-disabled') disabled: boolean;
-
   // Oculta o botão
   @Input('p-hide') set hide(value: boolean) {
     this._hide = convertToBoolean(value);
@@ -42,25 +76,10 @@ export class PoTabButtonComponent implements OnChanges {
     return this._hide;
   }
 
-  // Identificador do componente
-  @Input('p-id') id: string;
-
-  // Rótulo do botão
-  @Input('p-label') label: string;
-
-  // Diminui o tamanho do botão
-  @Input('p-small') small: boolean;
-
-  // Função sera emitida quando a tab ficar ativada
-  @Output('p-activated') activated = new EventEmitter();
-
-  // Função sera emitida quando a tab ficar desabilitada ou escondida
-  @Output('p-change-state') changeState = new EventEmitter();
-
-  // Método recebido do usuário para ser disparado quando clicar na aba
-  @Output('p-click') click = new EventEmitter();
-
-  constructor(private elementRef: ElementRef) {}
+  ngAfterViewInit(): void {
+    this.widthButton = this.tabButtom.nativeElement.offsetWidth;
+    this.changeDetector.detectChanges();
+  }
 
   ngOnChanges(changes: SimpleChanges) {
     if ((changes.hide && changes.hide.currentValue) || (changes.disabled && changes.disabled.currentValue)) {

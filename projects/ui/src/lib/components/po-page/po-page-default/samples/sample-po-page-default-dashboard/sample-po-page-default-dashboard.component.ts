@@ -1,44 +1,65 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, OnInit, inject } from '@angular/core';
 import { NgForm } from '@angular/forms';
 
-import { PoBreadcrumb } from '@po-ui/ng-components';
-import { PoModalAction, PoModalComponent } from '@po-ui/ng-components';
-import { PoNotificationService } from '@po-ui/ng-components';
-import { PoPageAction } from '@po-ui/ng-components';
-import { PoTableColumn } from '@po-ui/ng-components';
+import {
+  PoBreadcrumb,
+  PoHelperOptions,
+  PoModalAction,
+  PoModalComponent,
+  PoNotificationService,
+  PoPageAction,
+  PoTableColumn
+} from '@po-ui/ng-components';
 
 import { SampleDashboardService } from './sample-po-page-default-dashboard.service';
 
 @Component({
   selector: 'sample-po-page-default-dashboard',
   templateUrl: './sample-po-page-default-dashboard.component.html',
-  styles: [
-    `
-      .sample-widget-text-subtitle {
-        font-family: NunitoSans;
-        font-size: 14px;
-        text-align: center;
-        color: #9da7a9;
-      }
-    `
-  ],
-  providers: [SampleDashboardService]
+  styleUrls: ['./sample-po-page-default-dashboard.component.css'],
+  providers: [SampleDashboardService],
+  standalone: false
 })
-export class SamplePoPageDefaultDashboardComponent {
-  columns: Array<PoTableColumn> = this.sampleDashboardService.getColumns();
-  email: string = undefined;
+export class SamplePoPageDefaultDashboardComponent implements OnInit {
+  private poNotification = inject(PoNotificationService);
+  private sampleDashboardService = inject(SampleDashboardService);
+
+  @ViewChild('formShare', { static: true }) formShare!: NgForm;
+  @ViewChild(PoModalComponent, { static: true }) poModal!: PoModalComponent;
+
+  columns!: Array<PoTableColumn>;
+  email: string = '';
   isSubscribed: boolean = false;
-  items: Array<object> = this.sampleDashboardService.getItems();
+  items!: Array<object>;
 
   public readonly actions: Array<PoPageAction> = [
-    { label: 'Share', action: this.modalOpen.bind(this), icon: 'po-icon-share' },
+    { label: 'Share', action: this.modalOpen.bind(this), icon: 'an an-share' },
     { label: 'GitHub', url: 'https://github.com/po-ui/po-angular' },
+    {
+      label: 'More info',
+      subItems: [
+        {
+          label: 'po-dropdown documentation',
+          url: 'https://po-ui.io/documentation/po-dropdown'
+        }
+      ]
+    },
     { label: 'Components', url: '/documentation' },
-    { label: 'Disable notification', action: this.disableNotification.bind(this), disabled: () => this.isSubscribed }
+    {
+      label: 'Disable notification',
+      action: this.disableNotification.bind(this),
+      disabled: () => this.isSubscribed
+    }
   ];
 
   public readonly breadcrumb: PoBreadcrumb = {
     items: [{ label: 'Home', link: '/' }, { label: 'Dashboard' }]
+  };
+
+  public readonly helper: PoHelperOptions = {
+    title: 'Dashboard Info',
+    content: 'View <b>real-time metrics</b> of your website. Data is updated <i>every 5 minutes</i>.',
+    type: 'info'
   };
 
   public readonly cancelAction: PoModalAction = {
@@ -55,10 +76,10 @@ export class SamplePoPageDefaultDashboardComponent {
     label: 'Share'
   };
 
-  @ViewChild('formShare', { static: true }) formShare: NgForm;
-  @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
-
-  constructor(private poNotification: PoNotificationService, private sampleDashboardService: SampleDashboardService) {}
+  ngOnInit(): void {
+    this.columns = this.sampleDashboardService.getColumns();
+    this.items = this.sampleDashboardService.getItems();
+  }
 
   modalClose() {
     this.poModal.close();

@@ -5,17 +5,23 @@ import { RouterTestingModule } from '@angular/router/testing';
 
 import { Observable } from 'rxjs';
 
-import { configureTestSuite } from './../../util-test/util-expect.spec';
-
-import { PoMenuPanelComponent } from './po-menu-panel.component';
-import { PoMenuPanelItemComponent } from './po-menu-panel-item/po-menu-panel-item.component';
-import { PoMenuPanelItemsService } from './services/po-menu-panel-items.service';
 import { PoTooltipModule } from '../../directives/po-tooltip';
+import { PoMenuPanelItemComponent } from './po-menu-panel-item/po-menu-panel-item.component';
+import { PoMenuPanelComponent } from './po-menu-panel.component';
+import { PoMenuPanelItemsService } from './services/po-menu-panel-items.service';
 
-@Component({ template: 'Search' })
+@Component({
+  selector: 'app-menu-panel-search',
+  template: 'Search',
+  standalone: false
+})
 export class SearchComponent {}
 
-@Component({ template: 'Home' })
+@Component({
+  selector: 'app-menu-panel-home',
+  template: 'Home',
+  standalone: false
+})
 export class HomeComponent {}
 
 export const routes: Routes = [
@@ -32,15 +38,13 @@ describe('PoMenuPanelComponent: ', () => {
   let nativeElement: any;
   let router: Router;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       imports: [RouterTestingModule.withRoutes(routes), PoTooltipModule],
       declarations: [PoMenuPanelComponent, PoMenuPanelItemComponent, HomeComponent, SearchComponent],
       providers: [PoMenuPanelItemsService]
-    });
-  });
+    }).compileComponents();
 
-  beforeEach(() => {
     router = TestBed.inject(Router);
 
     fixture = TestBed.createComponent(PoMenuPanelComponent);
@@ -71,18 +75,18 @@ describe('PoMenuPanelComponent: ', () => {
       expect(nativeElement.querySelectorAll('po-menu-panel-item').length).toBe(5);
     });
 
-    it('should not appear if it is incorrect the icon class po, `po-icon-star`.', () => {
+    it('should not appear if it is incorrect the icon class po, `an-star`.', () => {
       component.menus = [{ label: 'Home', link: './home', icon: 'star' }];
 
       fixture.detectChanges();
-      expect(nativeElement.querySelectorAll('.po-icon-star').length).toBe(0);
+      expect(nativeElement.querySelectorAll('.an-star').length).toBe(0);
     });
 
-    it('should appear if it is correct the icon class po, `po-icon-star`.', () => {
-      component.menus = [{ label: 'Home', link: './home', icon: 'po-icon-star' }];
+    it('should appear if it is correct the icon class po, `an-star`.', () => {
+      component.menus = [{ label: 'Home', link: './home', icon: 'an-star' }];
 
       fixture.detectChanges();
-      expect(nativeElement.querySelectorAll('.po-icon-star').length).toBe(1);
+      expect(nativeElement.querySelectorAll('.an-star').length).toBe(1);
     });
 
     it('po-menu-panel-item-selected: should have a selected item.', () => {
@@ -99,19 +103,41 @@ describe('PoMenuPanelComponent: ', () => {
 
       spyOn(component, <any>'clickMenuItem');
 
-      component['menuItemsService'] = fakeMenuPanelService(menuItem) as PoMenuPanelItemsService;
+      Object.defineProperty(component, 'menuItemsService', {
+        value: fakeMenuPanelService(menuItem),
+        configurable: true
+      });
       component['subscribeToMenuItem']();
 
       expect(component['clickMenuItem']).toHaveBeenCalled();
     });
 
-    it('clickMenuItem: should call action', () => {
-      spyOn(component.menus[3], <any>'action');
+    it('should call `menu.action` when menu has a defined action', () => {
+      const spyAction = jasmine.createSpy('action');
+      const menuWithAction = component.menus[3];
+      menuWithAction.action = spyAction;
 
-      component['clickMenuItem'](<any>component.menus[3]);
+      component['clickMenuItem'](<any>menuWithAction);
 
-      expect(component.activeMenuItem).toBe(undefined);
-      expect(component.menus[3].action).toHaveBeenCalled();
+      expect(spyAction).toHaveBeenCalled();
+    });
+
+    it('should open link when menu has a link and it is an external link', () => {
+      spyOn(window, 'open');
+
+      const menuWithExternalLink = component.menus[2];
+      component['clickMenuItem'](<any>menuWithExternalLink);
+
+      expect(window.open).toHaveBeenCalledWith(menuWithExternalLink.link, '_blank');
+    });
+
+    it('should call `activateMenuItem` when menu has a link and it is an internal link', () => {
+      const spyActivateMenuItem = spyOn(component, <any>'activateMenuItem');
+
+      const menuWithInternalLink = component.menus[1];
+      component['clickMenuItem'](<any>menuWithInternalLink);
+
+      expect(spyActivateMenuItem).toHaveBeenCalledWith(<any>menuWithInternalLink);
     });
 
     it('activeMenuItem: should activate menu item', () => {

@@ -25,8 +25,10 @@ speed-measure-plugin.json
 .settings/
 *.sublime-workspace
 .vscode
+.kiro
 
 # IDE - VSCode
+.vscode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -35,6 +37,8 @@ speed-measure-plugin.json
 .history/*
 
 # misc
+.angular
+/.angular/cache
 /.sass-cache
 /connect.lock
 /coverage
@@ -43,6 +47,8 @@ npm-debug.log
 yarn-error.log
 testem.log
 /typings
+.scannerwork
+.env
 
 # System Files
 .DS_Store
@@ -54,5 +60,14 @@ projects/portal/src/app/guide/menu-guides.service.ts
 projects/portal/src/app/documentation/samples/
 projects/portal/src/app/menu.service.ts
 projects/portal/src/assets/json/api-list.json
+projects/portal/src/assets/json/icons-fill.json
+projects/portal/src/assets/json/icons-regular.json
 projects/portal/src/assets/json/version.json
 projects/portal/src/app/documentation/documentation-routing.module.ts
+
+# LLMS generated files
+projects/portal/src/llms-generated/
+projects/portal/src/llms.txt
+projects/portal/src/llms-full.txt
+
+projects/mcp/node_modules

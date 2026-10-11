@@ -1,30 +1,86 @@
 <div class="po-progress" [ngClass]="statusClass">
-  <label *ngIf="text" class="po-progress-description-mobile po-progress-description-text">
-    {{ text }}
-  </label>
+  @if (shape() === 'bar') {
+    @if (text) {
+      <div class="po-progress-description">
+        <po-label [p-label]="text"></po-label>
+      </div>
+    }
+    <po-progress-bar
+      class="po-progress-bar po-progress-bar-{{ size }}"
+      [p-aria-label]="ariaLabel || text"
+      [p-indeterminate]="indeterminate"
+      [p-value]="value"
+    >
+    </po-progress-bar>
 
-  <po-progress-bar class="po-progress-bar" [p-indeterminate]="indeterminate" [p-value]="value"> </po-progress-bar>
+    <div class="po-progress-info">
+      <div class="po-progress-info-left">
+        @if (infoIcon) {
+          <po-icon [p-icon]="infoIcon" [class.po-progress-info-icon-error]="status === 'error'"></po-icon>
+        }
+        @if (isAllowInfoError) {
+          <po-icon p-icon="ICON_EXCLAMATION" class="po-progress-info-icon-error"></po-icon>
+        }
+        @if (info) {
+          <span class="po-progress-info-text" [class.po-progress-info-text-error]="status === 'error'">{{ info }}</span>
+        }
+      </div>
 
-  <div *ngIf="text" class="po-progress-description">
-    <label class="po-progress-description-text">
-      {{ text }}
-    </label>
-  </div>
+      <div class="po-progress-info-right">
+        @if (showPercentage && !indeterminate) {
+          <span>{{ value }}%</span>
+        }
 
-  <div *ngIf="isAllowProgressInfo" class="po-progress-info">
-    <span *ngIf="infoIcon" class="po-progress-info-icon po-icon {{ infoIcon }}"></span>
-    <span *ngIf="info" class="po-progress-info-text">{{ info }}</span>
+        @if (isAllowRetry) {
+          <po-button
+            p-icon="ICON_REFRESH"
+            (p-click)="emitRetry()"
+            [p-aria-label]="literals.retry"
+            p-kind="tertiary"
+            [p-size]="sizeActions"
+          ></po-button>
+        }
 
-    <button
-      *ngIf="isAllowRetry"
-      class="po-progress-info-icon-action po-icon po-icon-refresh po-clickable"
-      (click)="emitRetry()"
-    ></button>
+        @if (isActionVisible(customAction)) {
+          <po-button
+            class="po-progress-custom-button"
+            [p-danger]="customAction.type === 'danger'"
+            [p-disabled]="actionIsDisabled(customAction)"
+            [p-label]="customAction.label || ''"
+            [p-icon]="customAction.icon"
+            [p-size]="sizeActions"
+            (p-click)="callAction()"
+          >
+          </po-button>
+        }
 
-    <button
-      *ngIf="isAllowCancel"
-      class="po-progress-info-icon-action po-icon po-icon-close po-clickable"
-      (click)="emitCancellation()"
-    ></button>
-  </div>
+        @if (isAllowCancel) {
+          <po-button
+            p-icon="ICON_CLOSE"
+            (p-click)="emitCancellation()"
+            p-kind="secondary"
+            [p-disabled]="disabledCancel"
+            [p-aria-label]="literals.cancel"
+            [p-danger]="true"
+            [p-size]="sizeActions"
+          ></po-button>
+        }
+      </div>
+    </div>
+  }
+
+  @if (shape() === 'circle') {
+    <po-progress-circle
+      class="po-progress-circle po-progress-circle-{{ size }}"
+      [p-aria-label]="ariaLabel || text"
+      [p-indeterminate]="indeterminate"
+      [p-value]="value"
+      [p-size]="size"
+      [p-status]="status"
+      [p-show-percentage]="showPercentage"
+      [p-radius]="radius()"
+      [p-parent-size]="parentSize()"
+    >
+    </po-progress-circle>
+  }
 </div>

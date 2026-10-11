@@ -1,42 +1,41 @@
-import { ComponentFixture, fakeAsync, TestBed, tick, waitForAsync } from '@angular/core/testing';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { ComponentFixture, fakeAsync, TestBed, tick, waitForAsync } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 
-import { of, EMPTY } from 'rxjs';
+import { EMPTY, of } from 'rxjs';
 
-import { PoDialogModule, PoNotificationModule, PoTableColumnSort, PoTableColumnSortType } from '@po-ui/ng-components';
+import {
+  PoDialogModule,
+  PoNotificationModule,
+  PoTableColumnSort,
+  PoTableColumnSortType,
+  PoTableColumnSpacing,
+  PoThemeA11yEnum
+} from '@po-ui/ng-components';
 
-import * as utilsFunctions from '../../utils/util';
 import { expectPropertiesValues } from '../../util-test/util-expect.spec';
+import { PoUtils as utilsFunctions } from '../../utils/util';
 import { PoPageDynamicDetailComponent } from '../po-page-dynamic-detail/po-page-dynamic-detail.component';
 
-import { PoPageDynamicTableComponent } from './po-page-dynamic-table.component';
-import { PoPageDynamicTableBeforeRemove } from './interfaces/po-page-dynamic-table-before-remove.interface';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { PoPageDynamicTableBeforeRemoveAll } from './interfaces/po-page-dynamic-table-before-remove-all.interface';
+import { PoPageDynamicTableBeforeRemove } from './interfaces/po-page-dynamic-table-before-remove.interface';
+import { PoPageDynamicTableComponent } from './po-page-dynamic-table.component';
 
 describe('PoPageDynamicTableComponent:', () => {
   let component: PoPageDynamicTableComponent;
   let fixture: ComponentFixture<PoPageDynamicTableComponent>;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        imports: [
-          FormsModule,
-          HttpClientTestingModule,
-          RouterTestingModule.withRoutes([]),
-
-          PoNotificationModule,
-          PoDialogModule
-        ],
-        declarations: [PoPageDynamicTableComponent],
-        providers: [],
-        schemas: [NO_ERRORS_SCHEMA]
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoPageDynamicTableComponent],
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [FormsModule, RouterTestingModule.withRoutes([]), PoNotificationModule, PoDialogModule],
+      providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoPageDynamicTableComponent);
@@ -50,6 +49,11 @@ describe('PoPageDynamicTableComponent:', () => {
   });
 
   describe('Properties:', () => {
+    const booleanValidTrueValues = [true, 'true', 1, ''];
+    const booleanInvalidValues = [undefined, null, NaN, 2, 'string'];
+    const numberValidValues = [105, 1, 98, 0];
+    const numberInvalidValues = [null, undefined, '', ' ', {}, [], false, true];
+
     it('actions: should set actions to `{}` when pass invalid values', () => {
       const invalidValues = [undefined, null, '', true, false, 0, 1, 'string'];
 
@@ -72,16 +76,178 @@ describe('PoPageDynamicTableComponent:', () => {
       expectPropertiesValues(component, 'actions', validValues, validValues);
     });
 
-    it('p-quick-search-width: should update property p-quick-search-width with valid values.', () => {
-      const validValues = [105, 1, 98, 0];
+    it('p-actions-right: should update property `p-actions-right` with false.', () => {
+      component.actionRight = utilsFunctions.convertToBoolean(3);
 
-      expectPropertiesValues(component, 'quickSearchWidth', validValues, validValues);
+      expect(component.actionRight).toBe(false);
+    });
+
+    it('p-actions-right: should update property `p-actions-right` with true.', () => {
+      component.actionRight = utilsFunctions.convertToBoolean(1);
+
+      expect(component.actionRight).toBe(true);
+    });
+
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
+    it('p-quick-search-width: should update property p-quick-search-width with valid values.', () => {
+      expectPropertiesValues(component, 'quickSearchWidth', numberValidValues, numberValidValues);
     });
 
     it('p-quick-search-width: should update property p-quick-search-width with invalid values for undefined.', () => {
-      const invalidValues = [null, undefined, '', ' ', {}, [], false, true];
+      expectPropertiesValues(component, 'quickSearchWidth', numberInvalidValues, undefined);
+    });
 
-      expectPropertiesValues(component, 'quickSearchWidth', invalidValues, undefined);
+    it('p-height: should update property p-height with valid values.', () => {
+      expectPropertiesValues(component, 'height', numberValidValues, numberValidValues);
+    });
+
+    it('p-height: should update property p-height with invalid values for undefined.', () => {
+      expectPropertiesValues(component, 'height', numberInvalidValues, undefined);
+    });
+
+    it('p-infinite-scroll: should update property `p-infinite-scroll` with false.', () => {
+      component.infiniteScroll = utilsFunctions.convertToBoolean(3);
+
+      expect(component.infiniteScroll).toBe(false);
+    });
+
+    it('p-infinite-scroll: should update property `p-infinite-scroll` with true.', () => {
+      component.height = 10;
+      component.infiniteScroll = utilsFunctions.convertToBoolean(3);
+
+      expect(component.infiniteScroll).toBe(false);
+    });
+
+    it('hideRemoveAllDisclaimer: should set property `p-hide-remove-all-disclaimer` to `false` if invalid value', () => {
+      component.hideRemoveAllDisclaimer = utilsFunctions.convertToBoolean(3);
+
+      expect(component.hideRemoveAllDisclaimer).toBe(false);
+    });
+
+    it('hideRemoveAllDisclaimer: should update property `p-hide-remove-all-disclaimer` to `true` with valid values', () => {
+      component.hideRemoveAllDisclaimer = utilsFunctions.convertToBoolean(1);
+
+      expect(component.hideRemoveAllDisclaimer).toBe(true);
+    });
+
+    it('hideCloseDisclaimers: should set property `p-hide-close-disclaimers` to `[]` if not Array value', () => {
+      const invalidValues = [undefined, null, '', true, false, 0, 1, 'string', {}];
+
+      expectPropertiesValues(component, 'hideCloseDisclaimers', invalidValues, []);
+    });
+
+    it('hideCloseDisclaimers: should update property `p-hide-close-disclaimers` with valid values', () => {
+      const validValues = [['Teste 1'], ['Teste 2', 'Teste 3']];
+
+      expectPropertiesValues(component, 'hideCloseDisclaimers', validValues, validValues);
+    });
+
+    it('hideColumnsManager: should set property `p-hide-columns-manager` to `false` if invalid value', () => {
+      component.hideColumnsManager = utilsFunctions.convertToBoolean(3);
+
+      expect(component.hideColumnsManager).toBe(false);
+    });
+
+    it('hideColumnsManager: should update property `p-hide-columns-manager` to `true` with valid values', () => {
+      component.hideColumnsManager = utilsFunctions.convertToBoolean('true');
+
+      expect(component.hideColumnsManager).toBe(true);
+    });
+
+    describe('spacing:', () => {
+      it('should set spacing to the given valid value', () => {
+        const validValues = [PoTableColumnSpacing.Small, PoTableColumnSpacing.Medium, PoTableColumnSpacing.Large];
+
+        expectPropertiesValues(component, 'spacing', validValues, validValues);
+      });
+    });
+
+    it('p-virtual-scroll: should default virtualScroll to true when height is defined.', () => {
+      component.height = 300;
+      expect(component.virtualScroll).toBe(true);
+    });
+
+    it('p-virtual-scroll: should allow setting virtualScroll to false when height is defined.', () => {
+      component.height = 300;
+      component.virtualScroll = false;
+      expect(component.virtualScroll).toBe(false);
+    });
+
+    it('p-virtual-scroll: should allow setting virtualScroll to true when height is defined.', () => {
+      component.height = 300;
+      component.virtualScroll = true;
+      expect(component.virtualScroll).toBe(true);
+    });
+
+    it('p-visible-fixed-filters: should update property `p-visible-filter-disclaimers` to `false` when valid boolean value is given', () => {
+      component.visibleFixedFilters = false;
+
+      expect(component.visibleFixedFilters).toBe(false);
+    });
+
+    it('p-visible-fixed-filters: should update property `p-visible-filter-disclaimers` to `true` when valid boolean value is given', () => {
+      component.visibleFixedFilters = true;
+
+      expect(component.visibleFixedFilters).toBe(true);
     });
   });
 
@@ -99,7 +265,7 @@ describe('PoPageDynamicTableComponent:', () => {
         spyOn(component, <any>'loadData').and.returnValue(EMPTY);
         spyOn(component['poPageDynamicService'], <any>'configServiceApi');
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         component.ngOnInit();
 
@@ -127,7 +293,7 @@ describe('PoPageDynamicTableComponent:', () => {
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(EMPTY);
         spyOn(component['poPageDynamicService'], <any>'configServiceApi');
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         component.ngOnInit();
 
@@ -151,24 +317,22 @@ describe('PoPageDynamicTableComponent:', () => {
         component.title = 'Original Title';
         component.quickSearchWidth = 3;
 
-        component.onLoad = () => {
-          return {
-            quickSearchWidth: 6,
-            title: 'New Title',
-            breadcrumb: {
-              items: [{ label: 'Test' }, { label: 'Test2' }]
-            },
-            pageCustomActions: [{ label: 'Custom Action', action: 'endpoint/' }],
-            tableCustomActions: [{ label: 'Details', action: 'endpoint/' }],
-            actions: {
-              detail: '/new_datail',
-              new: '/new'
-            },
-            fields: [{ property: 'filter1' }, { property: 'filter3' }],
-            keepFilters: true,
-            concatFilters: true
-          };
-        };
+        component.onLoad = () => ({
+          quickSearchWidth: 6,
+          title: 'New Title',
+          breadcrumb: {
+            items: [{ label: 'Test' }, { label: 'Test2' }]
+          },
+          pageCustomActions: [{ label: 'Custom Action', action: 'endpoint/' }],
+          tableCustomActions: [{ label: 'Details', action: 'endpoint/' }],
+          actions: {
+            detail: '/new_datail',
+            new: '/new'
+          },
+          fields: [{ property: 'filter1' }, { property: 'filter3' }],
+          keepFilters: true,
+          concatFilters: true
+        });
 
         spyOn(component, <any>'loadData').and.returnValue(EMPTY);
 
@@ -193,16 +357,17 @@ describe('PoPageDynamicTableComponent:', () => {
         expect(component.tableCustomActions).toEqual([{ label: 'Details', action: 'endpoint/' }]);
 
         component.ngOnDestroy();
-        expect(component['subscriptions']['_subscriptions']).toBeNull();
+        expect(component['subscriptions']['_subscriptions']).toBeUndefined();
       }));
 
       it('should configure properties based on the return of onload route', fakeAsync(() => {
         component.autoRouter = false;
-        component.actions = <any>{};
+        component.actions = {};
         component.breadcrumb = <any>{};
         component.fields = [];
         component.title = '';
         component.quickSearchWidth = undefined;
+        component.hideCloseDisclaimers = ['name'];
 
         const activatedRoute: any = {
           snapshot: {
@@ -224,7 +389,9 @@ describe('PoPageDynamicTableComponent:', () => {
           pageCustomActions: [{ label: 'Custom Action', action: 'endpoint/' }],
           tableCustomActions: [{ label: 'Details', action: 'endpoint/' }],
           keepFilters: true,
-          concatFilters: true
+          concatFilters: true,
+          hideRemoveAllDisclaimer: true,
+          hideCloseDisclaimers: ['birthdate', 'city']
         };
 
         const custom = { title: 'New Title' };
@@ -233,7 +400,7 @@ describe('PoPageDynamicTableComponent:', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of(metadata));
         spyOn(<any>component['poPageCustomizationService'], 'createObservable').and.returnValue(of(custom));
 
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
 
         component.ngOnInit();
 
@@ -249,6 +416,8 @@ describe('PoPageDynamicTableComponent:', () => {
         expect(component.keepFilters).toBe(true);
         expect(component.concatFilters).toBe(true);
         expect(component.quickSearchWidth).toBe(6);
+        expect(component.hideRemoveAllDisclaimer).toBe(true);
+        expect(component.hideCloseDisclaimers).toEqual(['birthdate', 'city']);
       }));
     });
 
@@ -261,6 +430,53 @@ describe('PoPageDynamicTableComponent:', () => {
 
       expect(component['loadData']).toHaveBeenCalled();
       expect(component['params']).toBe(filter);
+    });
+
+    it('updateDataTable: should be called with the parameters passed to the method', () => {
+      const expectValue = { Page: 2, search: 'test' };
+
+      spyOn(component, <any>'loadData').and.returnValue(EMPTY);
+
+      component.updateDataTable(expectValue);
+
+      expect(component['loadData']).toHaveBeenCalledWith(expectValue);
+    });
+
+    it('updateDataTable: should be called with the current parameters', () => {
+      const expectValue = { page: 1, search: 'test' };
+      component['quickSearchParam'] = null;
+      component['currentPage'] = 1;
+      component['params'] = { [component.quickSearchParam]: 'test' };
+
+      spyOn(component, <any>'loadData').and.returnValue(EMPTY);
+
+      component.updateDataTable();
+
+      expect(component['loadData']).toHaveBeenCalledWith(expectValue);
+    });
+
+    it(`updateDataTable: 'currentPage' should be 1 if it value is undefined`, () => {
+      const expectValue = { page: 1, search: 'test' };
+      component['currentPage'] = undefined;
+      component['params'] = { search: 'test' };
+
+      spyOn(component, <any>'loadData').and.returnValue(EMPTY);
+
+      component.updateDataTable();
+
+      expect(component['currentPage']).toEqual(1);
+      expect(component['loadData']).toHaveBeenCalledWith(expectValue);
+    });
+
+    it(`updateDataTable: 'currentPage' should be 2 if the index of 'itemSelectedAction' is greater than 9`, () => {
+      for (let i = 0; i <= 10; i++) {
+        component.items.push({ id: i });
+      }
+      component['itemSelectedAction'] = component.items[10];
+
+      component.updateDataTable();
+
+      expect(component['currentPage']).toBe(2);
     });
 
     it('onAdvancedSearch: should call `updateFilterValue` with filter if `keepFilters` is true', () => {
@@ -294,8 +510,8 @@ describe('PoPageDynamicTableComponent:', () => {
 
       component.onQuickSearch(filter);
 
-      expect(component['loadData']).toHaveBeenCalledWith({ page: 1, search: filter });
-      expect(component['params']).toEqual({ search: filter });
+      expect(component['loadData']).toHaveBeenCalledWith({ page: 1, [component.quickSearchParam]: filter });
+      expect(component['params']).toEqual({ [component.quickSearchParam]: filter });
     });
 
     it('onQuickSearch: should call `loadData` with merged filter and quickSearch if concatFilters is true', () => {
@@ -309,7 +525,7 @@ describe('PoPageDynamicTableComponent:', () => {
 
       const expectedParams = {
         ...advancedFiltersParams,
-        search: termTypedInQuickSearch
+        [component.quickSearchParam]: termTypedInQuickSearch
       };
       spyOn(component, <any>'loadData').and.returnValue(EMPTY);
 
@@ -325,6 +541,7 @@ describe('PoPageDynamicTableComponent:', () => {
     });
 
     it('onQuickSearch: should call `loadData` only with quickSearch if concatFilters is false', () => {
+      component.quickSearchParam = 'filter';
       component.concatFilters = false;
       const termTypedInQuickSearch = 'filterValue';
 
@@ -333,7 +550,7 @@ describe('PoPageDynamicTableComponent:', () => {
         name: 'Test'
       };
 
-      const quickSearchParams = { search: termTypedInQuickSearch };
+      const quickSearchParams = { [component.quickSearchParam]: termTypedInQuickSearch };
 
       spyOn(component, <any>'loadData').and.returnValue(EMPTY);
 
@@ -341,6 +558,20 @@ describe('PoPageDynamicTableComponent:', () => {
 
       expect(component['loadData']).toHaveBeenCalledWith({ page: 1, ...advancedFiltersParams });
       expect(component['params']).toEqual(advancedFiltersParams);
+
+      component.onQuickSearch(termTypedInQuickSearch);
+
+      expect(component['loadData']).toHaveBeenCalledWith({ page: 1, ...quickSearchParams });
+      expect(component['params']).toEqual(quickSearchParams);
+    });
+
+    it('onQuickSearch: should call `loadData` as default value of `search` if no value is sent in `quickSearchParam`', () => {
+      component.concatFilters = false;
+      const termTypedInQuickSearch = 'filterValue';
+
+      const quickSearchParams = { 'search': termTypedInQuickSearch };
+
+      spyOn(component, <any>'loadData').and.returnValue(EMPTY);
 
       component.onQuickSearch(termTypedInQuickSearch);
 
@@ -357,6 +588,17 @@ describe('PoPageDynamicTableComponent:', () => {
 
       expect(component['loadData']).toHaveBeenCalledWith(undefined);
       expect(component['params']).toEqual({});
+    });
+
+    it('onQuickSearch: should remove `oldQuickSearchParam` value from object properties if `quickSearchParam` is different.', () => {
+      component.concatFilters = true;
+      component.quickSearchParam = 'search';
+      component.onQuickSearch('search');
+
+      component.quickSearchParam = 'filter';
+
+      component.onQuickSearch('filter');
+      expect(component['params']['search']).not.toBeDefined();
     });
 
     it('showMore: should call `loadData` with next page and `params`', () => {
@@ -481,7 +723,7 @@ describe('PoPageDynamicTableComponent:', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of(response));
         spyOn(component, <any>'loadData').and.returnValue(EMPTY);
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(EMPTY);
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
         component['loadDataFromAPI']();
 
         tick();
@@ -490,6 +732,144 @@ describe('PoPageDynamicTableComponent:', () => {
         expect(component.fields).toEqual(response.fields);
         expect(component.title).toEqual(response.title);
         expect(component.quickSearchWidth).toEqual(response.quickSearchWidth);
+      }));
+
+      it('should add item and change pagination to next page', fakeAsync(() => {
+        component['page'] = 1;
+
+        const response = {
+          items: [{ name: 'Steve', id: 1 }],
+          hasNext: true,
+          page: 2
+        };
+
+        component.serviceApi = 'localHost';
+        component.items = [{ name: 'Anne', id: 2 }];
+
+        spyOn(component['poPageDynamicService'], 'getResources').and.returnValue(of(response));
+
+        component['loadData']({ page: 2 }).subscribe();
+
+        tick(100);
+
+        expect(component.items).toEqual([
+          { name: 'Anne', id: 2 },
+          { name: 'Steve', id: 1 }
+        ]);
+        expect(component['page']).toEqual(2);
+      }));
+
+      it('should add item and change pagination to next page with more than one key', fakeAsync(() => {
+        component['page'] = 1;
+        component.fields = [
+          { property: 'seqItem', key: true },
+          { property: 'id', key: true, visible: false }
+        ];
+
+        const response = {
+          items: [{ name: 'Steve', id: 1, seqItem: 9 }],
+          hasNext: true,
+          page: 2
+        };
+
+        component.serviceApi = 'localHost';
+        component.items = [{ name: 'Anne', id: 2, seqItem: 9 }];
+
+        spyOn(component['poPageDynamicService'], 'getResources').and.returnValue(of(response));
+
+        component['loadData']({ page: 2 }).subscribe();
+
+        tick(100);
+
+        expect(component.items).toEqual([
+          { name: 'Anne', id: 2, seqItem: 9 },
+          { name: 'Steve', id: 1, seqItem: 9 }
+        ]);
+        expect(component['page']).toEqual(2);
+      }));
+
+      it('should keep the first item found that is equal to the response items', fakeAsync(() => {
+        component['page'] = 1;
+        component.fields = [
+          { property: 'seqItem', key: true },
+          { property: 'id', key: false, visible: false }
+        ];
+
+        const response = {
+          items: [{ name: 'Steve', id: 1, seqItem: 9 }],
+          hasNext: true,
+          page: 2
+        };
+
+        component.serviceApi = 'localHost';
+        component.items = [{ name: 'Anne', id: 2, seqItem: 9 }];
+
+        spyOn(component['poPageDynamicService'], 'getResources').and.returnValue(of(response));
+
+        component['loadData']({ page: 2 }).subscribe();
+
+        tick(100);
+
+        expect(component.items).toEqual([{ name: 'Anne', id: 2, seqItem: 9 }]);
+        expect(component['page']).toEqual(2);
+      }));
+
+      it('should keep the initial item if the response is empty', fakeAsync(() => {
+        component['page'] = 1;
+        component.fields = [
+          { property: 'seqItem', key: true },
+          { property: 'id', key: true, visible: false }
+        ];
+
+        const response = {
+          items: [],
+          hasNext: true,
+          page: 2
+        };
+
+        component.serviceApi = 'localHost';
+        component.items = [{ name: 'Anne', id: 2, seqItem: 9 }];
+
+        spyOn(component['poPageDynamicService'], 'getResources').and.returnValue(of(response));
+        spyOn(utilsFunctions, 'removeDuplicateItemsWithArrayKey');
+
+        component['loadData']({ page: 2 }).subscribe();
+
+        tick(100);
+
+        expect(component.items).toEqual([{ name: 'Anne', id: 2, seqItem: 9 }]);
+      }));
+
+      it('should call loadData with quickSearchValue', fakeAsync(() => {
+        const activatedRoute: any = {
+          snapshot: {
+            data: {
+              serviceApi: 'localhost:4300/api/people',
+              serviceMetadataApi: 'localhost:4300/api/people/metadata'
+            },
+            params: { id: 1 }
+          }
+        };
+
+        const response = {
+          autoRouter: false,
+          actions: undefined,
+          breadcrumb: undefined,
+          fields: [],
+          title: 'Title',
+          quickSearchWidth: 4
+        };
+
+        component.quickSearchParam = 'search';
+        component.quickSearchValue = 'Jhon';
+
+        spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of(response));
+        spyOn(component, <any>'loadData').and.returnValue(EMPTY);
+        spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(EMPTY);
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
+        component['loadDataFromAPI']();
+
+        expect(component['loadData']).toHaveBeenCalledWith({ search: 'Jhon' });
       }));
 
       it('should call `getMetadata` and set properties', fakeAsync(() => {
@@ -515,7 +895,7 @@ describe('PoPageDynamicTableComponent:', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(of(response));
         spyOn(component, <any>'loadData').and.returnValue(EMPTY);
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(EMPTY);
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
         component['loadDataFromAPI']();
 
         tick();
@@ -579,7 +959,7 @@ describe('PoPageDynamicTableComponent:', () => {
         spyOn(component['poPageDynamicService'], 'getMetadata').and.returnValue(EMPTY);
         spyOn(component, <any>'loadData').and.returnValue(EMPTY);
         spyOn(component, <any>'loadOptionsOnInitialize').and.returnValue(EMPTY);
-        component['activatedRoute'] = activatedRoute;
+        Object.defineProperty(component, 'activatedRoute', { value: activatedRoute, configurable: true });
         component['loadDataFromAPI']();
 
         tick();
@@ -670,6 +1050,20 @@ describe('PoPageDynamicTableComponent:', () => {
       expect(component['router'].config.unshift).not.toHaveBeenCalled();
       expect(component['router'].navigate).toHaveBeenCalledWith([route.path], { queryParams: route.params });
     }));
+
+    it('navigateTo: should navigate to a external link', () => {
+      const route = {
+        path: 'http://google.com',
+        component: PoPageDynamicTableComponent,
+        params: {}
+      };
+
+      const openExternalLink = spyOn(utilsFunctions, 'openExternalLink');
+
+      component['navigateTo'](route);
+
+      expect(openExternalLink).toHaveBeenCalled();
+    });
 
     it('navigateTo: should call `router.config.unshift` and `navigateTo` only twice if `autoRouter` is true', fakeAsync(() => {
       const route: any = {
@@ -1364,7 +1758,7 @@ describe('PoPageDynamicTableComponent:', () => {
 
         expect(component['poNotification'].success).toHaveBeenCalled();
         expect(component['formatUniqueKey']).toHaveBeenCalled();
-        expect(component['poPageDynamicService'].deleteResource).toHaveBeenCalledWith(uniqueKey, '/teste');
+        expect(component['poPageDynamicService'].deleteResource).toHaveBeenCalledWith(undefined, '/teste');
       }));
 
       it(`should call 'deleteResource' with other url if beforeRemove return newUrl and remove is a function`, fakeAsync(() => {
@@ -1386,7 +1780,7 @@ describe('PoPageDynamicTableComponent:', () => {
 
         expect(component['poNotification'].success).toHaveBeenCalled();
         expect(component['formatUniqueKey']).toHaveBeenCalled();
-        expect(component['poPageDynamicService'].deleteResource).toHaveBeenCalledWith(uniqueKey, '/teste');
+        expect(component['poPageDynamicService'].deleteResource).toHaveBeenCalledWith(undefined, '/teste');
       }));
 
       it(`should call 'poNotification.success' if remove is a function and return true`, fakeAsync(() => {
@@ -1771,7 +2165,8 @@ describe('PoPageDynamicTableComponent:', () => {
           {
             label: component.literals.pageActionRemoveAll,
             action: jasmine.any(Function),
-            disabled: jasmine.any(Function)
+            disabled: jasmine.any(Function),
+            type: 'danger'
           }
         ];
         component.actions = actions;
@@ -1936,6 +2331,45 @@ describe('PoPageDynamicTableComponent:', () => {
       expect(component['sortedColumn']).toEqual(expectedValue);
     });
 
+    it('onChangeVisibleColumns: should call `changeVisibleColumns.emit`', () => {
+      spyOn(component.changeVisibleColumns, 'emit');
+      const fakeColumns = ['name', 'age'];
+
+      component.onChangeVisibleColumns(fakeColumns);
+
+      expect(component.changeVisibleColumns.emit).toHaveBeenCalledWith(fakeColumns);
+    });
+
+    it('onChangeFixedColumns: should call `changeFixedColumns.emit`', () => {
+      spyOn(component.changeFixedColumns, 'emit');
+      const fakeColumns = ['name', 'age'];
+
+      component.onChangeFixedColumns(fakeColumns);
+
+      expect(component.changeFixedColumns.emit).toHaveBeenCalledWith(fakeColumns);
+    });
+
+    it('onColumnRestoreManager: should call `columnRestoreManager.emit`', () => {
+      spyOn(component.columnRestoreManager, 'emit');
+      const fakeColumns = ['name', 'age'];
+
+      component.onColumnRestoreManager(fakeColumns);
+
+      expect(component.columnRestoreManager.emit).toHaveBeenCalledWith(fakeColumns);
+    });
+
+    it('onSortBy: should call `sortBy.emit`', () => {
+      spyOn(component.sortBy, 'emit');
+      const fakeColumns = {
+        column: { property: 'name' },
+        type: PoTableColumnSortType.Ascending
+      };
+
+      component.onSortBy(fakeColumns);
+
+      expect(component.sortBy.emit).toHaveBeenCalledWith(fakeColumns);
+    });
+
     it('onAdvancedSearch: should call `updateFilterValue` with filter if `keepFilters` is true', () => {
       const filter = 'filterValue';
       component.keepFilters = true;
@@ -1964,6 +2398,15 @@ describe('PoPageDynamicTableComponent:', () => {
       component['updateFilterValue'](filter);
 
       expect(component.fields).toEqual(expectedFields);
+    });
+
+    it('updateTableActions: ', () => {
+      const actions = [{ label: 'detail' }];
+      component['_defaultTableActions'] = actions;
+
+      component['updateTableActions']();
+
+      expect(component.tableActions).toEqual(actions);
     });
   });
 
@@ -2222,6 +2665,32 @@ describe('PoPageDynamicTableComponent:', () => {
       expect(component['router'].navigate).toHaveBeenCalledWith(['test/'], { queryParams: undefined });
     });
 
+    it('should navigate to `test/1` if action of tableCustomAction is undefined and url is defined and concatKeys is true', () => {
+      component.actions = {
+        detail: '/detail',
+        edit: '/edit'
+      };
+      const selectedItemKey = { id: '1' };
+
+      component.items = [
+        { id: '1', name: 'angular', $selected: true },
+        { id: '2', name: 'react' },
+        { id: '3', name: 'vue' }
+      ];
+      component.fields = [{ property: 'id', key: true }];
+
+      const tableCustomAction = { label: 'Table Custom Action 1', url: 'test', concatKeys: true };
+
+      component.tableCustomActions = [tableCustomAction];
+
+      spyOn(component['router'], 'navigate').and.callThrough();
+
+      const tableActions = visibleTableActions();
+      tableActions[2].action(selectedItemKey, tableCustomAction);
+
+      expect(component['router'].navigate).toHaveBeenCalledWith(['test/1'], { queryParams: undefined });
+    });
+
     it('shouldn`t navigate and call action from tableActions if action and url are undefined', () => {
       component.actions = {
         detail: '/detail',
@@ -2240,6 +2709,72 @@ describe('PoPageDynamicTableComponent:', () => {
 
       expect(routerNavigateSpy).not.toHaveBeenCalled();
       expect(customActionServiceSpy).not.toHaveBeenCalled();
+    });
+
+    it('should open an external url', () => {
+      const tableCustomAction = { label: 'External', url: 'https://fakeUrl.com' };
+      component.actions = {};
+      component.tableCustomActions = [tableCustomAction];
+
+      const openExternalLink = spyOn(utilsFunctions, 'openExternalLink');
+      const createConcatenatedUrlSpy = spyOn(component, <any>'createConcatenatedUrl').and.callThrough();
+
+      const tableActions = visibleTableActions();
+      tableActions[0].action(tableCustomAction);
+
+      expect(createConcatenatedUrlSpy).toHaveBeenCalled();
+      expect(openExternalLink).toHaveBeenCalledWith('https://fakeUrl.com');
+    });
+
+    it('should open an external url with concatenated key and has a unique key', () => {
+      const tableCustomAction = { label: 'External', url: 'https://fakeUrl.com', concatKeys: true };
+
+      const selectedItemKey = { id: '1' };
+
+      component.items = [
+        { id: '1', name: 'angular', $selected: true },
+        { id: '2', name: 'react' },
+        { id: '3', name: 'vue' }
+      ];
+      component.fields = [{ property: 'id', key: true }];
+
+      component.tableCustomActions = [tableCustomAction];
+
+      const openExternalLink = spyOn(utilsFunctions, 'openExternalLink');
+      const createConcatenatedUrlSpy = spyOn(component, <any>'createConcatenatedUrl').and.callThrough();
+
+      const tableActions = visibleTableActions();
+      tableActions[0].action(selectedItemKey, tableCustomAction);
+
+      expect(createConcatenatedUrlSpy).toHaveBeenCalled();
+      expect(openExternalLink).toHaveBeenCalledWith('https://fakeUrl.com/1');
+    });
+
+    it('should open an external url with a concatenated key and has multiple keys', () => {
+      const tableCustomAction = { label: 'External', url: 'https://fakeUrl.com', concatKeys: true };
+
+      const selectedItemKey = { id: '1', name: 'angular' };
+
+      component.items = [
+        { id: '1', name: 'angular', $selected: true },
+        { id: '2', name: 'react' },
+        { id: '3', name: 'vue' }
+      ];
+      component.fields = [
+        { property: 'id', key: true },
+        { property: 'name', key: true }
+      ];
+
+      component.tableCustomActions = [tableCustomAction];
+
+      const openExternalLink = spyOn(utilsFunctions, 'openExternalLink');
+      const createConcatenatedUrlSpy = spyOn(component, <any>'createConcatenatedUrl').and.callThrough();
+
+      const tableActions = visibleTableActions();
+      tableActions[0].action(selectedItemKey, tableCustomAction);
+
+      expect(createConcatenatedUrlSpy).toHaveBeenCalled();
+      expect(openExternalLink).toHaveBeenCalledWith('https://fakeUrl.com/1,angular');
     });
 
     it('should call action from tableActions and call modifyUITableItem if return an object', () => {
@@ -2330,5 +2865,58 @@ describe('PoPageDynamicTableComponent:', () => {
       expect(tableActions.length).toEqual(1);
       expect(tableActions[0].label).toEqual('Details');
     });
+
+    it('onSort: should sort list of items in ascending order', () => {
+      component.height = 400;
+      component.items = [
+        { label: 'ghi', id: 3 },
+        { label: 'abc', id: 2 },
+        { label: 'def', id: 1 }
+      ];
+
+      component.onSort({
+        column: {
+          label: 'Label',
+          property: 'label',
+          visible: true
+        },
+        type: PoTableColumnSortType.Ascending
+      });
+
+      expect(component.items).toEqual([
+        { label: 'abc', id: 2 },
+        { label: 'def', id: 1 },
+        { label: 'ghi', id: 3 }
+      ]);
+    });
+
+    it('onSort: should sort list of items in descending  order', () => {
+      component.height = 400;
+      component.items = [
+        { label: 'ghi', id: 3 },
+        { label: 'abc', id: 2 },
+        { label: 'def', id: 1 }
+      ];
+
+      component.onSort({
+        column: {
+          label: 'Label',
+          property: 'label',
+          visible: true
+        },
+        type: PoTableColumnSortType.Descending
+      });
+
+      expect(component.items).toEqual([
+        { label: 'ghi', id: 3 },
+        { label: 'def', id: 1 },
+        { label: 'abc', id: 2 }
+      ]);
+    });
+  });
+  it('draggable: should return false if draggable is false', () => {
+    component.draggable = false;
+
+    expect(component.draggable).toBeFalse();
   });
 });

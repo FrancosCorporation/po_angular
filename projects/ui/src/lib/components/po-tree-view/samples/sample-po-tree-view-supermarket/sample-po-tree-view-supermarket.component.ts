@@ -4,9 +4,12 @@ import { PoStepperComponent, PoTableColumn, PoTreeViewItem } from '@po-ui/ng-com
 
 @Component({
   selector: 'sample-po-tree-view-supermarket',
-  templateUrl: 'sample-po-tree-view-supermarket.component.html'
+  templateUrl: 'sample-po-tree-view-supermarket.component.html',
+  standalone: false
 })
 export class SamplePoTreeViewSupermarketComponent {
+  @ViewChild('stepper', { static: true }) stepper: PoStepperComponent;
+
   columnsItemsSelected: Array<PoTableColumn> = [{ property: 'item' }];
   confirmed: boolean = false;
   itemsListSelected: Array<any> = [];
@@ -64,8 +67,6 @@ export class SamplePoTreeViewSupermarketComponent {
       ]
     }
   ];
-
-  @ViewChild('stepper', { static: true }) stepper: PoStepperComponent;
 
   addItem(seletectedItem) {
     if (seletectedItem.subItems) {

@@ -1,6 +1,6 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, inject } from '@angular/core';
 
-import { PoDialogService, PoSelectOption } from '@po-ui/ng-components';
+import { PoDialogService, PoRadioGroupOption, PoSelectOption } from '@po-ui/ng-components';
 import {
   PoModalPasswordRecovery,
   PoModalPasswordRecoveryComponent,
@@ -9,10 +9,16 @@ import {
 
 @Component({
   selector: 'sample-po-modal-password-recovery-labs',
-  templateUrl: './sample-po-modal-password-recovery-labs.component.html'
+  templateUrl: './sample-po-modal-password-recovery-labs.component.html',
+  standalone: false
 })
 export class SamplePoModalPasswordRecoveryLabsComponent implements OnInit {
+  private poDialog = inject(PoDialogService);
+
+  @ViewChild(PoModalPasswordRecoveryComponent) poModalPasswordRecovery: PoModalPasswordRecoveryComponent;
+
   codeError: string;
+  componentsSize: string;
   email: string;
   event: string;
   invalidCode: boolean = true;
@@ -21,15 +27,16 @@ export class SamplePoModalPasswordRecoveryLabsComponent implements OnInit {
   submitEvent: string;
   type: PoModalPasswordRecoveryType;
 
+  public readonly componentsSizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
+  ];
+
   typeOptions: Array<PoSelectOption> = [
     { label: 'All', value: PoModalPasswordRecoveryType.All },
     { label: 'Email', value: PoModalPasswordRecoveryType.Email },
     { label: 'SMS', value: PoModalPasswordRecoveryType.SMS }
   ];
-
-  @ViewChild(PoModalPasswordRecoveryComponent) poModalPasswordRecovery: PoModalPasswordRecoveryComponent;
-
-  constructor(private poDialog: PoDialogService) {}
 
   ngOnInit() {
     this.restore();
@@ -45,6 +52,7 @@ export class SamplePoModalPasswordRecoveryLabsComponent implements OnInit {
 
   restore() {
     this.codeError = undefined;
+    this.componentsSize = 'medium';
     this.email = undefined;
     this.event = undefined;
     this.phoneMask = undefined;

@@ -1,14 +1,18 @@
 import { expectPropertiesValues } from '../../util-test/util-expect.spec';
 
+import { PoCaptionTagColorEnum } from '../../enums/po-caption-tag-color.enum';
 import { PoColorPaletteEnum } from '../../enums/po-color-palette.enum';
 
-import { PoTagBaseComponent } from './po-tag-base.component';
+import { poLocaleDefault } from './../../services/po-language/po-language.constant';
+import { PoLanguageService } from './../../services/po-language/po-language.service';
 import { PoTagOrientation } from './enums/po-tag-orientation.enum';
 import { PoTagType } from './enums/po-tag-type.enum';
+import { PoTagBaseComponent, PoTagLiteralsDefault } from './po-tag-base.component';
 
 describe('PoTagBaseComponent:', () => {
-  const component = new PoTagBaseComponent();
+  const component = new PoTagBaseComponent(new PoLanguageService());
   const poTagColors = (<any>Object).values(PoColorPaletteEnum);
+  const poCaptionTagColors = (<any>Object).values(PoCaptionTagColorEnum);
 
   it('should be created', () => {
     expect(component instanceof PoTagBaseComponent).toBeTruthy();
@@ -19,6 +23,20 @@ describe('PoTagBaseComponent:', () => {
       const colorsValidTrueValues = poTagColors;
 
       expectPropertiesValues(component, 'color', colorsValidTrueValues, colorsValidTrueValues);
+    });
+
+    it('color: should accept caption-tag color values.', () => {
+      const captionTagValidValues = poCaptionTagColors;
+
+      expectPropertiesValues(component, 'color', captionTagValidValues, captionTagValidValues);
+    });
+
+    it('color: should accept first and last caption-tag colors.', () => {
+      component.color = 'caption-tag-01';
+      expect(component.color).toBe('caption-tag-01');
+
+      component.color = 'caption-tag-35';
+      expect(component.color).toBe('caption-tag-35');
     });
 
     it('color: shouldn´t update to false value.', () => {
@@ -48,14 +66,6 @@ describe('PoTagBaseComponent:', () => {
       expectPropertiesValues(component, 'icon', validValues, validValues);
     });
 
-    it('inverse: should update property with valid and invalid values.', () => {
-      const validValues = [true, 'true', 1, ''];
-      const invalidValues = [false, 'false', 0];
-
-      expectPropertiesValues(component, 'inverse', validValues, true);
-      expectPropertiesValues(component, 'inverse', invalidValues, false);
-    });
-
     it('orientation: should update property with valid values', () => {
       const validValues = (<any>Object).values(PoTagOrientation);
 
@@ -78,6 +88,132 @@ describe('PoTagBaseComponent:', () => {
       const invalidValues = [undefined, null, '', true, false, 0, -1, 12, 15, 'aa', [], {}];
 
       expectPropertiesValues(component, 'type', invalidValues, undefined);
+    });
+
+    it('customColor: should change the value with a color name', () => {
+      component.color = 'red';
+      expect(component.customColor).toBe('red');
+    });
+
+    it('customColor: should change the value with a hex color', () => {
+      component.color = '#fff';
+      expect(component.customColor).toBe('#fff');
+    });
+
+    it('customColor: should change the value with a rgb', () => {
+      component.color = 'rgb(35, 233, 215)';
+      expect(component.customColor).toBe('rgb(35, 233, 215)');
+    });
+
+    it('color: should change color to default value if value is invalid', () => {
+      component.color = 'deep red';
+      expect(component.color).toBe(undefined);
+    });
+
+    it('textColor: should update to true value.', () => {
+      const colorsValidTrueValues = poTagColors;
+
+      expectPropertiesValues(component, 'textColor', colorsValidTrueValues, colorsValidTrueValues);
+    });
+
+    it('textColor: should not accept caption-tag color values.', () => {
+      const captionTagValues = poCaptionTagColors;
+
+      expectPropertiesValues(component, 'textColor', captionTagValues, undefined);
+    });
+
+    it('textColor: shouldn´t update to false value.', () => {
+      const colorsInalidTrueValues = [undefined, null, 2, 'string', 0, NaN];
+
+      expectPropertiesValues(component, 'textColor', colorsInalidTrueValues, undefined);
+    });
+
+    it('customTextColor : should change the value with a color name', () => {
+      component.textColor = 'red';
+      expect(component.customTextColor).toBe('red');
+    });
+
+    it('customTextColor : should change the value with a hex color', () => {
+      component.textColor = '#fff';
+      expect(component.customTextColor).toBe('#fff');
+    });
+
+    it('customTextColor : should change the value with a rgb', () => {
+      component.textColor = 'rgb(35, 233, 215)';
+      expect(component.customTextColor).toBe('rgb(35, 233, 215)');
+    });
+
+    it('customTextColor : should change color to default value if value is invalid', () => {
+      component.textColor = 'deep red';
+      expect(component.customTextColor).toBe(undefined);
+    });
+
+    it('p-literals: should be in portuguese if browser is setted with an unsupported language', () => {
+      Object.defineProperty(component, 'language', { value: 'zw', configurable: true });
+
+      component.literals = {};
+
+      expect(component.literals).toEqual(PoTagLiteralsDefault[poLocaleDefault]);
+    });
+
+    it('p-literals: should be in portuguese if browser is setted with `pt`', () => {
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
+
+      component.literals = {};
+
+      expect(component.literals).toEqual(PoTagLiteralsDefault.pt);
+    });
+
+    it('p-literals: should be in english if browser is setted with `en`', () => {
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
+
+      component.literals = {};
+
+      expect(component.literals).toEqual(PoTagLiteralsDefault.en);
+    });
+
+    it('p-literals: should be in spanish if browser is setted with `es`', () => {
+      Object.defineProperty(component, 'language', { value: 'es', configurable: true });
+
+      component.literals = {};
+
+      expect(component.literals).toEqual(PoTagLiteralsDefault.es);
+    });
+
+    it('p-literals: should be in russian if browser is setted with `ru`', () => {
+      Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
+
+      component.literals = {};
+
+      expect(component.literals).toEqual(PoTagLiteralsDefault.ru);
+    });
+
+    it('p-literals: should accept custom literals', () => {
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
+
+      const customLiterals = Object.assign({}, PoTagLiteralsDefault[poLocaleDefault]);
+
+      customLiterals.remove = 'Remove custom';
+
+      component.literals = customLiterals;
+
+      expect(component.literals).toEqual(customLiterals);
+    });
+
+    it('p-literals: should update property with default literals if is setted with invalid values', () => {
+      const invalidValues = [null, undefined, false, true, '', 'literals', 0, 10, [], [1, 2], () => {}];
+
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
+
+      expectPropertiesValues(component, 'literals', invalidValues, PoTagLiteralsDefault[poLocaleDefault]);
+    });
+
+    it('p-literals: should update property with default literals if _literals is undefined', () => {
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
+
+      component['_literals'] = undefined;
+
+      expect(component.literals).toEqual(PoTagLiteralsDefault.pt);
     });
   });
 });

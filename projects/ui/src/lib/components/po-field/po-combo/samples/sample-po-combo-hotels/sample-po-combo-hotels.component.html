@@ -57,13 +57,14 @@
       p-debounce-time="500"
       p-disabled-init-filter
       p-filter-minlength="1"
-      p-icon="po-icon-search"
+      p-icon="an an-magnifying-glass"
       p-required
       p-field-label="name"
       p-field-value="value"
       p-label="Search a hotel"
       p-sort
-      p-filter-service="https://po-sample-api.herokuapp.com/v1/hotels"
+      p-filter-service="https://po-sample-api.onrender.com/v1/hotels"
+      p-listbox-control-position="top"
       [p-filter-params]="filterParams"
     >
     </po-combo>
@@ -73,7 +74,7 @@
     <po-button
       class="po-md-3"
       p-label="Booking"
-      p-type="primary"
+      p-kind="primary"
       [p-disabled]="bookingForm.invalid"
       (p-click)="booking()"
     >

@@ -1,16 +1,31 @@
-import * as UtilsFunctions from '../../utils/util';
-import { expectPropertiesValues } from '../../util-test/util-expect.spec';
-import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { poLocaleDefault } from '../../services/po-language/po-language.constant';
+import { Component } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { expectPropertiesValues } from '../../util-test/util-expect.spec';
+
+import { PoThemeA11yEnum } from '../../services';
 import { PoListViewBaseComponent, poListViewLiteralsDefault } from './po-list-view-base.component';
+import { PoListViewDetailDisplay } from './enums/po-list-view-detail-display.enum';
+
+@Component({
+  template: '',
+  standalone: true
+})
+class PoListViewTestComponent extends PoListViewBaseComponent {}
 
 describe('PoListViewBaseComponent:', () => {
-  const languageService: PoLanguageService = new PoLanguageService();
-  let component: PoListViewBaseComponent;
+  let component: PoListViewTestComponent;
+  let fixture: ComponentFixture<PoListViewTestComponent>;
 
-  beforeEach(() => {
-    component = new PoListViewBaseComponent(languageService);
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [PoListViewTestComponent]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(PoListViewTestComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
   });
 
   describe('Properties:', () => {
@@ -40,6 +55,66 @@ describe('PoListViewBaseComponent:', () => {
       expectPropertiesValues(component, 'actions', validValues, validValues);
     });
 
+    describe('p-components-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('small');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.componentsSize = 'small';
+        expect(component.componentsSize).toBe('medium');
+
+        component.componentsSize = 'medium';
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_componentsSize'] = undefined;
+        expect(component.componentsSize).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
+    });
+
     it('p-height: should update property with valid values', () => {
       const validValues = [0, 5, 200, 1000];
 
@@ -67,7 +142,7 @@ describe('PoListViewBaseComponent:', () => {
     });
 
     it('p-literals: should be in portuguese if browser is setted with an unsupported language', () => {
-      component['language'] = 'zw';
+      Object.defineProperty(component, 'language', { value: 'zw', configurable: true });
 
       component.literals = {};
 
@@ -75,7 +150,7 @@ describe('PoListViewBaseComponent:', () => {
     });
 
     it('p-literals: should be in portuguese if browser is setted with `pt`', () => {
-      component['language'] = 'pt';
+      Object.defineProperty(component, 'language', { value: 'pt', configurable: true });
 
       component.literals = {};
 
@@ -83,7 +158,7 @@ describe('PoListViewBaseComponent:', () => {
     });
 
     it('p-literals: should be in english if browser is setted with `en`', () => {
-      component['language'] = 'en';
+      Object.defineProperty(component, 'language', { value: 'en', configurable: true });
 
       component.literals = {};
 
@@ -91,7 +166,7 @@ describe('PoListViewBaseComponent:', () => {
     });
 
     it('p-literals: should be in spanish if browser is setted with `es`', () => {
-      component['language'] = 'es';
+      Object.defineProperty(component, 'language', { value: 'es', configurable: true });
 
       component.literals = {};
 
@@ -99,7 +174,7 @@ describe('PoListViewBaseComponent:', () => {
     });
 
     it('p-literals: should be in russian if browser is setted with `ru`', () => {
-      component['language'] = 'ru';
+      Object.defineProperty(component, 'language', { value: 'ru', configurable: true });
 
       component.literals = {};
 
@@ -107,7 +182,7 @@ describe('PoListViewBaseComponent:', () => {
     });
 
     it('p-literals: should accept custom literals', () => {
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       const customLiterals = Object.assign({}, poListViewLiteralsDefault[poLocaleDefault]);
 
@@ -122,7 +197,7 @@ describe('PoListViewBaseComponent:', () => {
     it('p-literals: should update property with default literals if is setted with invalid values', () => {
       const invalidValues = [null, undefined, false, true, '', 'literals', 0, 10, [], [1, 2], () => {}];
 
-      component['language'] = poLocaleDefault;
+      Object.defineProperty(component, 'language', { value: poLocaleDefault, configurable: true });
 
       expectPropertiesValues(component, 'literals', invalidValues, poListViewLiteralsDefault[poLocaleDefault]);
     });
@@ -248,6 +323,227 @@ describe('PoListViewBaseComponent:', () => {
       component.items.forEach(listItem => component.selectListItem(listItem));
 
       component.items.forEach(listItem => expect(listItem.$selected).toBe(false));
+    });
+
+    it('p-single-select: should be false by default', () => {
+      expect(component.singleSelect).toBe(false);
+    });
+
+    it('p-single-select: should be true when set', () => {
+      component.singleSelect = true;
+      fixture.detectChanges();
+
+      expect(component.singleSelect).toBe(true);
+    });
+
+    it('p-single-select: should be false when not set', () => {
+      component.singleSelect = false;
+      fixture.detectChanges();
+
+      expect(component.singleSelect).toBe(false);
+    });
+
+    it('selectListItem: should keep only one item selected when singleSelect is true', () => {
+      component.singleSelect = true;
+      fixture.detectChanges();
+
+      component.items = [
+        { name: 'Name 1', $selected: false },
+        { name: 'Name 2', $selected: false },
+        { name: 'Name 3', $selected: false }
+      ];
+      component.select = true;
+
+      component.selectListItem(component.items[0]);
+      expect(component.items[0].$selected).toBe(true);
+
+      component.selectListItem(component.items[2]);
+      expect(component.items[0].$selected).toBe(false);
+      expect(component.items[2].$selected).toBe(true);
+      expect(component.selectAll).toBe(false);
+    });
+
+    it('selectListItem: should keep the current item selected when clicked again in `single` mode', () => {
+      component.singleSelect = true;
+      fixture.detectChanges();
+
+      component.items = [{ name: 'Name 1', $selected: false }];
+      component.select = true;
+
+      component.selectListItem(component.items[0]);
+      expect(component.items[0].$selected).toBe(true);
+
+      component.selectListItem(component.items[0]);
+      expect(component.items[0].$selected).toBe(true);
+    });
+
+    it('showMainHeader: should not show the header when singleSelect is true', () => {
+      component.singleSelect = true;
+      fixture.detectChanges();
+
+      component.items = [{ name: 'Name 1' }];
+      component.hideSelectAll = false;
+      component.select = true;
+
+      expect(component.showHeader).toBe(false);
+    });
+
+    it('showMainHeader: should show the header when selection mode is `multiple`', () => {
+      component.singleSelect = false;
+      fixture.detectChanges();
+
+      component.items = [{ name: 'Name 1' }];
+      component.hideSelectAll = false;
+      component.select = true;
+
+      expect(component.showHeader).toBe(true);
+    });
+
+    it('isSingleSelection: should return `true` when singleSelect is true', () => {
+      component.singleSelect = true;
+      fixture.detectChanges();
+
+      expect(component.isSingleSelection).toBe(true);
+    });
+
+    it('isSingleSelection: should return `false` when selection mode is `multiple`', () => {
+      component.singleSelect = false;
+      fixture.detectChanges();
+
+      expect(component.isSingleSelection).toBe(false);
+    });
+
+    it('p-detail-display: should have `inline` as default value', () => {
+      expect(component.detailDisplay()).toBe(PoListViewDetailDisplay.Inline);
+    });
+
+    it('p-detail-display: should update to `modal` when set with `modal`', () => {
+      fixture.componentRef.setInput('p-detail-display', 'modal');
+      fixture.detectChanges();
+
+      expect(component.detailDisplay()).toBe(PoListViewDetailDisplay.Modal);
+    });
+
+    it('p-detail-display: should fallback to `inline` when set with an invalid value', () => {
+      fixture.componentRef.setInput('p-detail-display', 'invalid');
+      fixture.detectChanges();
+
+      expect(component.detailDisplay()).toBe(PoListViewDetailDisplay.Inline);
+    });
+
+    it('isDetailModal: should return `true` when detail display is `modal`', () => {
+      fixture.componentRef.setInput('p-detail-display', 'modal');
+      fixture.detectChanges();
+
+      expect(component.isDetailModal).toBe(true);
+    });
+
+    it('isDetailModal: should return `false` when detail display is `inline`', () => {
+      fixture.componentRef.setInput('p-detail-display', 'inline');
+      fixture.detectChanges();
+
+      expect(component.isDetailModal).toBe(false);
+    });
+
+    describe('p-field-properties:', () => {
+      it('should be undefined by default', () => {
+        expect(component.fieldProperties()).toBeUndefined();
+      });
+
+      it('should update value when set', () => {
+        const fieldProperties = {
+          title: 'name',
+          subtitle: 'role',
+          link: 'url',
+          avatar: 'photo',
+          highlighted: 'unread',
+          tag: { value: 'status', type: 'statusType' }
+        };
+
+        fixture.componentRef.setInput('p-field-properties', fieldProperties);
+        fixture.detectChanges();
+
+        expect(component.fieldProperties()).toEqual(fieldProperties);
+      });
+    });
+
+    describe('resolved field properties (precedence):', () => {
+      it('resolvedPropertyTitle: should prioritize `p-field-properties` over the deprecated input', () => {
+        component['propertyTitle'] = 'legacyTitle';
+        fixture.componentRef.setInput('p-field-properties', { title: 'name' });
+        fixture.detectChanges();
+
+        expect(component['resolvedPropertyTitle']).toBe('name');
+      });
+
+      it('resolvedPropertyTitle: should fallback to the deprecated input when not set in `p-field-properties`', () => {
+        component['propertyTitle'] = 'legacyTitle';
+        fixture.componentRef.setInput('p-field-properties', {});
+        fixture.detectChanges();
+
+        expect(component['resolvedPropertyTitle']).toBe('legacyTitle');
+      });
+
+      it('resolvedPropertyLink: should prioritize `p-field-properties` and fallback to deprecated input', () => {
+        component['propertyLink'] = 'legacyUrl';
+        fixture.componentRef.setInput('p-field-properties', { link: 'url' });
+        fixture.detectChanges();
+        expect(component['resolvedPropertyLink']).toBe('url');
+
+        fixture.componentRef.setInput('p-field-properties', {});
+        fixture.detectChanges();
+        expect(component['resolvedPropertyLink']).toBe('legacyUrl');
+      });
+
+      it('resolvedPropertySubtitle: should return the value from `p-field-properties`', () => {
+        fixture.componentRef.setInput('p-field-properties', { subtitle: 'subtitle' });
+        fixture.detectChanges();
+        expect(component['resolvedPropertySubtitle']).toBe('subtitle');
+
+        fixture.componentRef.setInput('p-field-properties', {});
+        fixture.detectChanges();
+        expect(component['resolvedPropertySubtitle']).toBeUndefined();
+      });
+
+      it('resolvedPropertyHighlighted: should return the value from `p-field-properties`', () => {
+        fixture.componentRef.setInput('p-field-properties', { highlighted: 'unread' });
+        fixture.detectChanges();
+        expect(component['resolvedPropertyHighlighted']).toBe('unread');
+
+        fixture.componentRef.setInput('p-field-properties', {});
+        fixture.detectChanges();
+        expect(component['resolvedPropertyHighlighted']).toBeUndefined();
+      });
+
+      it('resolvedPropertyAvatar: should return the value from `p-field-properties`', () => {
+        fixture.componentRef.setInput('p-field-properties', { avatar: 'avatar' });
+        fixture.detectChanges();
+        expect(component['resolvedPropertyAvatar']).toBe('avatar');
+
+        fixture.componentRef.setInput('p-field-properties', {});
+        fixture.detectChanges();
+        expect(component['resolvedPropertyAvatar']).toBeUndefined();
+      });
+
+      it('resolvedPropertyTag: should return the value from `p-field-properties.tag.value`', () => {
+        fixture.componentRef.setInput('p-field-properties', { tag: { value: 'status' } });
+        fixture.detectChanges();
+        expect(component['resolvedPropertyTag']).toBe('status');
+
+        fixture.componentRef.setInput('p-field-properties', {});
+        fixture.detectChanges();
+        expect(component['resolvedPropertyTag']).toBeUndefined();
+      });
+
+      it('resolvedPropertyTagType: should return the value from `p-field-properties.tag.type`', () => {
+        fixture.componentRef.setInput('p-field-properties', { tag: { type: 'statusType' } });
+        fixture.detectChanges();
+        expect(component['resolvedPropertyTagType']).toBe('statusType');
+
+        fixture.componentRef.setInput('p-field-properties', {});
+        fixture.detectChanges();
+        expect(component['resolvedPropertyTagType']).toBeUndefined();
+      });
     });
 
     it('deleteInternalAttrs: should return `object` without property that starts with `$`', () => {

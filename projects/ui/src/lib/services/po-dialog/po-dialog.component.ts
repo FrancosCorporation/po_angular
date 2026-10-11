@@ -1,4 +1,4 @@
-import { Component, ComponentRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, ComponentRef, HostBinding, HostListener, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 
 import { Subscription } from 'rxjs';
 
@@ -6,12 +6,14 @@ import { poLocaleDefault } from '../po-language/po-language.constant';
 
 import { PoLanguageService } from '../po-language/po-language.service';
 
-import { PoDialogAlertLiterals } from './interfaces/po-dialog-alert-literals.interface';
-import { PoDialogAlertOptions, PoDialogConfirmOptions } from './interfaces/po-dialog.interface';
-import { PoDialogConfirmLiterals } from './interfaces/po-dialog-confirm-literals.interface';
-import { PoDialogType } from './po-dialog.enum';
 import { PoModalAction } from '../../components/po-modal/po-modal-action.interface';
 import { PoModalComponent } from '../../components/po-modal/po-modal.component';
+import { PoFieldSize } from '../../enums/po-field-size.enum';
+import { getDefaultSizeFn, validateSizeFn } from '../../utils/util';
+import { PoDialogType } from './enums/po-dialog.enum';
+import { PoDialogAlertLiterals } from './interfaces/po-dialog-alert-literals.interface';
+import { PoDialogConfirmLiterals } from './interfaces/po-dialog-confirm-literals.interface';
+import { PoDialogAlertOptions, PoDialogConfirmOptions } from './interfaces/po-dialog.interface';
 
 export const poDialogAlertLiteralsDefault = {
   en: <PoDialogAlertLiterals>{ ok: 'Ok' },
@@ -36,11 +38,10 @@ export const poDialogConfirmLiteralsDefault = {
  */
 
 @Component({
-  templateUrl: './po-dialog.component.html'
+  templateUrl: './po-dialog.component.html',
+  standalone: false
 })
 export class PoDialogComponent implements OnDestroy, OnInit {
-  private language: string;
-
   // ViewChild para o uso do po-modal.component
   @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
 
@@ -68,6 +69,22 @@ export class PoDialogComponent implements OnDestroy, OnInit {
   // Atributo para armazenar a referencia do componente criado via serviço.
   private componentRef: ComponentRef<PoDialogComponent>;
   private closeSubscription: Subscription;
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+
+  private readonly language: string;
+
+  // Define o tamanho dos componentes de formulário no dialog.
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
 
   constructor(languageService: PoLanguageService) {
     this.language = languageService.getShortLanguage();
@@ -79,6 +96,11 @@ export class PoDialogComponent implements OnDestroy, OnInit {
 
   ngOnInit() {
     this.closeSubscription = this.poModal.onXClosed.subscribe(close => this.close(true));
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
   }
 
   // Fecha o poModal
@@ -130,6 +152,7 @@ export class PoDialogComponent implements OnDestroy, OnInit {
     dialogType: PoDialogType,
     componentRef?: ComponentRef<PoDialogComponent>
   ): void {
+    this.componentsSize = dialogOptions.componentsSize;
     this.title = dialogOptions.title;
     this.message = dialogOptions.message;
 
@@ -171,5 +194,10 @@ export class PoDialogComponent implements OnDestroy, OnInit {
         ...literals
       };
     }
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialComponentsSize, PoFieldSize);
+    this._componentsSize = size;
   }
 }

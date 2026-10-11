@@ -2,27 +2,66 @@ import {
   AfterViewInit,
   ChangeDetectorRef,
   Component,
-  ComponentFactoryResolver,
-  ComponentRef,
-  DoCheck,
   ElementRef,
   HostListener,
+  inject,
+  OnChanges,
   OnDestroy,
+  OnInit,
+  QueryList,
+  SimpleChanges,
   ViewChild,
-  ViewContainerRef,
-  OnInit
+  ViewChildren,
+  ViewContainerRef
 } from '@angular/core';
 
-import { Subject, Subscription } from 'rxjs';
-
+import { CurrencyPipe, DecimalPipe } from '@angular/common';
+import { PoTooltipDirective } from '../../directives';
+import { PoColorService } from '../../services/po-color';
+import { PoLanguageService } from '../../services/po-language/po-language.service';
+import { PoChartLabelFormat } from '../po-chart/enums/po-chart-label-format.enum';
+import { PoChartSerie } from '../po-chart/interfaces/po-chart-serie.interface';
+import { PoModalAction } from '../po-modal';
+import { PoPopupAction } from '../po-popup';
+import { PoTableColumn } from '../po-table';
 import { PoChartBaseComponent } from './po-chart-base.component';
-import { PoChartColorService } from './services/po-chart-color.service';
-import { PoChartSvgContainerService } from './services/po-chart-svg-container.service';
-import { PoChartDynamicTypeComponent } from './po-chart-types/po-chart-dynamic-type.component';
-import { PoChartGaugeComponent } from './po-chart-types/po-chart-gauge/po-chart-gauge.component';
-import { PoChartType } from './enums/po-chart-type.enum';
-import { PoChartContainerSize } from './interfaces/po-chart-container-size.interface';
-import { debounceTime } from 'rxjs/operators';
+
+import { PoChartType } from '../po-chart/enums/po-chart-type.enum';
+import { PoChartGridUtils } from './po-chart-grid-utils';
+
+import { BarChart, CustomChart, GaugeChart, LineChart, PieChart, RadarChart } from 'echarts/charts';
+import {
+  BrushComponent,
+  DataZoomComponent,
+  GraphicComponent,
+  GridComponent,
+  LegendComponent,
+  MarkLineComponent,
+  ToolboxComponent,
+  TooltipComponent
+} from 'echarts/components';
+import * as echarts from 'echarts/core';
+import { use } from 'echarts/core';
+import { CanvasRenderer, SVGRenderer } from 'echarts/renderers';
+import { PoChartGaugeUtils } from './po-chart-gauge-utils';
+use([
+  BarChart,
+  CustomChart,
+  GaugeChart,
+  GraphicComponent,
+  LineChart,
+  PieChart,
+  RadarChart,
+  BrushComponent,
+  DataZoomComponent,
+  GridComponent,
+  LegendComponent,
+  MarkLineComponent,
+  ToolboxComponent,
+  TooltipComponent,
+  CanvasRenderer,
+  SVGRenderer
+]);
 
 /**
  * @docsExtends PoChartBaseComponent
@@ -43,197 +82,868 @@ import { debounceTime } from 'rxjs/operators';
  *  <file name="sample-po-chart-coffee-ranking/sample-po-chart-coffee-ranking.component.html"> </file>
  *  <file name="sample-po-chart-coffee-ranking/sample-po-chart-coffee-ranking.component.ts"> </file>
  * </example>
+ *
+ * <example name="po-chart-stacked" title="PO Chart - Stacked">
+ *  <file name="sample-po-chart-stacked/sample-po-chart-stacked.component.html"> </file>
+ *  <file name="sample-po-chart-stacked/sample-po-chart-stacked.component.ts"> </file>
+ * </example>
+ *
+ * <example name="po-chart-summary" title="PO Chart - Summary">
+ *  <file name="sample-po-chart-summary/sample-po-chart-summary.component.html"> </file>
+ *  <file name="sample-po-chart-summary/sample-po-chart-summary.component.ts"> </file>
+ * </example>
+ *
+ * <example name="po-chart-world-exports" title="PO Chart - World Exports">
+ *  <file name="sample-po-chart-world-exports/sample-po-chart-world-exports.component.html"> </file>
+ *  <file name="sample-po-chart-world-exports/sample-po-chart-world-exports.component.ts"> </file>
+ * </example>
+ *
+ * <example name="po-chart-technology-skill" title="PO Chart - Radar">
+ *  <file name="sample-po-chart-technology-skill/sample-po-chart-technology-skill.component.html"> </file>
+ *  <file name="sample-po-chart-technology-skill/sample-po-chart-technology-skill.component.ts"> </file>
+ * </example>
  */
+
 @Component({
   selector: 'po-chart',
-  templateUrl: './po-chart.component.html'
+  templateUrl: './po-chart.component.html',
+  standalone: false
 })
-export class PoChartComponent extends PoChartBaseComponent implements AfterViewInit, DoCheck, OnDestroy, OnInit {
-  private calculatedComponentRefElement: boolean = false;
-  private calculatedSvgContainerElement: boolean = false;
-  private colors: Array<string> = [];
-  private componentRef: ComponentRef<{}>;
-  private initialized: boolean = false;
-  private windowResizeListener: Subject<any> = new Subject();
-  private subscription = new Subscription();
+export class PoChartComponent extends PoChartBaseComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
+  el = inject(ElementRef);
+  private readonly currencyPipe = inject(CurrencyPipe);
+  private readonly decimalPipe = inject(DecimalPipe);
+  private readonly colorService = inject(PoColorService);
+  private readonly cdr = inject(ChangeDetectorRef);
 
-  private mappings = {
-    [PoChartType.Gauge]: PoChartGaugeComponent
+  @ViewChildren(PoTooltipDirective) poTooltip: QueryList<PoTooltipDirective>;
+  @ViewChild('targetPopup', { read: ElementRef, static: false }) targetRef: ElementRef;
+  @ViewChild('chartContainer') chartContainer: ElementRef;
+
+  tooltipText = ``;
+  originalHeight: number;
+  originalRadiusGauge;
+  chartMarginTop = '0px';
+  isTypeBar = false;
+  isTypeRadar = false;
+  boundaryGap = false;
+  listTypePieDonut: Array<any>;
+  itemsTypeDonut: Array<any> = [];
+  isGaugeSingle: boolean;
+  itemsTypeGauge: Array<any> = [];
+  itemsColorTypeGauge = [];
+  protected actionModal: PoModalAction = {
+    action: this.downloadCsv.bind(this),
+    label: this.literals.downloadCSV
   };
+  public showPopup = true;
+  protected itemsTable = [];
+  protected columnsTable: Array<PoTableColumn> = [];
+  protected isExpanded = false;
+  protected legendData: Array<{ name: string; color: string }> = [];
+  protected headerHeight: number;
+  protected paddingContainerGauge: number = 0;
+  protected descriptionHeight: number = 0;
+  protected positionTooltip = 'top';
+  protected tooltipTitle = undefined;
+  protected tooltipDescriptionGauge = undefined;
+  protected chartGridUtils: PoChartGridUtils;
+  protected chartGaugeUtils: PoChartGaugeUtils;
+  protected isTypeGauge = false;
+  protected popupActions: Array<PoPopupAction> = [];
+  private chartInstance!: echarts.ECharts;
+  private currentRenderer: 'svg' | 'canvas';
+  private resizeObserver: ResizeObserver;
+  private intersectionObserver: IntersectionObserver;
+  private hideDomEchartsDiv = false;
+  private readonly vcr = inject(ViewContainerRef);
 
-  svgContainerSize: PoChartContainerSize;
-
-  @ViewChild('chartContainer', { read: ViewContainerRef, static: true }) chartContainer: ViewContainerRef;
-
-  @ViewChild('chartHeader', { static: true }) chartHeader: ElementRef;
-
-  @ViewChild('chartLegend', { read: ElementRef }) chartLegend: ElementRef;
-
-  @ViewChild('chartWrapper', { static: true }) chartWrapper: ElementRef;
-
-  constructor(
-    public changeDetector: ChangeDetectorRef,
-    private colorService: PoChartColorService,
-    private containerService: PoChartSvgContainerService,
-    private componentFactoryResolver: ComponentFactoryResolver,
-    private elementRef: ElementRef
-  ) {
-    super();
+  get showHeader() {
+    return this.title || !this.options?.header?.hideTableDetails || !this.options?.header?.hideExpand || this.showPopup;
   }
 
-  get isChartGaugeType(): boolean {
-    return this.type === PoChartType.Gauge;
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
+    super(languageService);
   }
 
-  @HostListener('window:resize')
-  onResize = () => {
-    this.getSvgContainerSize();
-    this.windowResizeListener.next();
+  @HostListener('window:PoUiThemeChange', ['$event'])
+  changeTheme = (event: any) => {
+    this.chartInstance?.dispose();
+    this.chartInstance = undefined;
+    this.initECharts();
+    this.checkShowCEcharts();
   };
+
+  ngOnInit(): void {
+    this.chartGridUtils = new PoChartGridUtils(this);
+    this.chartGaugeUtils = new PoChartGaugeUtils(this);
+    super.ngOnInit();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['customActions']?.currentValue) {
+      this.setPopupActions();
+    }
+
+    if (changes['series']?.firstChange) {
+      return;
+    }
+
+    const { options, series, dataLabel, categories, height, valueGaugeMultiple } = changes;
+    if (options || series || dataLabel || categories || valueGaugeMultiple) {
+      if (
+        !this.chartInstance ||
+        (options?.currentValue?.rendererOption && this.currentRenderer !== options.currentValue.rendererOption)
+      ) {
+        this.chartInstance?.dispose();
+        this.chartInstance = undefined;
+        this.setInitialPopupActions();
+        this.initECharts();
+      } else {
+        this.chartInstance?.clear();
+        this.setInitialPopupActions();
+        this.setChartsProperties();
+      }
+    }
+
+    if (height) {
+      setTimeout(() => {
+        this.chartInstance?.resize();
+      });
+    }
+  }
 
   ngAfterViewInit() {
-    this.initialized = true;
-    this.getSvgContainerSize();
+    this.setInitialPopupActions();
+    this.initECharts();
+    this.checkShowCEcharts();
   }
 
-  ngDoCheck() {
-    const charWrapperWidth = this.chartWrapper.nativeElement.offsetWidth;
-    const isDynamicChart = this.getComponentType(this.type);
+  ngOnDestroy(): void {
+    /* istanbul ignore next */
+    if (this.resizeObserver?.disconnect) {
+      this.resizeObserver?.disconnect();
+    }
+    this.intersectionObserver?.disconnect();
+  }
 
-    // Permite que o chart seja calculado na primeira vez que o componente torna-se visível,
-    // evitando com isso, problemas com Tabs ou Divs que iniciem escondidas.
-    // Quando modificada a estrutura dos gráficos do tipo circular isto será melhorado.
-    if (charWrapperWidth && this.initialized) {
-      if (!isDynamicChart && !this.calculatedSvgContainerElement) {
-        this.getSvgContainerSize();
-        this.calculatedSvgContainerElement = true;
-      } else if (isDynamicChart && !this.calculatedComponentRefElement) {
-        this.dynamicComponentSetting();
-        this.calculatedComponentRefElement = true;
+  showTooltipTitle(e: MouseEvent) {
+    const element = e.target as HTMLElement;
+
+    if (element.offsetWidth < element.scrollWidth) {
+      this.tooltipTitle = this.title;
+    } else {
+      this.tooltipTitle = undefined;
+    }
+  }
+
+  showTooltipDescription(e: MouseEvent) {
+    const element = e.target as HTMLElement;
+
+    if (element.offsetWidth < element.scrollWidth) {
+      this.tooltipDescriptionGauge = this.options.descriptionChart;
+    } else {
+      this.tooltipDescriptionGauge = undefined;
+    }
+  }
+
+  getCSSVariable(variable: string, selector?: string): string {
+    const element = selector ? document.querySelector(selector) : document.documentElement;
+    return element ? getComputedStyle(element).getPropertyValue(variable).trim() : '';
+  }
+
+  async openModal() {
+    if (!this.chartInstance) {
+      return;
+    }
+
+    this.setTableProperties();
+    this.vcr.clear();
+
+    const { PoChartModalTableComponent } = await import('./po-chart-modal-table/po-chart-modal-table.component');
+
+    const componentRef = this.vcr.createComponent(PoChartModalTableComponent);
+
+    componentRef.setInput('title', this.title);
+    componentRef.setInput('itemsTable', this.itemsTable);
+    componentRef.setInput('columnsTable', this.columnsTable);
+    componentRef.setInput('actionModal', this.actionModal);
+
+    (componentRef.instance as any).modalComponent.open();
+  }
+
+  toggleExpand() {
+    if (!this.isExpanded) {
+      this.originalHeight = this.height;
+      this.height = window.innerHeight;
+      this.originalRadiusGauge = this.chartInstance?.getOption()?.series?.[0]?.radius;
+    } else {
+      this.height = this.originalHeight;
+      this.chartMarginTop = '0px';
+    }
+
+    if (this.isTypeGauge && innerWidth < 1366) {
+      this.chartInstance?.setOption({
+        series: [{ radius: this.isExpanded ? this.originalRadiusGauge : '100%' }]
+      });
+    }
+    this.isExpanded = !this.isExpanded;
+
+    setTimeout(() => {
+      this.chartInstance?.resize();
+    });
+  }
+
+  private applyStringFormatter(template: string, context: { name: string; seriesName: string; value: any }): string {
+    return template
+      .replace('{name}', context.name)
+      .replace('{seriesName}', context.seriesName)
+      .replace('{value}', context.value);
+  }
+
+  private observeContainerResize(): void {
+    if (!this.series?.length) return;
+
+    if (this.resizeObserver?.disconnect) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = undefined;
+    }
+
+    /* istanbul ignore next */
+    this.resizeObserver = new ResizeObserver(() => {
+      if (this.chartInstance?.resize) {
+        this.chartInstance.resize();
+      }
+    });
+    this.resizeObserver.observe(this.chartContainer?.nativeElement);
+  }
+
+  private checkShowCEcharts() {
+    const chartElement = this.el.nativeElement.querySelector('#chart-id');
+    if (!chartElement || !this.hideDomEchartsDiv) return;
+
+    this.intersectionObserver = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            this.setHeightProperties();
+            this.initECharts();
+            this.intersectionObserver.disconnect();
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    this.intersectionObserver.observe(chartElement);
+  }
+
+  private setInitialPopupActions(): void {
+    const hideExportCsv = this.options?.header?.hideExportCsv;
+    const hideExportImage = this.options?.header?.hideExportImage;
+
+    this.showPopup = !(hideExportCsv && hideExportImage && !this.customActions?.length);
+    this.cdr.detectChanges();
+    this.paddingContainerGauge = this.options?.showContainerGauge ? 16 : 0;
+
+    this.setHeightProperties();
+
+    this.popupActions = [
+      {
+        label: this.literals.exportCSV,
+        visible: !hideExportCsv,
+        action: () => {
+          this.setTableProperties();
+          this.downloadCsv();
+        }
+      },
+      {
+        label: this.literals.exportPNG,
+        visible: !hideExportImage,
+        action: this.exportImage.bind(this, 'png')
+      },
+      {
+        label: this.literals.exportJPG,
+        visible: !hideExportImage,
+        action: this.exportImage.bind(this, 'jpeg')
+      }
+    ];
+
+    this.actionModal = {
+      ...this.actionModal,
+      disabled: hideExportCsv
+    };
+
+    this.setPopupActions();
+  }
+
+  private setHeightProperties() {
+    const headerElement = this.el.nativeElement.querySelector('.po-chart-header') as HTMLDivElement;
+    let descriptionHeight = 0;
+    if (this.options?.descriptionChart) {
+      const descriptionElement = this.el.nativeElement.querySelector('.description-chart') as HTMLDivElement;
+      descriptionHeight = descriptionElement?.clientHeight;
+    }
+    if (this.headerHeight !== headerElement?.clientHeight || this.descriptionHeight !== descriptionHeight) {
+      this.headerHeight = headerElement?.clientHeight ?? 0;
+      this.descriptionHeight = descriptionHeight ?? 0;
+      this.cdr.detectChanges();
+      this.chartInstance?.resize();
+    }
+  }
+
+  private initECharts() {
+    this.cdr.detectChanges();
+    const echartsDiv = this.el.nativeElement.querySelector('#chart-id');
+    if (!echartsDiv?.clientWidth) {
+      this.hideDomEchartsDiv = true;
+      return;
+    }
+    this.currentRenderer = this.options?.rendererOption || 'canvas';
+    this.chartInstance = echarts.init(echartsDiv, null, { renderer: this.currentRenderer });
+    this.observeContainerResize();
+    this.setChartsProperties();
+    this.initEChartsEvents();
+  }
+
+  private initEChartsEvents() {
+    this.chartInstance.on('click', params => {
+      if (!params.value || params?.seriesType === 'gauge') return;
+      if (params.seriesName && !params.seriesName.includes('\u00000')) {
+        this.seriesClick.emit({ label: params.seriesName, data: params.value, category: params.name });
+      } else {
+        this.seriesClick.emit({ label: params.name, data: params.value });
+      }
+    });
+
+    this.chartInstance.on('mouseover', (params: any) => {
+      if (!params.value || params?.seriesType === 'gauge') return;
+      if (params.seriesType) {
+        const divTooltipElement = this.el.nativeElement.querySelector('#custom-tooltip');
+        if (divTooltipElement && this.dataLabel?.fixed !== true) {
+          this.setTooltipProperties(divTooltipElement, params);
+        }
+      }
+      if (params.seriesName && !params.seriesName.includes('\u00000')) {
+        this.seriesHover.emit({ label: params.seriesName, data: params.value, category: params.name });
+      } else {
+        this.seriesHover.emit({ label: params.name, data: params.value });
+      }
+    });
+
+    this.chartInstance.on('mouseout', () => {
+      this.poTooltip.last.toggleTooltipVisibility(false);
+    });
+  }
+
+  private parseTooltipText(text: string): string {
+    if (!text) return text;
+
+    return text
+      .replace(/\n/g, '<br>')
+      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+      .replace(/__(.*?)__/g, '<i>$1</i>');
+  }
+
+  private resolveCustomTooltip(params: any, name: string, seriesName: string, valueLabel: string): string {
+    let text: string | undefined;
+
+    const serie =
+      params.seriesType === 'pie' || params.seriesType === 'radar'
+        ? this.series[params.dataIndex]
+        : this.series[params.seriesIndex];
+
+    if (serie?.tooltip) {
+      if (typeof serie.tooltip === 'function') {
+        text = serie.tooltip(params);
+      } else {
+        text = this.applyStringFormatter(serie.tooltip, { name, seriesName, value: valueLabel });
+      }
+    }
+
+    if (!text) {
+      text =
+        seriesName && !seriesName.includes('\u00000')
+          ? `<b>${name}</b><br>${seriesName}: <b>${valueLabel}</b>`
+          : `${name}: <b>${valueLabel}</b>`;
+
+      if (params.seriesType === 'radar') {
+        text = this.chartGridUtils.buildRadarTooltip(params);
+      }
+    }
+
+    return this.parseTooltipText(text);
+  }
+
+  private setTooltipProperties(divTooltipElement, params) {
+    const chartElement = this.el.nativeElement.querySelector('#chart-id');
+    let valueLabel = params.value;
+    if (this.itemsTypeDonut?.length) {
+      const findCurrentValue = this.itemsTypeDonut.find(
+        item => item.data === params.value && params.name === item.label
+      );
+      valueLabel = `${findCurrentValue?.valuePercentage ?? 0}%`;
+    }
+    const name = params.name === ' ' ? this.literals.item : params.name;
+    const seriesName = params.seriesName === ' ' ? this.literals.item : params.seriesName;
+
+    this.tooltipText = this.resolveCustomTooltip(params, name, seriesName, valueLabel);
+
+    divTooltipElement.style.left = `${params.event.offsetX + chartElement.offsetLeft + 3}px`;
+    divTooltipElement.style.top = `${chartElement.offsetTop + params.event.offsetY - 2}px`;
+    this.poTooltip.last.toggleTooltipVisibility(true);
+  }
+
+  private setChartsProperties() {
+    this.isTypeBar = false;
+    this.isTypeGauge = false;
+    this.itemsColorTypeGauge = [];
+    this.listTypePieDonut = [];
+    this.itemsTypeDonut = [];
+    let option = {};
+    if (Array.isArray(this.categories) && !this.categories?.length && this.categories !== undefined) {
+      this.categories = undefined;
+    }
+    if (!this.series?.length) {
+      this.chartInstance?.dispose();
+      this.chartInstance = undefined;
+      return;
+    }
+    option = this.setOptions();
+    this.chartInstance.setOption(option);
+    this.cdr.detectChanges();
+  }
+
+  private setOptions() {
+    const newSeries = this.setSeries();
+
+    const options: any = {
+      backgroundColor: this.getCSSVariable('--background-color-grid', 'po-chart'),
+      series: newSeries as any
+    };
+
+    if (!this.listTypePieDonut?.length && !this.isTypeGauge) {
+      this.chartGridUtils.setGridOption(options);
+      this.chartGridUtils.setOptionsAxis(options);
+      this.formatLabelOption(options);
+      this.chartGridUtils.setShowAxisDetails(options);
+      if (this.options?.dataZoom) {
+        this.chartGridUtils.setOptionDataZoom(options);
+      }
+    } else if (this.chartGridUtils.isTypeDonut && this.options?.textCenterGraph) {
+      options.graphic = this.chartGridUtils.textCenterDonut;
+    }
+
+    if (this.options?.legend !== false) {
+      this.setOptionLegend(options);
+    }
+
+    if (this.isTypeGauge) {
+      this.chartGaugeUtils.setGaugeOptions(options, this.chartGridUtils.resolvePx('--font-size-grid', '.po-chart'));
+    }
+
+    if (this.isTypeRadar) {
+      options.radar = this.options?.radar;
+    }
+    return options;
+  }
+
+  private formatLabelOption(options) {
+    if (this.options?.axis && Object.keys(this.options.axis).length) {
+      const currentAxis = this.isTypeBar ? 'xAxis' : 'yAxis';
+      options[currentAxis]['splitNumber'] = this.options.axis.gridLines || 5;
+      options[currentAxis]['min'] = this.options.axis.minRange;
+      options[currentAxis]['max'] = this.options.axis.maxRange;
+      if (this.options.axis.labelType) {
+        options[currentAxis]['axisLabel'].formatter =
+          this.options.axis.labelType === PoChartLabelFormat.Number
+            ? (value: number) => this.decimalPipe.transform(value, '1.2-2')
+            : (value: number) => this.currencyPipe.transform(value, null, 'symbol', '1.2-2');
       }
     }
   }
 
-  ngOnDestroy() {
-    this.subscription.unsubscribe();
-    this.removeWindowResizeListener();
+  private setOptionLegend(options) {
+    options.legend = {
+      type: this.options?.legendType || 'plain',
+      pageIconColor:
+        this.options?.legendType === 'scroll'
+          ? this.getCSSVariable('--color-legend-scroll-icon-active', '.po-chart')
+          : '',
+      pageIconInactiveColor:
+        this.options?.legendType === 'scroll'
+          ? this.getCSSVariable('--color-legend-scroll-icon-inactive', '.po-chart')
+          : '',
+      show: true,
+      selectedMode: !this.isTypeGauge,
+      orient: 'horizontal',
+      left: this.options?.legendType === 'scroll' ? 32 : this.options?.legendPosition || 'center',
+      top: this.options?.legendVerticalPosition || 'bottom',
+      bottom: 0,
+      padding: [0, 16, 0, 16],
+      itemWidth: 16,
+      itemHeight: 16,
+      icon: 'roundRect',
+      textStyle: {
+        color: this.getCSSVariable('--color-legend', '.po-chart'),
+        fontSize: this.chartGridUtils.resolvePx('--font-size-grid', '.po-chart'),
+        fontFamily: this.getCSSVariable('--font-family-grid', '.po-chart'),
+        fontWeight: Number(this.getCSSVariable('--font-weight-grid', '.po-chart'))
+      }
+    };
   }
 
-  resizeAction() {
-    this.getSvgContainerSize();
-    this.windowResizeListener.next();
-    this.changeDetector.detectChanges();
+  private setSeries() {
+    const hasArea =
+      this.type === 'area' ||
+      this.series.some(serie => serie.type === 'area') ||
+      this.options?.areaStyle ||
+      this.series.some(serie => serie.areaStyle === true);
+    const newSeries: Array<any> = this.colorService
+      .getColors<PoChartSerie>(this.series, true, hasArea)
+      .map(serie => ({ ...serie }));
+    const tokenBorderWidthMd = this.chartGridUtils.resolvePx('--border-width-md');
+    const findType = this.series.find(serie => serie.type)?.type;
+    let serieGauge = {};
+    let typeDefault;
+    if (!this.type) {
+      typeDefault = Array.isArray(this.series[0].data) ? PoChartType.Column : PoChartType.Pie;
+    }
+
+    const verifyType = findType || this.type || typeDefault;
+    if (verifyType === 'donut' || verifyType === 'pie') {
+      this.chartGridUtils.setListTypeDonutPie(verifyType);
+    } else if (verifyType === 'gauge') {
+      const serie = {};
+      const fontSizes = {
+        fontSizeMd: this.chartGridUtils.resolvePx('--font-size-md'),
+        fontSizeLg: this.chartGridUtils.resolvePx('--font-size-lg'),
+        fontSizeSubtitle: this.chartGridUtils.resolvePx('--font-size-description-chart', 'po-chart')
+      };
+      serieGauge = this.chartGaugeUtils.setListTypeGauge(serie, fontSizes);
+    } else if (verifyType === 'radar') {
+      this.chartGridUtils.setListTypeRadar();
+    }
+
+    const seriesUpdated = newSeries.map((serie, index) => {
+      serie.name = serie.name || (serie.label && typeof serie.label === 'string') ? (serie.name ?? serie.label) : ' ';
+      !serie.type ? this.setTypeSerie(serie, this.type || typeDefault) : this.setTypeSerie(serie, serie.type);
+
+      let colorVariable: string;
+
+      if (serie.color?.startsWith('var(--')) {
+        colorVariable = getComputedStyle(document.documentElement)
+          .getPropertyValue(serie.color.replace(/^var\((--[^)]+)\)$/, '$1'))
+          .trim();
+      } else if (serie.color?.includes('color') || serie.color?.startsWith('caption-tag-')) {
+        colorVariable = this.getCSSVariable(`--color-${serie.color.replace('po-', '').replace('color-', '')}`);
+      } else {
+        colorVariable = serie.color;
+      }
+
+      this.chartGridUtils.setSerieTypeDonutPie(serie, colorVariable);
+      this.chartGaugeUtils.setSerieTypeGauge(serie, colorVariable);
+      this.setSerieEmphasis(serie, colorVariable, tokenBorderWidthMd);
+      this.chartGridUtils.setSerieTypeLine(serie, tokenBorderWidthMd, colorVariable);
+      this.chartGridUtils.setSerieTypeArea(serie, index);
+      this.chartGridUtils.setSerieTypeBarColumn(serie, colorVariable);
+      this.chartGridUtils.setSerieTypeRadar(serie, tokenBorderWidthMd, colorVariable);
+
+      return serie;
+    });
+
+    if (this.listTypePieDonut?.length) {
+      return this.listTypePieDonut;
+    } else if (verifyType === 'gauge') {
+      return this.chartGaugeUtils.finalizeSerieTypeGauge(serieGauge);
+    } else if (verifyType === 'radar') {
+      return this.chartGridUtils.finalizeSerieTypeRadar(seriesUpdated);
+    }
+
+    return seriesUpdated;
   }
 
-  ngOnInit() {
-    this.getSvgContainerSize();
+  private setSerieEmphasis(serie, color: string, tokenBorder: number) {
+    serie.emphasis = {
+      itemStyle: {
+        color: color,
+        borderWidth: tokenBorder
+      },
+      scale: 1.5
+    };
+
+    if (this.dataLabel?.fixed) {
+      serie.label = {
+        show: true
+      };
+
+      serie.emphasis = {
+        focus: 'series',
+        itemStyle: {
+          color: color,
+          borderWidth: tokenBorder
+        },
+        scale: 1.5
+      };
+    }
   }
 
-  rebuildComponentRef() {
-    if (this.componentRef) {
-      this.componentRef.destroy();
+  private setTypeSerie(serie, type: PoChartType) {
+    switch (type) {
+      case PoChartType.Area:
+        serie.isTypeArea = true;
+        serie.type = 'line';
+        break;
+      case PoChartType.Bar:
+        this.isTypeBar = true;
+        serie.type = 'bar';
+        break;
+      case PoChartType.Column:
+        serie.isTypeColumn = true;
+        serie.type = 'bar';
+        break;
+      case PoChartType.Line:
+        serie.type = 'line';
+        break;
+      case PoChartType.Gauge:
+        this.isTypeGauge = true;
+        serie.type = 'gauge';
+        break;
+      case PoChartType.Radar:
+        this.isTypeRadar = true;
+        serie.type = 'radar';
+        break;
+    }
+  }
 
-      if (this.isChartGaugeType) {
-        this.dynamicComponentSetting();
+  private setTableProperties() {
+    const option = this.chartInstance.getOption();
+    let categories: Array<any> = this.isTypeBar ? option.yAxis[0].data : option.xAxis?.[0].data;
+    if (!categories && !this.isTypeGauge) {
+      categories = [];
+      if (Array.isArray(this.series[0]?.data)) {
+        this.series[0].data.forEach((data, index) => categories.push(String(index)));
+      } else {
+        let items = { [this.options?.firstColumnName || this.literals.serie]: '-' };
+        option.series[0].data.forEach(data => (items = { ...items, [data.name]: data.value }));
+        this.itemsTable = [items];
+        return;
       }
     }
+    const series: any = option.series;
+
+    if (this.isTypeBar) {
+      this.setTablePropertiesTypeBar(categories, series);
+      return;
+    } else if (this.isTypeGauge) {
+      this.setTablePropertiesTypeGauge();
+      return;
+    } else if (this.isTypeRadar) {
+      this.setTablePropertiesTypeRadar();
+      return;
+    }
+
+    this.itemsTable = series.map((serie: any) => {
+      const rowData: any = { serie: serie.name };
+
+      categories.forEach((category: any, index) => {
+        rowData[category] = serie.data[index];
+      });
+
+      return rowData;
+    });
+    this.setTableColumns(option, categories);
   }
 
-  protected getSvgContainerSize() {
-    const { chartHeaderHeight, chartLegendHeight, chartWrapperWidth } = this.getChartMeasurements();
+  private setTablePropertiesTypeBar(categories: Array<any>, series: Array<any>) {
+    this.itemsTable = categories.map((category: string, index: number) => {
+      const rowData: any = { categoria: category };
 
-    this.svgContainerSize = this.containerService.calculateSVGContainerMeasurements(
-      this.height,
-      chartWrapperWidth,
-      chartHeaderHeight,
-      chartLegendHeight,
-      this.categories?.length
-    );
+      series.forEach((serie: any) => {
+        rowData[serie.name] = serie.data[index];
+      });
+
+      return rowData;
+    });
+
+    this.columnsTable = [
+      { property: 'categoria', label: this.options?.firstColumnName || this.literals.category },
+      ...series.map((serie: any) => ({
+        property: serie.name,
+        label: serie.name
+      }))
+    ];
   }
 
-  private chartLegendHeight(chartLegend: ElementRef) {
-    return chartLegend ? chartLegend.nativeElement.offsetHeight : 0;
-  }
-
-  private createComponent() {
-    const componentType = this.getComponentType(this.type);
-    const factory = this.componentFactoryResolver.resolveComponentFactory(componentType);
-
-    this.componentRef = this.chartContainer.createComponent(factory);
-
-    const instance = <PoChartDynamicTypeComponent>this.componentRef.instance;
-
-    this.setComponentRefProperties(instance);
-
-    return instance;
-  }
-
-  private dynamicComponentSetting() {
-    const instance = this.createComponent();
-
-    this.setResizeListenerSubscribe(instance);
-    this.changeDetector.detectChanges();
-    this.setClickSubscribe(instance);
-    this.setHoverSubscribe(instance);
-  }
-
-  private getComponentType(typeName) {
-    return this.mappings[typeName];
-  }
-
-  private getChartMeasurements() {
-    const chartWrapperWidth = this.chartWrapper.nativeElement.offsetWidth;
-    const chartHeaderHeight = this.chartHeader.nativeElement.offsetHeight;
-    const chartLegendHeight = this.chartLegendHeight(this.chartLegend);
-
-    return { chartWrapperWidth, chartHeaderHeight, chartLegendHeight };
-  }
-
-  private removeWindowResizeListener() {
-    if (this.onResize) {
-      this.onResize = () => {};
+  private setTablePropertiesTypeGauge() {
+    this.itemsTable = [
+      { [this.literals.value]: this.isGaugeSingle ? this.series[0].data : this.valueGaugeMultiple || '-' }
+    ];
+    if (!this.isGaugeSingle) {
+      this.series.forEach((serie, index) => {
+        const item = {
+          ...this.itemsTable[0],
+          [serie.label || `${this.literals.item} ${index + 1}`]: `${serie.from} - ${serie.to}`
+        };
+        this.itemsTable = [{ ...item }];
+      });
     }
   }
 
-  private setComponentRefProperties(instance: PoChartDynamicTypeComponent) {
-    const { chartHeaderHeight, chartLegendHeight, chartWrapperWidth } = this.getChartMeasurements();
+  private setTablePropertiesTypeRadar() {
+    let indicators;
 
-    this.colors = this.colorService.getSeriesColor(this.chartSeries, this.type);
+    if (!Array.isArray(this.categories) && this.categories?.indicator) {
+      indicators = this.categories.indicator;
+    } else if (Array.isArray(this.categories)) {
+      indicators = this.categories.map(item => ({ name: item }));
+    }
 
-    instance.chartHeader = chartHeaderHeight;
-    instance.chartLegend = chartLegendHeight;
-    instance.chartWrapper = chartWrapperWidth;
-    instance.colors = Array.isArray(this.colors) ? [...this.colors] : [];
-    instance.height = this.height;
-    instance.type = this.type;
-    instance.series = this.chartSeries || [];
+    const series = this.series;
+
+    this.columnsTable = [
+      {
+        property: 'serie',
+        label: this.options?.firstColumnName || this.literals.serie
+      },
+      ...indicators.map((indicator: any) => ({
+        property: indicator.name,
+        label: indicator.name
+      }))
+    ];
+
+    this.itemsTable = series.map((serie: any) => {
+      const row: any = { serie: serie.label };
+
+      indicators.forEach((indicator: any, idx: number) => {
+        const value = serie.data[idx]?.value ?? serie.data[idx];
+        row[indicator.name] = value;
+      });
+
+      return row;
+    });
   }
 
-  private setClickSubscribe(instance: PoChartDynamicTypeComponent) {
-    this.subscription.add(
-      instance.onSerieClick.subscribe(event => {
-        this.onSeriesClick(event);
-      })
-    );
+  private setTableColumns(option, categories) {
+    this.columnsTable = [
+      { property: 'serie', label: this.options?.firstColumnName || this.literals.serie },
+      ...categories.map((category: string) => ({
+        property: category,
+        label: category
+      }))
+    ];
   }
 
-  private setHoverSubscribe(instance: PoChartDynamicTypeComponent) {
-    this.subscription.add(
-      instance.onSerieHover.subscribe(event => {
-        this.onSeriesHover(event);
-      })
-    );
+  private downloadCsv() {
+    const headers = Object.keys(this.itemsTable[0]);
+    const columnNameDefault = this.isTypeBar ? 'Categoria' : this.literals.serie;
+    const firstColumnName = this.options?.firstColumnName || columnNameDefault;
+    const orderedHeaders = this.columnsTable?.length
+      ? [firstColumnName, ...headers.filter(header => header !== 'serie')]
+      : [...headers.filter(header => header !== 'serie')];
+
+    const csvContent = [
+      orderedHeaders.join(';'),
+      ...this.itemsTable.map(row =>
+        orderedHeaders.map(header => (header === firstColumnName ? row['serie'] : (row[header] ?? ''))).join(';')
+      )
+    ].join('\n');
+
+    const utf8Bom = '\uFEFF';
+    const blob = new Blob([utf8Bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'dados_grafico.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
-  private setResizeListenerSubscribe(instance: PoChartDynamicTypeComponent) {
-    this.subscription.add(
-      this.windowResizeListener.subscribe(() => {
-        const measuresForComponentRef = this.getChartMeasurements();
+  private exportImage(type: 'png' | 'jpeg') {
+    if (!this.chartInstance) {
+      return;
+    }
 
-        instance.chartWrapper = measuresForComponentRef.chartWrapperWidth;
-        instance.chartHeader = measuresForComponentRef.chartHeaderHeight;
-        instance.chartLegend = measuresForComponentRef.chartLegendHeight;
-      })
-    );
+    if (this.currentRenderer === 'svg') {
+      this.exportSvgAsImage(type);
+    } else {
+      const chartImage = new Image();
+      chartImage.src = this.chartInstance.getDataURL({
+        type: type,
+        pixelRatio: 2,
+        backgroundColor: this.getCSSVariable('--color-neutral-light-00')
+      });
+      this.configureImageCanvas(type, chartImage);
+    }
+  }
+
+  private exportSvgAsImage(type: 'png' | 'jpeg') {
+    const svgEl = this.el.nativeElement.querySelector('#chart-id svg') as SVGSVGElement;
+
+    if (!svgEl) return;
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgEl);
+
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+
+    const image = new Image();
+    this.configureImageCanvas(type, image);
+
+    image.src = url;
+  }
+
+  private configureImageCanvas(type: 'png' | 'jpeg', chartImage: HTMLImageElement) {
+    chartImage.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) return;
+
+      const chartElement = this.el.nativeElement.querySelector('#chart-id') as HTMLDivElement;
+      const headerElement = this.el.nativeElement.querySelector('.po-chart-header') as HTMLDivElement;
+
+      const chartWidth = chartElement.clientWidth;
+      const chartHeight = chartElement.clientHeight;
+
+      const headerHeight = headerElement?.clientHeight || 40;
+
+      canvas.width = chartWidth;
+      canvas.height = headerHeight + chartHeight + 40;
+      ctx.fillStyle = this.getCSSVariable('--color-neutral-light-00');
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      this.setHeaderProperties(ctx, headerElement, chartWidth, headerHeight);
+      ctx.drawImage(chartImage, 0, headerHeight, chartWidth, chartHeight);
+
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL(`image/${type}`);
+      link.download = `grafico-exportado.${type}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+  }
+
+  private setHeaderProperties(ctx, headerElement, chartWidth, headerHeight) {
+    ctx.fillStyle = this.getCSSVariable('--color-neutral-light-00');
+    ctx.fillRect(0, 0, chartWidth, headerHeight);
+
+    const titleElement = headerElement.querySelector('.po-chart-header-title');
+    const title = titleElement?.innerText ?? 'Gráfico';
+
+    ctx.fillStyle = this.getCSSVariable('--color-neutral-dark-70');
+    ctx.font = 'bold 16px Roboto-Bold';
+    ctx.textAlign = 'left';
+    ctx.fillText(title, 20, headerHeight / 2 + 5);
+  }
+
+  private setPopupActions(): void {
+    this.popupActions = [...this.popupActions, ...(this.customActions || [])];
   }
 }

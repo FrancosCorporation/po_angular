@@ -1,8 +1,19 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  Output,
+  TemplateRef,
+  ViewChild,
+  inject
+} from '@angular/core';
 
-import { PoMultiselectLiterals } from '../../index';
-import { PoMultiselectOption } from '../po-multiselect-option.interface';
-import { PoMultiselectSearchComponent } from './../po-multiselect-search/po-multiselect-search.component';
+import { PoMultiselectLiterals } from '../interfaces/po-multiselect-literals.interface';
+import { PoMultiselectOption } from '../interfaces/po-multiselect-option.interface';
+import { PoListBoxComponent } from './../../../po-listbox/po-listbox.component';
 
 /**
  * @docsPrivate
@@ -13,11 +24,15 @@ import { PoMultiselectSearchComponent } from './../po-multiselect-search/po-mult
  */
 @Component({
   selector: 'po-multiselect-dropdown',
-  templateUrl: './po-multiselect-dropdown.component.html'
+  templateUrl: './po-multiselect-dropdown.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
 export class PoMultiselectDropdownComponent {
-  scrollTop = 0;
-  show: boolean = false;
+  private readonly cd = inject(ChangeDetectorRef);
+
+  /** Propriedade que indica se deve exibir o loading. */
+  @Input('p-searching') isServerSearching?: boolean = false;
 
   /** Propriedade que indica se o campo de pesquisa deverá ser escondido. */
   @Input('p-hide-search') hideSearch?: boolean = false;
@@ -29,13 +44,27 @@ export class PoMultiselectDropdownComponent {
   @Input('p-placeholder-search') placeholderSearch: string;
 
   /** Propriedade que recebe a lista de opções selecionadas. */
-  @Input('p-selected-values') selectedValues: Array<any> = [];
+  @Input('p-selected-options') selectedOptions: Array<any> = [];
 
   /** Propriedade que recebe a lista com todas as opções. */
-  @Input('p-options') options: Array<PoMultiselectOption> = [];
+  @Input('p-options') options: Array<PoMultiselectOption | any> = [];
 
   /** Propriedade que recebe a lista de opções que deverão ser criadas no dropdown. */
-  @Input('p-visible-options') visibleOptions: Array<PoMultiselectOption> = [];
+  @Input('p-visible-options') visibleOptions: Array<PoMultiselectOption | any> = [];
+
+  /** Propriedade que indica se o campo "Selecionar todos" deverá ser escondido. */
+  @Input('p-hide-select-all') hideSelectAll?: boolean = false;
+
+  @Input('p-field-value') fieldValue: string;
+
+  @Input('p-field-label') fieldLabel: string;
+
+  @Input('p-multiselect-template') multiselectTemplate: TemplateRef<any> | any;
+
+  @Input('p-container-width') containerWidth: number;
+
+  /** Tamanho do componente. */
+  @Input('p-size') size: string;
 
   /** Evento disparado a cada tecla digitada na pesquisa. */
   @Output('p-change-search') changeSearch = new EventEmitter();
@@ -51,8 +80,11 @@ export class PoMultiselectDropdownComponent {
   @Output('p-close-dropdown') closeDropdown = new EventEmitter();
 
   @ViewChild('container', { read: ElementRef, static: true }) container: ElementRef;
-  @ViewChild('ulElement', { read: ElementRef, static: true }) ulElement: ElementRef;
-  @ViewChild('searchElement') searchElement: PoMultiselectSearchComponent;
+  @ViewChild('divElement', { read: ElementRef, static: true }) divElement: ElementRef;
+  @ViewChild('listbox') listbox: PoListBoxComponent;
+
+  scrollTop = 0;
+  show: boolean = false;
 
   get hasOptions() {
     return !!this.options?.length;
@@ -60,50 +92,89 @@ export class PoMultiselectDropdownComponent {
 
   scrollTo(index) {
     this.scrollTop = index <= 2 ? 0 : index * 44 - 88;
+    this.cd.markForCheck();
   }
 
   isSelectedItem(option: PoMultiselectOption) {
-    return this.selectedValues.some(selectedItem => selectedItem === option.value);
+    return this.selectedOptions.some(selectedItem => selectedItem[this.fieldValue] === option[this.fieldValue]);
   }
 
-  clickItem(check, option) {
-    this.updateSelectedValues(check, option);
-
-    if (!this.hideSearch) {
-      this.searchElement.setFocus();
+  clickItem(check, options?) {
+    if (options) {
+      this.updateSelectedValues(check, options);
+    } else {
+      const { selected, option } = check;
+      this.updateSelectedValues(selected, option);
     }
+  }
+
+  onClickSelectAll() {
+    const selectedValues = this.selectedOptions.map(({ [this.fieldValue]: value }) => value);
+
+    if (this.everyVisibleOptionsSelected(selectedValues)) {
+      this.selectedOptions = [];
+    } else {
+      this.selectedOptions = this.uniqueSelectedOptions(selectedValues);
+    }
+    this.change.emit(this.selectedOptions);
   }
 
   updateSelectedValues(checked, option) {
     if (checked) {
-      this.selectedValues.push(option.value);
+      this.selectedOptions.push(option);
     } else {
-      const indexSelectedValues = this.selectedValues.indexOf(option.value);
-      this.selectedValues.splice(indexSelectedValues, 1);
+      this.selectedOptions = this.selectedOptions.filter(
+        selectedOption => selectedOption[this.fieldValue] !== option[this.fieldValue]
+      );
     }
+    this.change.emit(this.selectedOptions);
+  }
 
-    this.change.emit(this.selectedValues);
+  everyVisibleOptionsSelected(selectedValues) {
+    return this.visibleOptions?.every(visibleOption => selectedValues.includes(visibleOption[this.fieldValue]));
+  }
+
+  someVisibleOptionsSelected(selectedValues) {
+    return this.visibleOptions?.some(visibleOption => selectedValues.includes(visibleOption[this.fieldValue]));
+  }
+
+  getStateSelectAll() {
+    const selectedValues = this.selectedOptions.map(({ [this.fieldValue]: value }) => value);
+
+    if (this.everyVisibleOptionsSelected(selectedValues)) {
+      return true;
+    } else if (this.someVisibleOptionsSelected(selectedValues)) {
+      return null;
+    } else {
+      return false;
+    }
   }
 
   callChangeSearch(event) {
     this.changeSearch.emit(event);
   }
 
-  @HostListener('keydown', ['$event'])
-  onKeydown(event: any) {
-    if (event.keyCode === 9) {
-      this.closeDropdown.emit();
-    }
-  }
-
   controlVisibility(toOpen) {
     this.show = toOpen;
 
     setTimeout(() => {
-      if (toOpen && this.searchElement && !this.hideSearch) {
-        this.searchElement.setFocus();
-        this.searchElement.clean();
+      if (toOpen && this.listbox?.searchElement && !this.hideSearch) {
+        this.listbox.searchElement.setFocus();
+        this.listbox.searchElement.clean();
       }
     });
+    this.cd.markForCheck();
+  }
+
+  private uniqueSelectedOptions(selectedValues) {
+    const newSelectedOptions = [...this.selectedOptions];
+
+    for (const visibleOption of this.visibleOptions) {
+      if (!selectedValues.includes(visibleOption[this.fieldValue])) {
+        newSelectedOptions.push(visibleOption);
+      }
+    }
+
+    return newSelectedOptions;
   }
 }

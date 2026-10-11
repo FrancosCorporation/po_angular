@@ -1,7 +1,22 @@
-import { Component, ElementRef, forwardRef, ViewChild, AfterViewInit } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  forwardRef,
+  ViewChild,
+  inject,
+  OnChanges,
+  OnDestroy,
+  SimpleChanges
+} from '@angular/core';
 import { NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
+import { setHelperSettings, uuid } from '../../../utils/util';
+
 import { PoTextareaBaseComponent } from './po-textarea-base.component';
+import { PoHelperComponent } from '../../po-helper';
 
 /**
  * @docsExtends PoTextareaBaseComponent
@@ -32,6 +47,7 @@ import { PoTextareaBaseComponent } from './po-textarea-base.component';
 @Component({
   selector: 'po-textarea',
   templateUrl: './po-textarea.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -43,16 +59,33 @@ import { PoTextareaBaseComponent } from './po-textarea-base.component';
       useExisting: forwardRef(() => PoTextareaComponent),
       multi: true
     }
-  ]
+  ],
+  standalone: false
 })
-export class PoTextareaComponent extends PoTextareaBaseComponent implements AfterViewInit {
-  @ViewChild('inp', { read: ElementRef, static: true }) inputEl: ElementRef;
+export class PoTextareaComponent extends PoTextareaBaseComponent implements AfterViewInit, OnChanges, OnDestroy {
+  private readonly el = inject(ElementRef);
 
+  @ViewChild('inp', { read: ElementRef, static: true }) inputEl: ElementRef;
+  @ViewChild('textareaBody', { read: ElementRef, static: true }) textareaBodyEl: ElementRef;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
+
+  id = `po-textarea[${uuid()}]`;
   valueBeforeChange: any;
   fireChange: boolean = false;
+  hasScroll: boolean = false;
+  hasValue: boolean = false;
+  private resizeObserver: ResizeObserver;
 
   constructor() {
-    super();
+    const cd = inject(ChangeDetectorRef);
+
+    super(cd);
+  }
+
+  emitAdditionalHelp() {
+    if (this.label && this.isAdditionalHelpEventTriggered()) {
+      this.additionalHelp.emit();
+    }
   }
 
   /**
@@ -82,6 +115,51 @@ export class PoTextareaComponent extends PoTextareaBaseComponent implements Afte
     if (this.autoFocus) {
       this.focus();
     }
+
+    this.initResizeObserver();
+    window.addEventListener('resize', this.onWindowResize);
+  }
+
+  protected override onAfterThemeChange(): void {
+    requestAnimationFrame(() => {
+      this.syncContainerWidth();
+      this.checkScrollState();
+    });
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
+
+    if (changes.loading) {
+      requestAnimationFrame(() => {
+        this.syncContainerWidth();
+        this.checkScrollState();
+      });
+    }
+  }
+
+  ngOnDestroy() {
+    this.resizeObserver?.disconnect();
+    window.removeEventListener('resize', this.onWindowResize);
+  }
+
+  getAdditionalHelpTooltip() {
+    return this.isAdditionalHelpEventTriggered() ? null : this.additionalHelpTooltip;
+  }
+
+  getErrorPattern() {
+    return this.fieldErrorMessage && this.hasInvalidClass() ? this.fieldErrorMessage : '';
+  }
+
+  hasInvalidClass() {
+    return (
+      this.el.nativeElement.classList.contains('ng-invalid') &&
+      this.el.nativeElement.classList.contains('ng-dirty') &&
+      !this.inputEl.nativeElement.value &&
+      (this.required || this.hasValidatorRequired)
+    );
   }
 
   writeValueModel(value: any): void {
@@ -92,6 +170,9 @@ export class PoTextareaComponent extends PoTextareaBaseComponent implements Afte
       } else {
         this.inputEl.nativeElement.value = value;
       }
+
+      this.hasValue = !!value;
+      this.checkScrollState();
     }
 
     // Emite evento quando o model é atualizado, inclusive a primeira vez
@@ -108,6 +189,9 @@ export class PoTextareaComponent extends PoTextareaBaseComponent implements Afte
     const value = this.validMaxLength(this.maxlength, event.target.value);
     this.callOnChange(value);
     this.inputEl.nativeElement.value = value;
+
+    this.hasValue = !!value;
+    this.checkScrollState();
   }
 
   eventOnFocus() {
@@ -120,6 +204,7 @@ export class PoTextareaComponent extends PoTextareaBaseComponent implements Afte
   }
 
   eventOnBlur() {
+    this.onTouched?.();
     this.blur.emit();
     this.controlChangeEmitter();
   }
@@ -130,5 +215,117 @@ export class PoTextareaComponent extends PoTextareaBaseComponent implements Afte
     if (elementValue !== this.valueBeforeChange) {
       this.change.emit(elementValue);
     }
+  }
+
+  onKeyDown(event: KeyboardEvent): void {
+    const isFieldFocused = document.activeElement === this.inputEl.nativeElement;
+
+    if (isFieldFocused) {
+      this.keydown.emit(event);
+    }
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * //Exemplo com p-label e p-helper
+   * <po-textarea
+   *  #textarea
+   *  ...
+   *  p-label="Label do textarea"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, textarea)"
+   * ></po-textarea>
+   * ```
+   * ```
+   * ...
+   * onKeyDown(event: KeyboardEvent, inp: PoTextareaComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  showAdditionalHelp(): boolean {
+    this.displayAdditionalHelp = !this.displayAdditionalHelp;
+    const helper = this.poHelperComponent();
+    const isHelpEvt = this.isAdditionalHelpEventTriggered();
+    if (!this.label && (helper || this.additionalHelpTooltip || isHelpEvt)) {
+      if (isHelpEvt) {
+        this.additionalHelp.emit();
+      }
+      if (typeof helper !== 'string' && typeof helper?.eventOnClick === 'function') {
+        helper.eventOnClick();
+        return;
+      }
+      if (this.helperEl?.helperIsVisible()) {
+        this.helperEl?.closeHelperPopover();
+        return;
+      }
+      this.helperEl?.openHelperPopover();
+      return;
+    }
+    return this.displayAdditionalHelp;
+  }
+
+  private isAdditionalHelpEventTriggered(): boolean {
+    return (
+      this.additionalHelpEventTrigger === 'event' ||
+      (this.additionalHelpEventTrigger === undefined && this.additionalHelp.observed)
+    );
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.isAdditionalHelpEventTriggered() ? this.additionalHelp : undefined
+    );
+  }
+
+  private readonly onWindowResize = () => {
+    this.syncContainerWidth();
+    this.checkScrollState();
+  };
+
+  private checkScrollState(): void {
+    const el = this.inputEl?.nativeElement;
+    if (!el) return;
+
+    this.hasScroll = el.scrollHeight > el.clientHeight;
+    this.cd.markForCheck();
+  }
+
+  private syncContainerWidth(): void {
+    const el = this.inputEl?.nativeElement;
+    const body = this.textareaBodyEl?.nativeElement;
+    if (!el || !body) return;
+
+    body.style.width = this.loading && el.style.width ? 'fit-content' : '';
+  }
+
+  private initResizeObserver(): void {
+    const el = this.inputEl?.nativeElement;
+    const body = this.textareaBodyEl?.nativeElement;
+
+    if (!el || !body || typeof ResizeObserver === 'undefined') return;
+
+    this.resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        if (this.loading) {
+          body.style.width = el.style.width ? 'fit-content' : '';
+        }
+
+        this.checkScrollState();
+      });
+    });
+
+    this.resizeObserver.observe(el);
   }
 }

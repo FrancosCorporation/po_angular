@@ -1,17 +1,20 @@
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Component, OnInit, inject } from '@angular/core';
+import { UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 
 import { PoMultiselectOption, PoRadioGroupOption } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-multiselect-vacation-reactive-form',
-  templateUrl: './sample-po-multiselect-vacation-reactive-form.component.html'
+  templateUrl: './sample-po-multiselect-vacation-reactive-form.component.html',
+  standalone: false
 })
 export class SamplePoMultiselectVacationReactiveFormComponent implements OnInit {
+  private formBuilder = inject(UntypedFormBuilder);
+
   days: number;
   employeesVacations: Array<string> = [];
   finalPeriod: Date;
-  formCollectiveVacations: FormGroup;
+  formCollectiveVacations: UntypedFormGroup;
   initialPeriod: Date;
   nameEmployeesVacations: string;
 
@@ -20,6 +23,8 @@ export class SamplePoMultiselectVacationReactiveFormComponent implements OnInit 
     { value: '518734', label: 'Alice' },
     { value: '986237', label: 'Bradley' },
     { value: '941278', label: 'Jackie' },
+    { value: '112333', label: 'Jane' },
+    { value: '989898', label: 'John' },
     { value: '897643', label: 'Phillip' },
     { value: '423767', label: 'Reynold' },
     { value: '423837', label: 'Robert' }
@@ -30,8 +35,6 @@ export class SamplePoMultiselectVacationReactiveFormComponent implements OnInit 
     { value: 20, label: '20' },
     { value: 30, label: '30' }
   ];
-
-  constructor(private formBuilder: FormBuilder) {}
 
   ngOnInit() {
     this.formCollectiveVacations = this.formBuilder.group({

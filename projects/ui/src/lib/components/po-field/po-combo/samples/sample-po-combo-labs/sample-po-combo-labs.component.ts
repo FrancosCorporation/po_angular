@@ -11,9 +11,11 @@ import {
 
 @Component({
   selector: 'sample-po-combo-labs',
-  templateUrl: './sample-po-combo-labs.component.html'
+  templateUrl: './sample-po-combo-labs.component.html',
+  standalone: false
 })
 export class SamplePoComboLabsComponent implements OnInit {
+  helperText: string;
   combo: string;
   comboOptionGroupSwitch: boolean;
   customLiterals: PoComboLiterals;
@@ -34,10 +36,14 @@ export class SamplePoComboLabsComponent implements OnInit {
   optionsGroupList: Array<PoSelectOption>;
   placeholder: string;
   properties: Array<string>;
+  fieldErrorMessage: string;
 
   option: PoComboOption;
   options: Array<PoComboOption | PoComboOptionGroup>;
   selectedOptionsGroup: string;
+  size: string;
+
+  listboxPosition: string = 'bottom';
 
   public readonly filterModeOptions: Array<PoRadioGroupOption> = [
     { label: 'Starts With', value: 'startsWith' },
@@ -45,10 +51,15 @@ export class SamplePoComboLabsComponent implements OnInit {
     { label: 'Ends With', value: 'endsWith' }
   ];
 
+  public readonly listboxPositionOptions: Array<any> = [
+    { label: 'top', value: 'top' },
+    { label: 'bottom', value: 'bottom' }
+  ];
+
   public readonly iconsOptions: Array<PoRadioGroupOption> = [
-    { label: 'Company', value: 'po-icon-company' },
-    { label: 'Gas', value: 'po-icon-gas' },
-    { label: 'Light', value: 'po-icon-light' }
+    { label: 'an an-building-apartment', value: 'an an-building-apartment' },
+    { label: 'an an-gas-pump', value: 'an an-gas-pump' },
+    { label: 'fa fa-calculator', value: 'fa fa-calculator' }
   ];
 
   public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [
@@ -57,8 +68,19 @@ export class SamplePoComboLabsComponent implements OnInit {
     { value: 'optional', label: 'Optional' },
     { value: 'disabledInitFilter', label: 'Disabled Init Filter' },
     { value: 'required', label: 'Required' },
+    { value: 'showRequired', label: 'Show Required' },
     { value: 'sort', label: 'Sort' },
-    { value: 'clean', label: 'Clean' }
+    { value: 'clean', label: 'Clean' },
+    { value: 'disabledTabFilter', label: 'Disabled Tab Filter' },
+    { value: 'errorLimit', label: 'Limit Error Message' },
+    { value: 'labelTextWrap', label: 'Label Text Wrap' },
+    { value: 'loading', label: 'Loading' },
+    { value: 'compactLabel', label: 'Compact Label' }
+  ];
+
+  public readonly sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
   ];
 
   ngOnInit() {
@@ -87,6 +109,7 @@ export class SamplePoComboLabsComponent implements OnInit {
   }
 
   restore() {
+    this.helperText = '';
     this.combo = undefined;
     this.comboOptionGroupSwitch = false;
     this.customLiterals = undefined;
@@ -110,7 +133,9 @@ export class SamplePoComboLabsComponent implements OnInit {
     this.optionsGroupList = [];
     this.placeholder = '';
     this.properties = [];
+    this.fieldErrorMessage = '';
     this.selectedOptionsGroup = undefined;
+    this.size = 'medium';
   }
 
   private insertGroupIntoSelectInput(value: string) {

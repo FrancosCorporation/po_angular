@@ -1,12 +1,13 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { NgForm } from '@angular/forms';
 
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
 import { Observable, of, throwError } from 'rxjs';
 
 import { PoDynamicFormBaseComponent } from './po-dynamic-form-base.component';
 import { PoDynamicFormComponent } from './po-dynamic-form.component';
 import { PoDynamicModule } from '../po-dynamic.module';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('PoDynamicFormComponent:', () => {
   let component: PoDynamicFormComponent;
@@ -14,13 +15,12 @@ describe('PoDynamicFormComponent:', () => {
 
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      imports: [PoDynamicModule]
-    });
-  });
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [PoDynamicModule],
+      providers: [NgForm, provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoDynamicFormComponent);
     component = fixture.componentInstance;
 
@@ -78,6 +78,15 @@ describe('PoDynamicFormComponent:', () => {
       component.focus('field');
 
       expect(spyFieldsComponentFocus).toHaveBeenCalled();
+    });
+
+    it('showAdditionalHelp: should call `fieldsComponent.showAdditionalHelp` with the given property', () => {
+      const property = 'name';
+      spyOn(component.fieldsComponent, 'showAdditionalHelp');
+
+      component.showAdditionalHelp(property);
+
+      expect(component.fieldsComponent.showAdditionalHelp).toHaveBeenCalledWith(property);
     });
 
     it('validateForm: should call sendFormChange with validate, field and value', () => {
@@ -551,5 +560,46 @@ describe('PoDynamicFormComponent:', () => {
       expect(nativeElement.querySelector('form')).toBeFalsy();
       expect(nativeElement.querySelector('po-dynamic-form-fields')).toBeTruthy();
     });
+
+    it('should render lookup fields with correct values when `getObjectByValue` returns an object or an array', fakeAsync(() => {
+      const mockServiceObject = {
+        getObjectByValue: () =>
+          new Observable(observer => {
+            observer.next({ id: 1, name: 'Tony Stark' });
+            observer.complete();
+          }),
+        getFilteredItems: null
+      };
+      const mockServiceArray = {
+        getObjectByValue: () =>
+          new Observable(observer => {
+            observer.next([{ id: 1, name: 'Tony Stark' }]);
+            observer.complete();
+          }),
+        getFilteredItems: null
+      };
+      component.fields = [
+        { property: 'heroeObject', searchService: mockServiceObject, fieldValue: 'id', fieldLabel: 'name' },
+        { property: 'heroeArray', searchService: mockServiceArray, fieldValue: 'id', fieldLabel: 'name' }
+      ];
+      component.value = {
+        heroeObject: 1,
+        heroeArray: [1]
+      };
+
+      tick();
+      fixture.detectChanges();
+
+      (nativeElement.querySelectorAll('.po-lookup-input')[0] as HTMLElement).blur();
+      (nativeElement.querySelectorAll('.po-lookup-input')[1] as HTMLElement).blur();
+
+      tick();
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('form')).toBeTruthy();
+      expect(nativeElement.querySelector('po-dynamic-form-fields')).toBeTruthy();
+      expect(nativeElement.querySelectorAll('.po-lookup-input')[0].value).toBe('Tony Stark');
+      expect(nativeElement.querySelectorAll('.po-lookup-input')[1].value).toBe('Tony Stark');
+    }));
   });
 });

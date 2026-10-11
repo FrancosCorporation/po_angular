@@ -1,21 +1,36 @@
-import { Component, EventEmitter, OnInit, Output, ViewChild } from '@angular/core';
-import { AbstractControl, NgForm } from '@angular/forms';
+import { Component, EventEmitter, HostBinding, Input, Output, ViewChild, inject } from '@angular/core';
+import { NgForm } from '@angular/forms';
 
-import { convertImageToBase64 } from '../../../../utils/util';
+import { PoUtils } from '../../../../utils/util';
 import { PoLanguageService } from './../../../../services/po-language/po-language.service';
 
 import { PoModalAction, PoModalComponent } from '../../../po-modal';
-import { poRichTextLiteralsDefault } from '../po-rich-text-literals';
-import { PoUploadComponent } from '../../po-upload/po-upload.component';
 import { PoUploadFileRestrictions } from '../../po-upload/interfaces/po-upload-file-restriction.interface';
+import { PoUploadComponent } from '../../po-upload/po-upload.component';
+import { poRichTextLiteralsDefault } from '../po-rich-text-literals';
 
 const uploadRestrictions = ['.apng', '.bmp', '.gif', '.ico', '.jpeg', '.jpg', '.png', '.svg'];
 
 @Component({
   selector: 'po-rich-text-image-modal',
-  templateUrl: './po-rich-text-image-modal.component.html'
+  templateUrl: './po-rich-text-image-modal.component.html',
+  standalone: false
 })
 export class PoRichTextImageModalComponent {
+  private readonly languageService = inject(PoLanguageService);
+
+  @ViewChild('modal', { static: true }) modal: PoModalComponent;
+
+  @ViewChild('modalImageForm') modalImageForm: NgForm;
+
+  @ViewChild('upload', { static: true }) upload: PoUploadComponent;
+
+  @HostBinding('attr.p-size')
+  @Input('p-size')
+  size: string;
+
+  @Output('p-command') command = new EventEmitter<string | { command: string; value: string | any }>();
+
   savedCursorPosition;
   selection = document.getSelection();
   uploadModel: Array<any>;
@@ -24,25 +39,11 @@ export class PoRichTextImageModalComponent {
   };
   urlImage: string;
 
-  readonly literals = {
-    ...poRichTextLiteralsDefault[this.languageService.getShortLanguage()]
-  };
+  readonly literals: any;
 
-  modalCancelAction: PoModalAction = {
-    label: this.literals.cancel,
-    action: () => {
-      this.modal.close();
-      this.command.emit();
-      this.retrieveCursorPosition();
-      this.cleanUpFields();
-    }
-  };
+  modalCancelAction: PoModalAction;
 
-  modalConfirmAction: PoModalAction = {
-    label: this.literals.insert,
-    disabled: false,
-    action: () => this.insertElementRef()
-  };
+  modalConfirmAction: PoModalAction;
 
   get isUploadValid(): boolean {
     return !!(this.uploadModel && this.uploadModel.length);
@@ -52,15 +53,27 @@ export class PoRichTextImageModalComponent {
     return !!this.urlImage && this.modalImageForm && this.modalImageForm.valid;
   }
 
-  @ViewChild('modal', { static: true }) modal: PoModalComponent;
+  constructor() {
+    this.literals = {
+      ...poRichTextLiteralsDefault[this.languageService.getShortLanguage()]
+    };
 
-  @ViewChild('modalImageForm') modalImageForm: NgForm;
+    this.modalCancelAction = {
+      label: this.literals.cancel,
+      action: () => {
+        this.modal.close();
+        this.command.emit();
+        this.retrieveCursorPosition();
+        this.cleanUpFields();
+      }
+    };
 
-  @ViewChild('upload', { static: true }) upload: PoUploadComponent;
-
-  @Output('p-command') command = new EventEmitter<string | { command: string; value: string | any }>();
-
-  constructor(private languageService: PoLanguageService) {}
+    this.modalConfirmAction = {
+      label: this.literals.insert,
+      disabled: false,
+      action: () => this.insertElementRef()
+    };
+  }
 
   openModal() {
     this.saveCursorPosition();
@@ -75,7 +88,7 @@ export class PoRichTextImageModalComponent {
   private async convertToBase64() {
     if (this.isUploadValid) {
       const uploadImage = this.uploadModel[0].rawFile;
-      return await convertImageToBase64(uploadImage);
+      return await PoUtils.convertImageToBase64(uploadImage);
     }
   }
 

@@ -1,8 +1,10 @@
-import { Component, ContentChildren, QueryList, OnDestroy } from '@angular/core';
+import { Component, ContentChildren, OnDestroy, QueryList, ViewChildren, inject } from '@angular/core';
 
 import { Subscription } from 'rxjs';
 
+import { PoLanguageService } from '../../services/po-language/po-language.service';
 import { PoAccordionBaseComponent } from './po-accordion-base.component';
+import { PoAccordionItemHeaderComponent } from './po-accordion-item-header/po-accordion-item-header.component';
 import { PoAccordionItemComponent } from './po-accordion-item/po-accordion-item.component';
 import { PoAccordionService } from './services/po-accordion.service';
 
@@ -14,8 +16,6 @@ import { PoAccordionService } from './services/po-accordion.service';
  * <example name="po-accordion-basic" title="PO Accordion Basic" >
  *  <file name="sample-po-accordion-basic/sample-po-accordion-basic.component.html"> </file>
  *  <file name="sample-po-accordion-basic/sample-po-accordion-basic.component.ts"> </file>
- *  <file name="sample-po-accordion-basic/sample-po-accordion-basic.component.e2e-spec.ts"> </file>
- *  <file name="sample-po-accordion-basic/sample-po-accordion-basic.component.po.ts"> </file>
  * </example>
  *
  * <example name="po-accordion-labs" title="PO Accordion Labs" >
@@ -31,16 +31,24 @@ import { PoAccordionService } from './services/po-accordion.service';
 @Component({
   selector: 'po-accordion',
   templateUrl: 'po-accordion.component.html',
-  providers: [PoAccordionService]
+  providers: [PoAccordionService],
+  standalone: false
 })
 export class PoAccordionComponent extends PoAccordionBaseComponent implements OnDestroy {
+  private readonly accordionService = inject(PoAccordionService);
+
+  @ViewChildren(PoAccordionItemHeaderComponent) accordionsHeader: QueryList<PoAccordionItemHeaderComponent>;
+  @ContentChildren(PoAccordionItemComponent) poAccordionItems: QueryList<PoAccordionItemComponent>;
+
+  expandedAllItems = false;
+
   private accordionServiceSubscription: Subscription;
   private expandedActiveAccordionItem: PoAccordionItemComponent;
 
-  @ContentChildren(PoAccordionItemComponent) poAccordionItems: QueryList<PoAccordionItemComponent>;
+  constructor() {
+    const languageService = inject(PoLanguageService);
 
-  constructor(private accordionService: PoAccordionService) {
-    super();
+    super(languageService);
     this.receiveFromChildAccordionSubscription();
   }
 
@@ -48,10 +56,60 @@ export class PoAccordionComponent extends PoAccordionBaseComponent implements On
     this.accordionServiceSubscription.unsubscribe();
   }
 
+  changeVisibleAllItems(event: boolean) {
+    this.expandedAllItems = !event;
+
+    this.poAccordionItems.forEach(item => {
+      if (!item.disabledItem) {
+        item.expanded = this.expandedAllItems;
+        this.toggle(item, false);
+      }
+    });
+
+    if (this.expandedAllItems) {
+      this.expandAllEvent.emit();
+    } else {
+      this.collapseAllEvent.emit();
+    }
+  }
+
+  /**
+   * Método para colapsar todos os itens.
+   * Só pode ser utilizado quando a propriedade `p-show-manager-accordion` estiver como `true`.
+   */
+  collapseAllItems() {
+    if (this.showManagerAccordion) {
+      this.changeVisibleAllItems(true);
+    }
+  }
+
+  /**
+   * Método para expandir todos os itens.
+   * Só pode ser utilizado quando a propriedade `p-show-manager-accordion` estiver como `true`.
+   */
+  expandAllItems() {
+    if (this.showManagerAccordion) {
+      this.changeVisibleAllItems(false);
+    }
+  }
+
   headerToggle(event: boolean, poAccordionItem: PoAccordionItemComponent) {
     poAccordionItem.expanded = event;
 
-    this.toggle(poAccordionItem);
+    this.accordionService.sendToParentAccordionItemClicked(poAccordionItem);
+  }
+
+  private checkVisibleAllItems(event: boolean) {
+    if (this.showManagerAccordion) {
+      const accordionList = this.poAccordionItems.toArray();
+      const accordionsValids = accordionList.filter(item => !item.disabledItem);
+      const allItemsExpanded = accordionsValids.every(item => item.expanded === true);
+      if (allItemsExpanded) {
+        this.expandedAllItems = event;
+      } else {
+        this.expandedAllItems = false;
+      }
+    }
   }
 
   private receiveFromChildAccordionSubscription() {
@@ -60,15 +118,18 @@ export class PoAccordionComponent extends PoAccordionBaseComponent implements On
       .subscribe(poAccordionItem => this.toggle(poAccordionItem));
   }
 
-  private toggle(poAccordionItem: PoAccordionItemComponent) {
+  private toggle(poAccordionItem: PoAccordionItemComponent, checkAllItems = true) {
     const isCurrentAccordionCollapsed = !poAccordionItem.expanded;
+    if (checkAllItems) {
+      this.checkVisibleAllItems(poAccordionItem.expanded);
+    }
 
     if (isCurrentAccordionCollapsed) {
       this.expandedActiveAccordionItem = null;
       return;
     }
 
-    if (this.expandedActiveAccordionItem) {
+    if (!this.showManagerAccordion && !this.allowExpandItems && this.expandedActiveAccordionItem) {
       this.expandedActiveAccordionItem.collapse();
     }
 

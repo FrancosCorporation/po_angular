@@ -1,5 +1,5 @@
-import { ViewContainerRef } from '@angular/core';
-import { poLocales, poLocaleDefault } from '@po-ui/ng-components';
+import { poLocaleDefault, poLocales, PoThemeA11yEnum, PoThemeService } from '@po-ui/ng-components';
+import { PoPageComponentsSize } from '../components/enums/po-page-components-size.enum';
 
 /**
  * Retorna o idioma atual do navegador
@@ -122,6 +122,7 @@ export function convertDateToISOExtended(date: Date, time?: string) {
 
 /**
  * Transforma o ano em uma string no formato yyyy e caso o ano seja menor que 1000 preenche com zeros a esquerda.
+ *
  * @param year Ano
  */
 export function formatYear(year: number) {
@@ -142,12 +143,29 @@ export function formatYear(year: number) {
   }
 }
 
+/**
+ * @deprecated use getDefaultSizeFn
+ *
+ * Retorna o tamanho padrão dos componentes conforme o nível de acessibilidade.
+ */
+export function getDefaultSize(poThemeService: PoThemeService): string {
+  return poThemeService.getA11yDefaultSize() === 'small' ? PoPageComponentsSize.Small : PoPageComponentsSize.Medium;
+}
+
+/**
+ * Retorna o tamanho padrão dos componentes conforme o nível de acessibilidade.
+ */
+export function getDefaultSizeFn(): string {
+  return getA11yDefaultSize() === 'small' ? PoPageComponentsSize.Small : PoPageComponentsSize.Medium;
+}
+
 export function isEquals(value, comparedValue) {
   return JSON.stringify(value) === JSON.stringify(comparedValue);
 }
 
 /**
  * Caso o ano original da data seja entre 0 e 100 atribui esse valor ao ano, pois o `new Date` do javascript transforma o ano para 190X.
+ *
  * @param date Data
  * @param year Ano original
  */
@@ -384,3 +402,152 @@ export function removeKeysProperties(keys: Array<any>, newItemValue: any) {
   keys.forEach(key => delete newItemValue[key]);
   return newItemValue;
 }
+
+/**
+ * Remove objetos duplicados.
+ *
+ * Exemplo:
+ *
+ * ```
+ * item: [{country: 'japao'}, {country: 'brasil'} , {country: 'china'}]
+ * item2: [{country: 'chile'}, {country: 'brasil'}, {country: 'canada'}]
+ * key: 'country'
+ * Resultado:
+ *    item2 = [{country: 'chile'}, {country: 'canada'} ]
+ * ```
+ *
+ * @param item lista comparada.
+ * @param item2 lista para remover items duplicados.
+ * @param key propriedade que será utilizada para realizar a comparação.
+ */
+export function removeDuplicateItems(item, item2, key) {
+  const uniqueValues = new Set(item.map(entry => entry[key]));
+  item2.splice(0, item2.length, ...item2.filter(entry => !uniqueValues.has(entry[key])));
+}
+
+/**
+ * Recebe dois arrays de objetos e remove os itens duplicados utilizando uma propriedade(key) para comparação.
+ *
+ * Exemplo:
+ *
+ * ```
+ * item: [{country: 'japao'}, {country: 'brasil'} , {country: 'china'}]
+ * item2: [{country: 'chile'}, {country: 'brasil'}, {country: 'canada'}]
+ * key: '[country]'
+ * Resultado do retorno:
+ *    [{country: 'chile'}, {country: 'canada'}, {country: 'japao'}, {country: 'china'}]
+ * ```
+ *
+ *
+ * @param item : primeira lista de itens.
+ * @param item2 : segunda lista de itens.
+ * @param key : um array de propriedades que vão ser utilizadas para a comparação.
+ */
+export function removeDuplicateItemsWithArrayKey(item, item2, keys) {
+  const newKey = keys.length ? keys : ['id'];
+
+  const combinedArray = item.concat(item2);
+  return combinedArray.filter(
+    (obj, index) => index === combinedArray.findIndex(innerObj => newKey.every(key => innerObj[key] === obj[key]))
+  );
+}
+
+/**
+ * Recebe um array de objetos para ordenação utilizando chave como comparativo e
+ * se a order é crescente(true) ou descrescente(false)
+ *
+ * Exemplo:
+ *
+ * ```
+ * items: [{country: 'japao'}, {country: 'brasil'} , {country: 'china'}]
+ * key: 'country'
+ * isAscendingOrder: true
+ * Resultado do retorno:
+ *    [{country: 'brasil'}, {country: 'china'} , {country: 'japao'}]
+ * ```
+ *
+ *
+ * @param items : lista de itens.
+ * @param key : propriedade utilizada na comparação.
+ * @param isAscendingOrder : ordenação crescente ou descrescente.
+ */
+export function sortArrayOfObjects(items, key, isAscendingOrder) {
+  return items.sort((a, b) => {
+    const valueA = a[key];
+    const valueB = b[key];
+
+    if (typeof valueA === 'number' && typeof valueB === 'number') {
+      return isAscendingOrder ? valueA - valueB : valueB - valueA;
+    } else {
+      const compareResult = valueA.toString().localeCompare(valueB.toString());
+      return isAscendingOrder ? compareResult : -compareResult;
+    }
+  });
+}
+
+/**
+ * @deprecated use validateSizeFn
+ *
+ * Valida e retorna um tamanho permitido para os componentes, considerando a acessibilidade.
+ */
+export function validateSize(value: string, poThemeService: PoThemeService): string {
+  if (value && Object.values(PoPageComponentsSize).includes(value as PoPageComponentsSize)) {
+    if (value === PoPageComponentsSize.Small && poThemeService.getA11yLevel() !== 'AA') {
+      return PoPageComponentsSize.Medium;
+    }
+    return value;
+  }
+  return getDefaultSize(poThemeService);
+}
+
+/**
+ * Valida e retorna um tamanho permitido para os componentes, considerando a acessibilidade.
+ */
+export function validateSizeFn(value: string): string {
+  if (value && Object.values(PoPageComponentsSize).includes(value as PoPageComponentsSize)) {
+    if (value === PoPageComponentsSize.Small && getA11yLevel() !== 'AA') {
+      return PoPageComponentsSize.Medium;
+    }
+    return value;
+  }
+  return getDefaultSizeFn();
+}
+
+/**
+ * Retorna a preferência global de tamanho dos componentes.
+ *
+ * @returns `'small'` ou `'medium'`.
+ */
+export function getA11yDefaultSize(): string {
+  const defaultSize =
+    document.documentElement.getAttribute('data-default-size') || localStorage.getItem('po-default-size');
+  const a11yLevel = document.documentElement.getAttribute('data-a11y');
+
+  return defaultSize === 'small' && a11yLevel === 'AA' ? 'small' : 'medium';
+}
+
+/**
+ * Retorna o nível de acessibilidade configurado no tema.
+ * Se não estiver configurado, retorna `AAA` como padrão.
+ * @returns {PoThemeA11yEnum} O nível de acessibilidade, que pode ser `AA` ou `AAA`.
+ */
+export function getA11yLevel(): PoThemeA11yEnum {
+  const a11yLevel = document.documentElement.getAttribute('data-a11y');
+
+  return a11yLevel === 'AA' ? PoThemeA11yEnum.AA : PoThemeA11yEnum.AAA;
+}
+
+export const PoUtils = {
+  convertDateToISOExtended,
+  convertToBoolean,
+  convertToInt,
+  getShortBrowserLanguage,
+  isExternalLink,
+  mapArrayByProperties,
+  mapObjectByProperties,
+  openExternalLink,
+  removeDuplicateItemsWithArrayKey,
+  removeKeysProperties,
+  sortArrayOfObjects,
+  valuesFromObject
+};

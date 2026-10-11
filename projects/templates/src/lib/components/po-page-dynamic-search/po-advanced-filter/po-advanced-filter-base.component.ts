@@ -1,17 +1,17 @@
-import { EventEmitter, Input, Output, ViewChild, Directive } from '@angular/core';
+import { Directive, EventEmitter, HostBinding, HostListener, Input, Output, ViewChild } from '@angular/core';
 
 import {
-  InputBoolean,
+  PoComboOption,
   PoDynamicFormField,
   PoLanguageService,
   PoModalAction,
   PoModalComponent,
-  poLocaleDefault,
-  PoComboOption
+  poLocaleDefault
 } from '@po-ui/ng-components';
 
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn } from '../../../utils/util';
+import { PoPageDynamicSearchFilters } from '../interfaces/po-page-dynamic-search-filters.interface';
 import { PoAdvancedFilterLiterals } from './po-advanced-filter-literals.interface';
-import { PoPageDynamicSearchFilters } from '../po-page-dynamic-search-filters.interface';
 
 export const poAdvancedFiltersLiteralsDefault = {
   en: <PoAdvancedFilterLiterals>{
@@ -48,10 +48,13 @@ export const poAdvancedFiltersLiteralsDefault = {
 export class PoAdvancedFilterBaseComponent {
   @ViewChild(PoModalComponent, { static: true }) poModal: PoModalComponent;
 
-  private _filters: Array<PoDynamicFormField> = [];
-  private _literals: PoAdvancedFilterLiterals;
+  /**
+   * Mantém na modal de busca avançada os valores preenchidos do último filtro realizado pelo usuário.
+   */
+  @Input({ alias: 'p-keep-filters', transform: convertToBoolean }) keepFilters: boolean = false;
 
-  protected optionsServiceChosenOptions: Array<PoComboOption> = [];
+  /** Função que será disparada e receberá os valores do formulário ao ser clicado no botão buscar. */
+  @Output('p-search-event') searchEvent = new EventEmitter<any>();
 
   filter = {};
   language: string = poLocaleDefault;
@@ -73,6 +76,38 @@ export class PoAdvancedFilterBaseComponent {
     label: this.literals.cancelLabel
   };
 
+  protected optionsServiceChosenOptions: Array<PoComboOption> = [];
+
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _filters: Array<PoDynamicFormField> = [];
+  private _literals: PoAdvancedFilterLiterals;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
+  }
+
   /**
    * Coleção de objetos que implementam a interface PoPageDynamicSearchFilters, para definição dos campos que serão criados
    * dinamicamente.
@@ -84,13 +119,6 @@ export class PoAdvancedFilterBaseComponent {
   get filters(): Array<PoPageDynamicSearchFilters> {
     return this._filters;
   }
-
-  /**
-   * Mantém na modal de busca avançada os valores preenchidos do último filtro realizado pelo usuário.
-   */
-  @InputBoolean()
-  @Input('p-keep-filters')
-  keepFilters: boolean = false;
 
   /** Objeto com as literais usadas no `po-advanced-filter`. */
   @Input('p-literals') set literals(value: PoAdvancedFilterLiterals) {
@@ -112,11 +140,17 @@ export class PoAdvancedFilterBaseComponent {
     return this._literals || poAdvancedFiltersLiteralsDefault[this.language];
   }
 
-  /** Função que será disparada e receberá os valores do formulário ao ser clicado no botão buscar. */
-  @Output('p-search-event') searchEvent = new EventEmitter<any>();
-
   constructor(languageService: PoLanguageService) {
     this.language = languageService.getShortLanguage();
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
   }
 
   // Retorna os models dos campos preenchidos
@@ -126,14 +160,13 @@ export class PoAdvancedFilterBaseComponent {
     Object.keys(this.filter).forEach(property => {
       if (this.filter[property] === undefined || this.filter[property] === '') {
         delete this.filter[property];
-        return;
       }
     });
 
     if (this.optionsServiceChosenOptions.length) {
-      optionServiceOptions = this.optionsServiceChosenOptions.filter((optionItem: PoComboOption) => {
-        return Object.values(this.filter).includes(optionItem.value);
-      });
+      optionServiceOptions = this.optionsServiceChosenOptions.filter((optionItem: PoComboOption) =>
+        Object.values(this.filter).includes(optionItem.value)
+      );
     }
 
     return { filter: this.filter, optionsService: optionServiceOptions };

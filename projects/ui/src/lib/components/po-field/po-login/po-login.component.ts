@@ -1,5 +1,17 @@
-import { Component, ElementRef, forwardRef } from '@angular/core';
-import { AbstractControl, NG_VALUE_ACCESSOR, NG_VALIDATORS } from '@angular/forms';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  forwardRef,
+  Input,
+  inject,
+  OnChanges,
+  SimpleChanges
+} from '@angular/core';
+import { AbstractControl, NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
+
+import { convertToBoolean, uuid } from '../../../utils/util';
 
 import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 
@@ -7,13 +19,13 @@ import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 const providers = [
   {
     provide: NG_VALUE_ACCESSOR,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoLoginComponent),
     multi: true
   },
   {
     provide: NG_VALIDATORS,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoLoginComponent),
     multi: true
   }
@@ -23,7 +35,7 @@ const providers = [
  * @docsExtends PoInputBaseComponent
  *
  * @description
- * O po-login é um input específico para login. Já possui tipo, estilo e ícone predefinidos.
+ * O `po-login` é um input específico para login. Já possui tipo, estilo e ícone predefinidos.
  *
  * @example
  *
@@ -46,14 +58,39 @@ const providers = [
 @Component({
   selector: 'po-login',
   templateUrl: './po-login.component.html',
-  providers
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  providers,
+  standalone: false
 })
-export class PoLoginComponent extends PoInputGeneric {
+export class PoLoginComponent extends PoInputGeneric implements OnChanges {
+  id = `po-login[${uuid()}]`;
   type = 'text';
+  private _noAutocompleteLogin?: boolean = true;
+
+  @Input('p-no-autocomplete') override set noAutocomplete(value: boolean) {
+    this._noAutocompleteLogin = convertToBoolean(value);
+  }
+
+  override get noAutocomplete() {
+    return this._noAutocompleteLogin;
+  }
+
+  override get autocomplete(): string {
+    return this.noAutocomplete ? 'off' : 'on';
+  }
 
   /* istanbul ignore next */
-  constructor(el: ElementRef) {
-    super(el);
+  constructor() {
+    const el = inject(ElementRef);
+    const cd = inject(ChangeDetectorRef);
+
+    super(el, cd);
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
   }
 
   extraValidation(c: AbstractControl): { [key: string]: any } {

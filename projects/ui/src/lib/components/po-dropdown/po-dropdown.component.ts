@@ -1,6 +1,14 @@
-import { Component, ElementRef, Renderer2, ViewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  Renderer2,
+  ViewChild,
+  inject
+} from '@angular/core';
 
-import { isKeyCodeEnter } from './../../utils/util';
+import { PoUtils } from './../../utils/util';
 
 import { PoDropdownBaseComponent } from './po-dropdown-base.component';
 
@@ -12,8 +20,11 @@ import { PoDropdownBaseComponent } from './po-dropdown-base.component';
  * <example name="po-dropdown-basic" title="PO Dropdown Basic" >
  *  <file name="sample-po-dropdown-basic/sample-po-dropdown-basic.component.html"> </file>
  *  <file name="sample-po-dropdown-basic/sample-po-dropdown-basic.component.ts"> </file>
- *  <file name="sample-po-dropdown-basic/sample-po-dropdown-basic.component.e2e-spec.ts"> </file>
- *  <file name="sample-po-dropdown-basic/sample-po-dropdown-basic.component.po.ts"> </file>
+ * </example>
+ *
+ * <example name="po-dropdown-subitems" title="PO Dropdown Subitems" >
+ *  <file name="sample-po-dropdown-subitems/sample-po-dropdown-subitems.component.html"> </file>
+ *  <file name="sample-po-dropdown-subitems/sample-po-dropdown-subitems.component.ts"> </file>
  * </example>
  *
  * <example name="po-dropdown-labs" title="PO Dropdown Labs" >
@@ -28,21 +39,22 @@ import { PoDropdownBaseComponent } from './po-dropdown-base.component';
  */
 @Component({
   selector: 'po-dropdown',
-  templateUrl: './po-dropdown.component.html'
+  templateUrl: './po-dropdown.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
 export class PoDropdownComponent extends PoDropdownBaseComponent {
-  private clickoutListener: () => void;
-  private resizeListener: () => void;
+  private readonly renderer = inject(Renderer2);
+  private readonly changeDetector = inject(ChangeDetectorRef);
 
   @ViewChild('dropdownRef', { read: ElementRef, static: true }) dropdownRef: ElementRef;
   @ViewChild('popupRef') popupRef: any;
 
-  constructor(private renderer: Renderer2) {
-    super();
-  }
+  private clickoutListener: () => void;
+  private resizeListener: () => void;
 
   onKeyDown(event: any) {
-    if (isKeyCodeEnter(event)) {
+    if (PoUtils.isKeyCodeEnter(event)) {
       this.toggleDropdown();
     }
   }
@@ -52,14 +64,15 @@ export class PoDropdownComponent extends PoDropdownBaseComponent {
   }
 
   private checkClickArea(event: MouseEvent) {
-    return this.dropdownRef && this.dropdownRef.nativeElement.contains(event.target);
+    return this.dropdownRef?.nativeElement.contains(event.target);
   }
 
   private hideDropdown() {
-    this.icon = 'po-icon-arrow-down';
+    this.icon = 'ICON_ARROW_DOWN';
     this.removeListeners();
     this.popupRef.close();
     this.open = false;
+    this.changeDetector.detectChanges();
   }
 
   private initializeListeners() {
@@ -74,11 +87,17 @@ export class PoDropdownComponent extends PoDropdownBaseComponent {
     window.addEventListener('scroll', this.onScroll, true);
   }
 
-  private onScroll = ({ target }): void => {
-    if (this.open && target.className !== 'po-popup-container') {
+  private readonly onScroll = ({ target }): void => {
+    if (this.open && target.className !== 'po-popup-container' && !this.isDropdownClosed()) {
       this.hideDropdown();
     }
   };
+
+  private isDropdownClosed(): boolean {
+    const dropdownRect = this.dropdownRef.nativeElement.getBoundingClientRect();
+
+    return dropdownRect.top >= 0 && dropdownRect.bottom <= window.innerHeight;
+  }
 
   private removeListeners() {
     if (this.clickoutListener) {
@@ -93,10 +112,11 @@ export class PoDropdownComponent extends PoDropdownBaseComponent {
   }
 
   private showDropdown() {
-    this.icon = 'po-icon-arrow-up';
+    this.icon = 'ICON_ARROW_UP';
     this.initializeListeners();
     this.popupRef.open();
     this.open = true;
+    this.changeDetector.detectChanges();
   }
 
   private wasClickedOnDropdown(event: MouseEvent) {

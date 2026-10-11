@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpRequest } from '@angular/common/http';
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { HttpRequest, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { PoComboFilterService } from './po-combo-filter.service';
 import { PoComboOption } from './interfaces/po-combo-option.interface';
@@ -13,8 +13,8 @@ describe('PoComboFilterService ', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [PoComboFilterService]
+      imports: [],
+      providers: [PoComboFilterService, provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
     });
 
     comboService = TestBed.inject(PoComboFilterService);
@@ -157,7 +157,7 @@ describe('PoComboFilterService ', () => {
       comboService.fieldValue = 'cpf';
 
       spyOn(comboService, <any>'addMessage').and.callThrough();
-      spyOn(console, 'error').and.callThrough();
+      spyOn(console, 'error');
       spyOnProperty(comboService, 'url', 'get').and.returnValue('http://mockurl.com');
 
       comboService.getFilteredData(filterParam).subscribe(response => {
@@ -252,6 +252,35 @@ describe('PoComboFilterService ', () => {
       });
 
       httpMock.expectOne((req: HttpRequest<any>) => req.urlWithParams === urlWithParams).flush({});
+    });
+
+    it('prepareData: should be called', () => {
+      const param = { value: 'Peter' };
+      const expectedParams = { filter: 'Peter' };
+
+      const params = comboService['prepareParams'](param);
+      expect(params).toEqual(expectedParams);
+    });
+
+    it('prepareData: should be called when infinite scroll is active', () => {
+      const param = { value: 'Peter', page: 1, pageSize: 10 };
+      const expectedParams = { filter: 'Peter', page: 1, pageSize: 10 };
+
+      const params = comboService['prepareParams'](param);
+      expect(params).toEqual(expectedParams);
+    });
+
+    it('scrollListener: should call scrollListener on scroll', done => {
+      const dummyElement = document.createElement('div');
+      document.body.appendChild(dummyElement);
+
+      comboService.scrollListener(dummyElement).subscribe(response => {
+        expect(response).toBeDefined();
+        dummyElement.remove();
+        done();
+      });
+
+      dummyElement.dispatchEvent(new Event('scroll'));
     });
   });
 });

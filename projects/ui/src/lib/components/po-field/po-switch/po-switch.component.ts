@@ -1,20 +1,100 @@
 import {
-  AfterViewChecked,
   AfterViewInit,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
   ElementRef,
+  EventEmitter,
   forwardRef,
-  ViewChild
+  inject,
+  InjectOptions,
+  Injector,
+  Input,
+  Output,
+  ViewChild,
+  OnDestroy,
+  HostListener,
+  input,
+  OnChanges,
+  SimpleChanges,
+  HostBinding
 } from '@angular/core';
-import { NG_VALUE_ACCESSOR } from '@angular/forms';
+import {
+  AbstractControl,
+  NG_VALUE_ACCESSOR,
+  ValidationErrors,
+  Validator,
+  NgControl,
+  UntypedFormControl,
+  NG_VALIDATORS
+} from '@angular/forms';
 
-import { PoSwitchBaseComponent } from './po-switch-base.component';
+import {
+  convertToBoolean,
+  getDefaultSizeFn,
+  mapInputSizeToLoadingIcon,
+  setHelperSettings,
+  uuid,
+  validateSizeFn
+} from '../../../utils/util';
+
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import { PoFieldModel } from '../po-field.model';
+import { PoKeyCodeEnum } from './../../../enums/po-key-code.enum';
 import { PoSwitchLabelPosition } from './po-switch-label-position.enum';
+import { Subscription } from 'rxjs';
+import { PoHelperComponent, PoHelperOptions } from '../../po-helper';
 
 /**
- * @docsExtends PoSwitchBaseComponent
+ * @docsExtends PoFieldModel
+ *
+ * @description
+ *
+ * O componente `po-switch` é um [checkbox](/documentation/po-checkbox-group) mais intuitivo, pois faz analogia a um interruptor.
+ * Deve ser usado quando deseja-se transmitir a ideia de ligar / desligar uma funcionalidade específica.
+ *
+ * Pode-se ligar ou desligar o switch utilizando a tecla de espaço ou o clique do mouse.
+ *
+ * O texto exibido pode ser alterado de acordo com o valor setado aumentando as possibilidades de uso do componente,
+ * portanto, recomenda-se informar textos que contextualizem seu uso para que facilite a compreensão do usuário.
+ *
+ * > O componente não altera o valor incial informado no *model*, portanto indica-se inicializa-lo caso ter necessidade.
+ *
+ * #### Boas práticas
+ *
+ * - Evite `labels` extensos que quebram o layout do `po-switch`, use `labels` diretos, curtos e intuitivos.
+ *
+ * #### Acessibilidade tratada no componente
+ *
+ * Algumas diretrizes de acessibilidade já são tratadas no componente, internamente, e não podem ser alteradas pelo proprietário do conteúdo. São elas:
+ *
+ * - Quando em foco, o switch é ativado usando a tecla de Espaço. [W3C WAI-ARIA 3.5 Switch - Keyboard Interaction](https://www.w3.org/WAI/ARIA/apg/patterns/switch/#keyboard-interaction-19)
+ * - A área do foco precisar ter uma espessura de pelo menos 2 pixels CSS e o foco não pode ficar escondido por outros elementos da tela. [WCAG 2.4.12: Focus Appearance](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance-enhanced)
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                            | Descrição                                             | Valor Padrão                                    |
+ * |----------------------------------------|-------------------------------------------------------|-------------------------------------------------|
+ * | **Unchecked**                          |                                                       |                                                 |
+ * | `--color-unchecked`                    | Cor principal no estado desmarcado                    | `var(--color-neutral-light-00)`                 |
+ * | `--border-color`                       | Cor da borda                                          | `var(--color-neutral-dark-70)`                  |
+ * | `--track-unchecked`                    | Cor principal da faixa no estado desmarcado           | `var(--color-neutral-light-20)`                 |
+ * | **Checked**                            |                                                       |                                                 |
+ * | `--color-checked`                      | Cor principal no estado selecionado                   | `var(--color-action-default)`                   |
+ * | `--track-checked`                      | Cor da faixa no estado selecionado                    | `var(--color-brand-01-light)`                   |
+ * | **Hover**                              |                                                       |                                                 |
+ * | `--color-unchecked-hover`              | Cor principal no estado hover desmarcado              | `var(--color-action-pressed)`                   |
+ * | `--color-checked-hover`                | Cor principal no estado hover marcado                 | `var(--color-action-pressed)`                   |
+ * | **Focused**                            |                                                       |                                                 |
+ * | `--outline-color-focused`              | Cor do outline do estado de focus                     | `var(--color-action-focus)`                     |
+ * | **Disabled**                           |                                                       |                                                 |
+ * | `--color-unchecked-disabled`           | Cor principal do disabled no estado desmarcado        | `var(--color-neutral-light-20)`                 |
+ * | `--color-checked-disabled`             | Cor principal do disabled no estado marcado           | `var(--color-action-disabled)`                  |
+ *
  *
  * @example
  *
@@ -26,8 +106,6 @@ import { PoSwitchLabelPosition } from './po-switch-label-position.enum';
  * <example name="po-switch-labs" title="PO Switch Labs">
  *   <file name="sample-po-switch-labs/sample-po-switch-labs.component.html"> </file>
  *   <file name="sample-po-switch-labs/sample-po-switch-labs.component.ts"> </file>
- *   <file name="sample-po-switch-labs/sample-po-switch-labs.component.e2e-spec.ts"> </file>
- *   <file name="sample-po-switch-labs/sample-po-switch-labs.component.po.ts"> </file>
  * </example>
  *
  * <example name="po-switch-order" title="PO Switch - Order Summary">
@@ -49,20 +127,295 @@ import { PoSwitchLabelPosition } from './po-switch-label-position.enum';
       provide: NG_VALUE_ACCESSOR,
       useExisting: forwardRef(() => PoSwitchComponent),
       multi: true
+    },
+    {
+      provide: NG_VALIDATORS,
+      useExisting: forwardRef(() => PoSwitchComponent),
+      multi: true
+    },
+    {
+      provide: NgControl,
+      useExisting: forwardRef(() => PoSwitchComponent),
+      multi: false
     }
-  ]
+  ],
+  standalone: false
 })
-export class PoSwitchComponent extends PoSwitchBaseComponent implements AfterViewInit {
-  @ViewChild('switchContainer', { static: true }) switchContainer: ElementRef;
+export class PoSwitchComponent extends PoFieldModel<any> implements Validator, AfterViewInit, OnDestroy, OnChanges {
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly injector = inject<Injector>(Injector);
 
-  constructor(changeDetector: ChangeDetectorRef) {
-    super(changeDetector);
+  @ViewChild('switchContainer', { static: true }) switchContainer: ElementRef;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
+
+  id = `po-switch[${uuid()}]`;
+
+  // Parâmetro interno, não documentar
+  @Input({ alias: 'p-value', transform: convertToBoolean }) value: boolean = false;
+
+  private _labelOff: string = 'false';
+  private _labelOn: string = 'true';
+  private _labelPosition: PoSwitchLabelPosition = PoSwitchLabelPosition.Right;
+  private _loading: boolean = false;
+  private _formatModel: boolean = false;
+  private _size?: string = undefined;
+  private _initialSize?: string = undefined;
+  private statusChangesSubscription: Subscription;
+
+  /**
+   * @optional
+   *
+   * @description
+   * Define se o título do campo será exibido de forma compacta.
+   *
+   * Quando habilitado (`true`), o modo compacto afeta o conjunto composto por:
+   * - `po-label`
+   * - `p-requirement (showRequired)`
+   * - `po-helper`
+   *
+   * Ou seja, todos os elementos relacionados ao título do campo
+   * (rótulo, indicador de obrigatoriedade e componente auxiliar) passam
+   * a seguir o comportamento de layout compacto.
+   *
+   * Também é possível definir esse comportamento de forma global,
+   * uma única vez, na folha de estilo geral da aplicação, por meio
+   * da customização dos tokens CSS:
+   *
+   * - `--field-container-title-justify`
+   * - `--field-container-title-flex`
+   *
+   * Exemplo:
+   *
+   * ```
+   * :root {
+   *   --field-container-title-justify: flex-start;
+   *   --field-container-title-flex: 0 1 auto;
+   * }
+   * ```
+   *
+   * Dessa forma, o layout compacto passa a ser o padrão da aplicação,
+   * sem a necessidade de definir a propriedade individualmente em cada campo.
+   *
+   * @default `false`
+   */
+  compactLabel = input<boolean, unknown>(false, { alias: 'p-compact-label', transform: convertToBoolean });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Indica se o `model` receberá o valor formatado pelas propriedades `p-label-on` e `p-label-off` ou
+   * apenas o valor puro (sem formatação).
+   *
+   * > Por padrão será atribuído `false`.
+   * @default `false`
+   */
+  @Input({ alias: 'p-format-model', transform: convertToBoolean })
+  set formatModel(format: boolean) {
+    this._formatModel = format || false;
   }
 
-  ngAfterViewInit() {
-    if (this.autoFocus) {
-      this.focus();
+  get formatModel() {
+    return this._formatModel;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Indica se o status do `model` será escondido visualmente ao lado do switch.
+   *
+   * > Por padrão será atribuído `false`.
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-label-status', transform: convertToBoolean }) hideLabelStatus: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Posição de exibição do rótulo que fica ao lado do switch.
+   *
+   * > Por padrão exibe à direita.
+   */
+  @Input('p-label-position') set labelPosition(position: PoSwitchLabelPosition) {
+    this._labelPosition = position in PoSwitchLabelPosition ? parseInt(<any>position, 10) : PoSwitchLabelPosition.Right;
+  }
+
+  get labelPosition() {
+    return this._labelPosition;
+  }
+
+  /**
+   * Texto exibido quando o valor do componente for `false`.
+   *
+   * @default `false`
+   */
+  @Input('p-label-off') set labelOff(label: string) {
+    this._labelOff = label || 'false';
+  }
+
+  get labelOff() {
+    return this._labelOff;
+  }
+
+  /**
+   * Texto exibido quando o valor do componente for `true`.
+   *
+   * @default `true`
+   */
+  @Input('p-label-on') set labelOn(label: string) {
+    this._labelOn = label || 'true';
+  }
+
+  get labelOn() {
+    return this._labelOn;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   * Exibe um ícone de carregamento substituindo o switch para sinalizar que uma operação está em andamento.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-loading', transform: convertToBoolean })
+  set loading(value: boolean) {
+    this._loading = value;
+    this.changeDetector.markForCheck();
+  }
+
+  get loading(): boolean {
+    return this._loading;
+  }
+
+  get isDisabled(): boolean {
+    return this.disabled || this.loading;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Exibe a mensagem de erro configurada quando o campo estiver desligado(off/false).
+   *
+   *
+   */
+  @Input('p-field-error-message') fieldErrorMessage: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Limita a exibição da mensagem de erro a duas linhas e exibe um tooltip com o texto completo.
+   *
+   * > Caso essa propriedade seja definida como `true`, a mensagem de erro será limitada a duas linhas
+   * e um tooltip será exibido ao passar o mouse sobre a mensagem para mostrar o conteúdo completo.
+   *
+   * @default `false`
+   */
+  @Input('p-error-limit') errorLimit: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define qual valor será considerado como inválido para exibir a mensagem da propriedade `p-field-error-message`.
+   *
+   * > Caso essa propriedade seja definida como `true`, a mensagem de erro será exibida quando o campo estiver ligado(on/true).
+   *
+   * @default `false`
+   */
+  @Input('p-invalid-value') invalidValue: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho do componente:
+   * - `small`: altura de 16px (disponível apenas para acessibilidade AA).
+   * - `medium`: altura de 24px.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   *
+   */
+  set size(value: string) {
+    this._initialSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-size')
+  @HostBinding('attr.p-size')
+  get size(): string {
+    return this._size ?? getDefaultSizeFn(PoFieldSize);
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define as opções do componente de ajuda (po-helper) que será exibido ao lado do label quando a propriedade `p-label` for definida, ou, ao lado do componente na ausência da propriedade `p-label`.
+   * > Para mais informações acesse: https://po-ui.io/documentation/po-helper.
+   *
+   * > Ao configurar esta propriedade, o antigo ícone de ajuda adicional (`p-additional-help-tooltip` e `p-additional-help`) será ignorado.
+   */
+  poHelperComponent = input<PoHelperOptions | string>(undefined, { alias: 'p-helper' });
+
+  /**
+   * @optional
+   *
+   * @description
+   * Habilita a quebra automática do texto da propriedade `p-label`. Quando `p-label-text-wrap` for verdadeiro, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
+   *
+   * @default `false`
+   */
+  labelTextWrap = input<boolean>(false, { alias: 'p-label-text-wrap' });
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado sempre que o valor do model é alterado, seja por interação do usuário
+   * ou por atualização programática (ex: `setValue`, `patchValue`, carregamento assíncrono).
+   *
+   * Diferentemente do `p-change`, que é disparado apenas por interação do usuário,
+   * o `p-change-model` cobre todos os cenários de alteração de valor.
+   *
+   * Não emite quando o novo valor é idêntico ao anterior (deduplicação automática).
+   */
+  @Output('p-change-model') changeModel: EventEmitter<any> = new EventEmitter();
+
+  modelLastUpdate: any;
+
+  private readonly el: ElementRef = inject(ElementRef);
+  private readonly injectOptions: InjectOptions = {
+    self: true
+  };
+  private control!: AbstractControl;
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
     }
+  }
+
+  ngOnDestroy() {
+    this.statusChangesSubscription?.unsubscribe();
   }
 
   /**
@@ -88,6 +441,14 @@ export class PoSwitchComponent extends PoSwitchBaseComponent implements AfterVie
     }
   }
 
+  onBlur() {
+    this.onTouched?.();
+
+    if (this.getAdditionalHelpTooltip() && this.displayAdditionalHelp) {
+      super.showAdditionalHelp(this.helperEl, this.poHelperComponent());
+    }
+  }
+
   getLabelPosition() {
     switch (this.labelPosition) {
       case PoSwitchLabelPosition.Left:
@@ -99,21 +460,153 @@ export class PoSwitchComponent extends PoSwitchBaseComponent implements AfterVie
     }
   }
 
-  getSwitchPosition() {
-    switch (this.labelPosition) {
-      case PoSwitchLabelPosition.Left:
-        return 'right';
-      case PoSwitchLabelPosition.Right:
-        return 'left';
-      default:
-        return 'left';
-    }
-  }
-
   onKeyDown(event) {
-    if (event.which === 32 || event.keyCode === 32) {
+    const isFieldFocused = document.activeElement === this.switchContainer?.nativeElement;
+
+    if (event.which === PoKeyCodeEnum.space || event.keyCode === PoKeyCodeEnum.space) {
       event.preventDefault();
       this.eventClick();
     }
+
+    if (isFieldFocused) {
+      this.keydown.emit(event);
+    }
+  }
+
+  changeValue(value: any) {
+    if (this.value !== value) {
+      this.value = value;
+      if (this.formatModel) {
+        if (this.value) {
+          this.updateModel(this.labelOn);
+        } else {
+          this.updateModel(this.labelOff);
+        }
+      } else {
+        this.updateModel(value);
+      }
+      this.emitChange(this.value);
+      this.controlChangeModelEmitter(this.value);
+    }
+  }
+
+  eventClick() {
+    if (!this.disabled) {
+      this.changeValue(!this.value);
+    }
+  }
+
+  onWriteValue(value: any): void {
+    if (value !== this.value) {
+      if (this.formatModel && !!value) {
+        this.value = value.toLowerCase() === this.labelOn.toLowerCase();
+      } else {
+        this.value = !!value;
+      }
+      this.changeDetector.markForCheck();
+    }
+    if (value != null) {
+      this.controlChangeModelEmitter(this.value);
+    }
+  }
+
+  validate(control: AbstractControl): ValidationErrors | null {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    const value = this.value as unknown as boolean;
+    const isRequired = { required: true };
+    if (this.invalidValue && this.fieldErrorMessage) {
+      return value === this.invalidValue ? isRequired : null;
+    } else if (this.fieldErrorMessage) {
+      return value === true ? null : isRequired;
+    }
+    return null;
+  }
+
+  ngAfterViewInit(): void {
+    this.setControl();
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private setControl(): void {
+    const ngControl: NgControl = this.injector.get(NgControl, null, this.injectOptions);
+
+    if (ngControl) {
+      this.control = ngControl.control as UntypedFormControl;
+
+      if (this.control) {
+        this.statusChangesSubscription = this.control.statusChanges.subscribe(() => {
+          this.changeDetector.markForCheck();
+        });
+      }
+    }
+  }
+
+  //Transforma o tamanho do input para o tamanho do ícone de loading correspondente
+  public mapSizeToIcon(size: string): string {
+    return mapInputSizeToLoadingIcon(size);
+  }
+
+  getErrorPattern(): string {
+    return this.fieldErrorMessage && this.hasInvalidClass() ? this.fieldErrorMessage : '';
+  }
+
+  hasInvalidClass(): boolean {
+    return (
+      this.el.nativeElement.classList.contains('ng-invalid') && this.el.nativeElement.classList.contains('ng-dirty')
+    );
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.isAdditionalHelpEventTriggered() ? this.additionalHelp : undefined
+    );
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * //Exemplo com p-label e p-helper
+   * <po-switch
+   *  #switch
+   *  ...
+   *  p-label="Label do switch"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, switch)"
+   * ></po-switch>
+   * ```
+   * ```typescript
+   * onKeyDown(event: KeyboardEvent, inp: PoSwitchComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  override showAdditionalHelp(): boolean {
+    return super.showAdditionalHelp(this.helperEl, this.poHelperComponent());
+  }
+
+  controlChangeModelEmitter(value: any) {
+    if (this.modelLastUpdate !== value) {
+      this.changeModel.emit(value);
+      this.modelLastUpdate = value;
+    }
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialSize, PoFieldSize);
+    this._size = size;
   }
 }

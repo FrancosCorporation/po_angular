@@ -1,24 +1,26 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-import { addZero, convertDateToISOExtended } from '../../utils/util';
+import { addZero, PoUtils } from '../../utils/util';
 import { PoDynamicFormField } from '@po-ui/ng-components';
 
 import { PoJobScheduler } from './interfaces/po-job-scheduler.interface';
 import { PoJobSchedulerInternal } from './interfaces/po-job-scheduler-internal.interface';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoPageJobSchedulerService {
-  private endpoint = '/';
+  private readonly http = inject(HttpClient);
 
   readonly headers: HttpHeaders = new HttpHeaders({
     'X-PO-SCREEN-LOCK': 'true'
   });
 
-  constructor(private http: HttpClient) {}
+  private endpoint = '/';
 
   configServiceApi(config: { endpoint?: string } = {}) {
     this.endpoint = config.endpoint;
@@ -26,9 +28,9 @@ export class PoPageJobSchedulerService {
 
   // Cria um recurso
   createResource(resource): Observable<any> {
-    const jobScheduler = this.convertToJobScheduler(resource);
+    const newResouce = this.convertToJobScheduler(resource);
 
-    return this.http.post(`${this.endpoint}`, jobScheduler, { headers: this.headers });
+    return this.http.post(`${this.endpoint}`, newResouce, { headers: this.headers });
   }
 
   getHeadProcesses() {
@@ -63,12 +65,11 @@ export class PoPageJobSchedulerService {
 
   // Atualiza um recurso
   updateResource(id, resource): Observable<any> {
-    const jobScheduler = this.convertToJobScheduler(resource);
-
-    return this.http.put(`${this.endpoint}/${id}`, jobScheduler, { headers: this.headers });
+    const newResouce = this.convertToJobScheduler(resource);
+    return this.http.put(`${this.endpoint}/${id}`, newResouce, { headers: this.headers });
   }
 
-  private convertToJobScheduler(jobSchedulerInternal): PoJobScheduler {
+  convertToJobScheduler(jobSchedulerInternal): PoJobScheduler {
     const jobScheduler = { ...jobSchedulerInternal };
 
     if (jobSchedulerInternal.periodicity) {
@@ -86,6 +87,28 @@ export class PoPageJobSchedulerService {
       );
     }
 
+    if (jobSchedulerInternal.frequency && jobSchedulerInternal.frequency.type) {
+      jobScheduler.rangeExecutions = {
+        frequency: { ...jobSchedulerInternal.frequency }
+      };
+
+      if (jobSchedulerInternal.rangeLimitHour) {
+        const splitRangeLimitHour = jobSchedulerInternal.rangeLimitHour.split(':');
+
+        jobScheduler.rangeExecutions.rangeLimit = {
+          hour: parseInt(splitRangeLimitHour[0], 10),
+          minute: parseInt(splitRangeLimitHour[1], 10)
+        };
+      }
+
+      if (jobSchedulerInternal.rangeLimitDay) {
+        jobScheduler.rangeExecutions.rangeLimit = {
+          ...jobScheduler.rangeExecutions.rangeLimit,
+          day: jobSchedulerInternal.rangeLimitDay
+        };
+      }
+    }
+
     if (!Object.keys(this.returnValidExecutionParameter(jobScheduler.executionParameter)).length) {
       delete jobScheduler.executionParameter;
     }
@@ -95,7 +118,7 @@ export class PoPageJobSchedulerService {
     return jobScheduler;
   }
 
-  private convertToJobSchedulerInternal(jobScheduler = <any>{}): PoJobSchedulerInternal {
+  convertToJobSchedulerInternal(jobScheduler = <any>{}): PoJobSchedulerInternal {
     const jobSchedulerInternal = { ...jobScheduler };
 
     if (jobScheduler.firstExecution) {
@@ -103,6 +126,23 @@ export class PoPageJobSchedulerService {
     }
 
     Object.assign(jobSchedulerInternal, this.convertToPeriodicityInternal(jobScheduler));
+
+    if (jobScheduler.rangeExecutions) {
+      jobSchedulerInternal.rangeLimitHour = `${
+        jobScheduler.rangeExecutions.rangeLimit.hour < 10
+          ? '0' + jobScheduler.rangeExecutions.rangeLimit.hour
+          : jobScheduler.rangeExecutions.rangeLimit.hour
+      }:${
+        jobScheduler.rangeExecutions.rangeLimit.minute < 10
+          ? '0' + jobScheduler.rangeExecutions.rangeLimit.minute
+          : jobScheduler.rangeExecutions.rangeLimit.minute
+      }`;
+      jobSchedulerInternal.rangeLimitDay = jobScheduler.rangeExecutions.rangeLimit.day;
+      jobSchedulerInternal.frequency = {
+        type: jobScheduler.rangeExecutions.frequency.type,
+        value: jobScheduler.rangeExecutions.frequency.value
+      };
+    }
 
     this.removeInvalidKeys(jobSchedulerInternal, ['weekly', 'monthly', 'daily']);
 
@@ -178,27 +218,51 @@ export class PoPageJobSchedulerService {
       'day',
       'daysOfWeek',
       'dayOfMonth',
-      'firstExecutionHour'
+      'firstExecutionHour',
+      'frequency',
+      'rangeLimitHour',
+      'rangeLimitDay'
     ];
 
     Object.keys(value).forEach(key => {
       if (invalidKeys.includes(key)) {
+        delete value[key];
+      } else if (key === 'rangeExecutions' && value['periodicity'] === 'single') {
         delete value[key];
       }
     });
   }
 
   private replaceHourFirstExecution(date: string, time: string): string {
-    const firstExecutionDate = new Date(date);
+    try {
+      if (!date) {
+        return date;
+      }
 
-    const timeSplited = time.split(':');
+      const dateSplited = date.split('-');
+      const timeSplited = time.split(':');
 
-    const hours = parseInt(timeSplited[0], 10);
-    const minutes = parseInt(timeSplited[1], 10);
+      if (dateSplited.length < 2 || timeSplited.length < 1) {
+        return date;
+      }
 
-    firstExecutionDate.setHours(hours, minutes);
+      const year = parseInt(dateSplited[0]);
+      const monthIndex = parseInt(dateSplited[1]) - 1;
+      const day = parseInt(dateSplited[2]);
 
-    return convertDateToISOExtended(firstExecutionDate);
+      const hours = parseInt(timeSplited[0], 10);
+      const minutes = parseInt(timeSplited[1], 10);
+
+      const firstExecutionDate = new Date(year, monthIndex, day, hours, minutes);
+
+      if (!(firstExecutionDate instanceof Date && !isNaN(firstExecutionDate.getTime()))) {
+        return date;
+      }
+
+      return PoUtils.convertDateToISOExtended(firstExecutionDate);
+    } catch {
+      return date;
+    }
   }
 
   private returnValidExecutionParameter(parameter: object) {

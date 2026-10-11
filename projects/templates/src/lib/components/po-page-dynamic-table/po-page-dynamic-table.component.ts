@@ -1,11 +1,10 @@
+import { Component, HostBinding, HostListener, Input, OnDestroy, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, Route, Router } from '@angular/router';
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
 
-import { Subscription, Observable, EMPTY, concat, of } from 'rxjs';
-import { tap, switchMap, map } from 'rxjs/operators';
+import { EMPTY, Observable, Subscription, of } from 'rxjs';
+import { map, switchMap, tap } from 'rxjs/operators';
 
 import {
-  InputBoolean,
   PoDialogConfirmOptions,
   PoDialogService,
   PoLanguageService,
@@ -14,30 +13,35 @@ import {
   PoTableAction,
   PoTableColumnSort,
   PoTableColumnSortType,
+  PoTableColumnSpacing,
   poLocaleDefault
 } from '@po-ui/ng-components';
 
-import * as util from '../../utils/util';
+import { convertToBoolean, getDefaultSizeFn, validateSizeFn, PoUtils as util } from '../../utils/util';
 
 import { PoPageDynamicDetailComponent } from '../po-page-dynamic-detail/po-page-dynamic-detail.component';
 
-import { poPageDynamicTableLiteralsDefault } from './po-page-dynamic-table-literals';
-import { PoPageDynamicListBaseComponent } from './po-page-dynamic-list-base.component';
 import { PoPageDynamicService } from '../../services/po-page-dynamic/po-page-dynamic.service';
-import { PoPageDynamicTableActions } from './interfaces/po-page-dynamic-table-actions.interface';
-import { PoPageDynamicTableOptions } from './interfaces/po-page-dynamic-table-options.interface';
+import { isExternalLink, removeDuplicateItemsWithArrayKey, PoUtils } from '../../utils/util';
+import { PoPageDynamicSearchLiterals } from '../po-page-dynamic-search/interfaces/po-page-dynamic-search-literals.interface';
 import { PoPageCustomizationService } from './../../services/po-page-customization/po-page-customization.service';
 import { PoPageDynamicOptionsSchema } from './../../services/po-page-customization/po-page-dynamic-options.interface';
-import { PoPageDynamicTableMetaData } from './interfaces/po-page-dynamic-table-metadata.interface';
-import { PoPageDynamicTableActionsService } from './po-page-dynamic-table-actions.service';
-import { PoPageDynamicTableBeforeEdit } from './interfaces/po-page-dynamic-table-before-edit.interface';
-import { PoPageDynamicTableBeforeNew } from './interfaces/po-page-dynamic-table-before-new.interface';
-import { PoPageDynamicTableBeforeRemove } from './interfaces/po-page-dynamic-table-before-remove.interface';
+import { PoPageDynamicTableActions } from './interfaces/po-page-dynamic-table-actions.interface';
 import { PoPageDynamicTableBeforeDetail } from './interfaces/po-page-dynamic-table-before-detail.interface';
 import { PoPageDynamicTableBeforeDuplicate } from './interfaces/po-page-dynamic-table-before-duplicate.interface';
+import { PoPageDynamicTableBeforeEdit } from './interfaces/po-page-dynamic-table-before-edit.interface';
+import { PoPageDynamicTableBeforeNew } from './interfaces/po-page-dynamic-table-before-new.interface';
 import { PoPageDynamicTableBeforeRemoveAll } from './interfaces/po-page-dynamic-table-before-remove-all.interface';
+import { PoPageDynamicTableBeforeRemove } from './interfaces/po-page-dynamic-table-before-remove.interface';
 import { PoPageDynamicTableCustomAction } from './interfaces/po-page-dynamic-table-custom-action.interface';
 import { PoPageDynamicTableCustomTableAction } from './interfaces/po-page-dynamic-table-custom-table-action.interface';
+import { PoPageDynamicTableMetaData } from './interfaces/po-page-dynamic-table-metadata.interface';
+import { PoPageDynamicTableOptions } from './interfaces/po-page-dynamic-table-options.interface';
+import { PoPageDynamicListBaseComponent } from './po-page-dynamic-list-base.component';
+import { PoPageDynamicTableActionsService } from './po-page-dynamic-table-actions.service';
+import { poPageDynamicTableLiteralsDefault } from './po-page-dynamic-table-literals';
+
+const PAGE_SIZE_DEFAULT = 10;
 
 type UrlOrPoCustomizationFunction = string | (() => PoPageDynamicTableOptions);
 
@@ -51,16 +55,14 @@ type UrlOrPoCustomizationFunction = string | (() => PoPageDynamicTableOptions);
  *
  * ### Utilização via rota
  *
- * Ao utilizar as rotas para carregar o template, o `page-dynamic-table` disponibiliza propriedades para
- * poder especificar o endpoint dos dados e dos metadados. Exemplo de utilização:
+ * Ao utilizar as rotas para inicializar o template, o `page-dynamic-table` disponibiliza propriedades que devem ser fornecidas no arquivo de configuração de rotas da aplicação, para
+ * poder especificar o endpoint dos dados e dos metadados que serão carregados na inicialização.
  *
- * O componente primeiro irá carregar o metadado da rota definida na propriedade serviceMetadataApi
- * e depois irá buscar da rota definida na propriedade serviceLoadApi
+ * Exemplo de utilização:
  *
- * > Caso o servidor retornar um erro ao recuperar o metadados, será repassado o metadados salvo em cache,
- * se o cache não existe será disparado uma notificação.
- *
+ * Arquivo de configuração de rotas da aplicação: `app-routing.module.ts`
  * ```
+ * const routes: Routes = [
  * {
  *   path: 'people',
  *   component: PoPageDynamicTableComponent,
@@ -69,12 +71,22 @@ type UrlOrPoCustomizationFunction = string | (() => PoPageDynamicTableOptions);
  *     serviceMetadataApi: 'http://localhost:3000/v1/metadata', // endpoint dos metadados utilizando o método HTTP Get
  *     serviceLoadApi: 'http://localhost:3000/load-metadata' // endpoint de customizações dos metadados utilizando o método HTTP Post
  *   }
- * }
+ *  },
+ *  {
+ *   path: 'home',
+ *   component: HomeExampleComponent
+ *  }
+ * ];
  *
  * ```
+ * O componente primeiro irá carregar o metadado da rota definida na propriedade serviceMetadataApi
+ * e depois irá buscar da rota definida na propriedade serviceLoadApi.
  *
  * A requisição dos metadados é feita na inicialização do template para buscar os metadados da página passando o
  * tipo do metadado esperado e a versão cacheada pelo browser.
+ *
+ * > Caso o servidor retornar um erro ao recuperar os metadados, serão repassados os metadados salvos em cache,
+ * se o cache não existir será disparada uma notificação.
  *
  * O formato esperado na resposta da requisição está especificado na interface
  * [PoPageDynamicTableMetadata](/documentation/po-page-dynamic-table#po-page-dynamic-table-metadata). Por exemplo:
@@ -102,6 +114,20 @@ type UrlOrPoCustomizationFunction = string | (() => PoPageDynamicTableOptions);
  * GET {end-point}/metadata?type=list&version={version}
  * ```
  *
+ * #### Tokens customizáveis
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade         | Descrição                                   | Valor Padrão                          |
+ * |---------------------|---------------------------------------------|---------------------------------------|
+ * | **Header**          |                                             |                                       |
+ * | `--padding`         | Espaçamento do header                       | `var(--spacing-xs) var(--spacing-md)` |
+ * | `--gap`             | Espaçamento entre os breadcrumbs e o título | `var(--spacing-md)`                   |
+ * | `--gap-actions`     | Espaçamento entre as ações                  | `var(--spacing-xs)`                   |
+ * | `--font-family`     | Família tipográfica do título               | `var(--font-family-theme)`            |
+ * | **Content**         |                                             |                                       |
+ * | `--padding-content` | Espaçamento do conteúdo                     | `var(--spacing-xs) var(--spacing-sm)` |
+ *
  * @example
  *
  * <example name="po-page-dynamic-table-basic" title="PO Page Dynamic Table Basic">
@@ -109,59 +135,41 @@ type UrlOrPoCustomizationFunction = string | (() => PoPageDynamicTableOptions);
  *  <file name="sample-po-page-dynamic-table-basic/sample-po-page-dynamic-table-basic.component.ts"> </file>
  * </example>
  *
+ * <example name="po-page-dynamic-table-people" title="PO Page Dynamic Table - People">
+ *  <file name="sample-po-page-dynamic-table-people/sample-po-page-dynamic-table-people.component.html"> </file>
+ *  <file name="sample-po-page-dynamic-table-people/sample-po-page-dynamic-table-people.component.ts"> </file>
+ * </example>
+ *
  * <example name="po-page-dynamic-table-users" title="PO Page Dynamic Table - Users">
  *  <file name="sample-po-page-dynamic-table-users/sample-po-page-dynamic-table-users.component.html"> </file>
  *  <file name="sample-po-page-dynamic-table-users/sample-po-page-dynamic-table-users.component.ts"> </file>
  *  <file name="sample-po-page-dynamic-table-users/sample-po-page-dynamic-table-users.service.ts"> </file>
  * </example>
+ *
+ * <example name="po-page-dynamic-table-hotels" title="PO Page Dynamic Table - Hotels">
+ *  <file name="sample-po-page-dynamic-table-hotels/sample-po-page-dynamic-table-hotels.component.html"> </file>
+ *  <file name="sample-po-page-dynamic-table-hotels/sample-po-page-dynamic-table-hotels.component.ts"> </file>
+ * </example>
+ *
+ * <example name="po-page-dynamic-table-drag-and-drop" title="PO Page Dynamic Table - Drag and Drop">
+ *  <file name="sample-po-page-dynamic-table-drag-and-drop/sample-po-page-dynamic-table-drag-and-drop.component.html"> </file>
+ *  <file name="sample-po-page-dynamic-table-drag-and-drop/sample-po-page-dynamic-table-drag-and-drop.component.ts"> </file>
+ * </example>
  */
 @Component({
   selector: 'po-page-dynamic-table',
   templateUrl: './po-page-dynamic-table.component.html',
-  providers: [PoPageDynamicService]
+  providers: [PoPageDynamicService],
+  standalone: false
 })
 export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent implements OnInit, OnDestroy {
-  private _actions: PoPageDynamicTableActions = {};
-  private _pageCustomActions: Array<PoPageDynamicTableCustomAction> = [];
-  private _quickSearchWidth: number;
-  private _tableCustomActions: Array<PoPageDynamicTableCustomTableAction> = [];
-
-  hasNext = false;
-  items = [];
-  literals;
-  pageActions: Array<PoPageAction> = [];
-  tableActions: Array<PoTableAction> = [];
-
-  private page: number = 1;
-  private params = {};
-  private sortedColumn: PoTableColumnSort;
-  private subscriptions = new Subscription();
-  private hasCustomActionWithSelectable = false;
-
-  private _customPageListActions: Array<PoPageAction> = [];
-  private _customTableActions: Array<PoTableAction> = [];
-  private _defaultPageActions: Array<PoPageAction> = [];
-  private _defaultTableActions: Array<PoTableAction> = [];
-
-  private set defaultPageActions(value: Array<PoPageAction>) {
-    this._defaultPageActions = value;
-    this.updatePageActions();
-  }
-
-  private set defaultTableActions(value: Array<PoTableAction>) {
-    this._defaultTableActions = value;
-    this.updateTableActions();
-  }
-
-  private set customPageListActions(value: Array<PoPageAction>) {
-    this._customPageListActions = value;
-    this.updatePageActions();
-  }
-
-  private set customTableActions(value: Array<PoTableAction>) {
-    this._customTableActions = value;
-    this.updateTableActions();
-  }
+  private readonly router = inject(Router);
+  private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly poDialogService = inject(PoDialogService);
+  private readonly poNotification = inject(PoNotificationService);
+  private readonly poPageDynamicService = inject(PoPageDynamicService);
+  private readonly poPageCustomizationService = inject(PoPageCustomizationService);
+  private readonly poPageDynamicTableActionsService = inject(PoPageDynamicTableActionsService);
 
   /**
    * Função ou serviço que será executado na inicialização do componente.
@@ -199,6 +207,146 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
    *
    * @description
    *
+   * Mantém na modal de `Busca Avançada` os valores preenchidos do último filtro realizado pelo usuário.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-keep-filters', transform: convertToBoolean }) keepFilters: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define que a coluna de ações ficará no lado direito da tabela.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-actions-right', transform: convertToBoolean }) actionRight: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite a utilização da pesquisa rápida junto com a pesquisa avançada.
+   *
+   * Desta forma, ao ter uma pesquisa avançada estabelecida e ser
+   * preenchido a pesquisa rápida, o filtro será concatenado adicionando a pesquisa
+   * rápida também na lista de `disclaimers` a aplicando uma nova busca com a concatenação.
+   *
+   * Por exemplo, com os seguintes filtros aplicados:
+   *   - filtro avançado: `{ name: 'Mike', age: '12' }`
+   *   - filtro rápido: `{ search: 'paper' }`
+   *
+   * A requisição dos dados na API ficará com os parâmetros:
+   * ```
+   * page=1&pageSize=10&name=Mike&age=12&search=paper
+   * ```
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-concat-filters', transform: convertToBoolean }) concatFilters: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Permite que o gerenciador de colunas, responsável pela definição de quais colunas serão exibidas, seja escondido.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-columns-manager', transform: convertToBoolean })
+  hideColumnsManager: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Oculta o botão para remover todos os *disclaimers* do grupo.
+   *
+   * > Por padrão, o mesmo é exibido à partir de dois ou mais *disclaimers* com a opção `hideClose` habilitada.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-hide-remove-all-disclaimer', transform: convertToBoolean })
+  hideRemoveAllDisclaimer: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Se verdadeiro, ativa a funcionalidade de scroll infinito para a tabela e o botão "Carregar Mais" deixará de ser exibido. Ao chegar no fim da tabela
+   * executará a função `p-show-more`.
+   *
+   * **Regras de utilização:**
+   *  - O scroll infinito só funciona para tabelas que utilizam a propriedade `p-height` e que possuem o scroll já na carga inicial dos dados.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-infinite-scroll', transform: convertToBoolean }) infiniteScroll: boolean = false;
+
+  hasNext = false;
+  items = [];
+  literals;
+  pageActions: Array<PoPageAction> = [];
+  tableActions: Array<PoTableAction> = [];
+
+  private _actions: PoPageDynamicTableActions = {};
+  private _pageCustomActions: Array<PoPageDynamicTableCustomAction> = [];
+  private _height: number;
+  private _oldQuickSearchParam: string;
+  private _quickSearchParam: string = 'search';
+  private _quickSearchValue: string;
+  private _quickSearchWidth: number;
+  private _tableCustomActions: Array<PoPageDynamicTableCustomTableAction> = [];
+
+  private page: number = 1;
+  private currentPage: number = 1;
+  private itemSelectedAction;
+  private params = {};
+  private sortedColumn: PoTableColumnSort;
+  private readonly subscriptions = new Subscription();
+  private hasCustomActionWithSelectable = false;
+
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _customPageListActions: Array<PoPageAction> = [];
+  private _customTableActions: Array<PoTableAction> = [];
+  private _defaultPageActions: Array<PoPageAction> = [];
+  private _defaultTableActions: Array<PoTableAction> = [];
+  private _hideCloseDisclaimers: Array<string> = [];
+  private _draggable = false;
+  private _virtualScroll?: boolean = true;
+
+  private set defaultPageActions(value: Array<PoPageAction>) {
+    this._defaultPageActions = value;
+    this.updatePageActions();
+  }
+
+  private set defaultTableActions(value: Array<PoTableAction>) {
+    this._defaultTableActions = value;
+    this.updateTableActions();
+  }
+
+  private set customPageListActions(value: Array<PoPageAction>) {
+    this._customPageListActions = value;
+    this.updatePageActions();
+  }
+
+  private set customTableActions(value: Array<PoTableAction>) {
+    this._customTableActions = value;
+    this.updateTableActions();
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
    * Ações da página e da tabela.
    * > Caso utilizar a ação padrão de excluir, a mesma será exibida por último na tabela.
    */
@@ -212,6 +360,31 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
 
   get actions(): PoPageDynamicTableActions {
     return this._actions;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn();
   }
 
   /**
@@ -275,45 +448,6 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
    *
    * @description
    *
-   * Mantém na modal de `Busca Avançada` os valores preenchidos do último filtro realizado pelo usuário.
-   *
-   * @default `false`
-   */
-  @InputBoolean()
-  @Input('p-keep-filters')
-  keepFilters: boolean = false;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Permite a utilização da pesquisa rápida junto com a pesquisa avançada.
-   *
-   * Desta forma, ao ter uma pesquisa avançada estabelecida e ser
-   * preenchido a pesquisa rápida, o filtro será concatenado adicionando a pesquisa
-   * rápida também na lista de `disclaimers` a aplicando uma nova busca com a concatenação.
-   *
-   * Por exemplo, com os seguintes filtros aplicados:
-   *   - filtro avançado: `{ name: 'Mike', age: '12' }`
-   *   - filtro rápido: `{ search: 'paper' }`
-   *
-   * A requisição dos dados na API ficará com os parâmetros:
-   * ```
-   * page=1&pageSize=10&name=Mike&age=12&search=paper
-   * ```
-   *
-   * @default `false`
-   */
-  @InputBoolean()
-  @Input('p-concat-filters')
-  concatFilters: boolean = false;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
    * Largura do campo de busca, utilizando o *Grid System*,
    * e limitado ao máximo de 6 colunas. O tamanho mínimo é controlado
    * conforme resolução de tela para manter a consistência do layout.
@@ -326,16 +460,210 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     return this._quickSearchWidth;
   }
 
-  constructor(
-    private router: Router,
-    private activatedRoute: ActivatedRoute,
-    private poDialogService: PoDialogService,
-    private poNotification: PoNotificationService,
-    private poPageDynamicService: PoPageDynamicService,
-    private poPageCustomizationService: PoPageCustomizationService,
-    private poPageDynamicTableActionsService: PoPageDynamicTableActionsService,
-    languageService: PoLanguageService
-  ) {
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define a altura da tabela em *pixels* e fixa o cabeçalho.
+   */
+  @Input('p-height') set height(value: number) {
+    this._height = util.convertToInt(value);
+  }
+
+  get height(): number {
+    return this._height;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Lista de filtros que terão a opção de fechar ocultada
+   * em seu respectivo disclaimer. Utilizar o atributo `property` do campo.
+   *
+   * Exemplo de utilização:
+   * ```
+   * ['city','name'];
+   * ```
+   */
+  @Input('p-hide-close-disclaimers') set hideCloseDisclaimers(value: Array<string>) {
+    this._hideCloseDisclaimers = Array.isArray(value) ? value : [];
+  }
+
+  get hideCloseDisclaimers(): Array<string> {
+    return this._hideCloseDisclaimers;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Identificador do parâmetro enviado ao serviço ao realizar uma busca rápida.
+   *
+   * @default 'search'
+   */
+  @Input('p-quick-search-param') set quickSearchParam(value: string) {
+    this._quickSearchParam = value ?? 'search';
+  }
+
+  get quickSearchParam(): string {
+    return this._quickSearchParam;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Valor padrão na busca rápida ao inicializar o componente
+   *
+   */
+  @Input('p-quick-search-value') set quickSearchValue(value: string) {
+    this._quickSearchValue = value;
+  }
+
+  get quickSearchValue(): string {
+    return this._quickSearchValue;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Objeto com as literais usadas no `po-page-dynamic-table`.
+   *
+   * Existem duas maneiras de customizar o componente, passando um objeto com todas as literais disponíveis:
+   *
+   * ```
+   *  const customLiterals: PoPageDynamicSearchLiterals = {
+   *    disclaimerBooleanFalse: 'Inativo',
+   *    disclaimerBooleanTrue: 'Ativo',
+   *    disclaimerGroupTitle: 'Filtros aplicados:',
+   *    filterTitle: 'Filtro avançado',
+   *    filterCancelLabel: 'Fechar',
+   *    filterConfirmLabel: 'Aplicar',
+   *    quickSearchLabel: 'Valor pesquisado:',
+   *    searchPlaceholder: 'Pesquise aqui'
+   *  };
+   * ```
+   *
+   * Ou passando apenas as literais que deseja customizar:
+   *
+   * ```
+   *  const customLiterals: PoPageDynamicSearchLiterals = {
+   *    filterTitle: 'Filtro avançado'
+   *  };
+   * ```
+   *
+   * E para carregar as literais customizadas, basta apenas passar o objeto para o componente.
+   *
+   * ```
+   * <po-page-dynamic-table
+   *   [p-literals]="customLiterals">
+   * </po-page-dynamic-table>
+   * ```
+   *
+   * > O valor padrão será traduzido de acordo com o idioma configurado no [`PoI18nService`](/documentation/po-i18n) ou *browser*.
+   */
+  @Input('p-literals') searchLiterals: PoPageDynamicSearchLiterals;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o espaçamento interno das células, impactando diretamente na altura das linhas do table. Os valores
+   * permitidos são definidos pelo enum **PoTableColumnSpacing**.
+   *
+   * > Em nível de acessibilidade **AA**, caso o valor de `p-spacing` não seja definido, o valor padrão será
+   * > `extraSmall` nos seguintes cenários:
+   * > - Quando o valor de `p-components-size` for `small`;
+   * > - Quando o valor padrão dos componentes for configurado como `small` no
+   * > [serviço de tema](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
+   */
+  @Input('p-spacing') spacing: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita ou desabilita a quebra automática de texto. Quando ativada, o texto que excede
+   * o espaço disponível é transferido para a próxima linha em pontos apropriados para uma
+   * leitura clara.
+   *
+   * > Incompatível com `virtual-scroll`, que requer altura fixa nas linhas.
+   *
+   * @default `false`
+   */
+  @Input({ alias: 'p-text-wrap', transform: convertToBoolean }) textWrap?: boolean = false;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita o modo drag and drop para as colunas da tabela.
+   *
+   */
+  @Input('p-draggable') set draggable(value: boolean) {
+    this._draggable = value;
+  }
+
+  get draggable(): boolean {
+    return this._draggable;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Habilita o `virtual-scroll` na tabela para melhorar a performance com grandes volumes de dados.
+   * Requer altura (`p-height`) para funcionar corretamente.
+   *
+   * > Incompatível com `p-text-wrap` e `master-detail`, pois o `virtual-scroll` exige altura fixa nas linhas.
+   *
+   * @default `true`
+   */
+  @Input('p-virtual-scroll') set virtualScroll(value: boolean) {
+    this._virtualScroll = convertToBoolean(value && this.height > 0);
+  }
+
+  get virtualScroll() {
+    return this._virtualScroll;
+  }
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Controla a visibilidade dos filtros fixos na página.
+   *
+   * - Quando `true` (default), todos os filtros, incluindo os fixos, são exibidos, permitindo que o usuário visualize os filtros aplicados.
+   * - Quando `false`, os filtros fixos são ocultados, não sendo exibidos na interface, mas ainda sendo aplicados como filtros nas requisições.
+   *
+   * Esta propriedade trabalha em conjunto com a propriedade `fixed` dos filtros individuais. Filtros marcados como `fixed: true` não serão exibidos na interface do filtro avançado quando `visibleFixedFilters` for `false`, mas continuarão a ser aplicados de forma transparente ao usuário. Dessa forma, permite-se maior flexibilidade no controle de quais filtros devem ser visíveis ao usuário ou devem ser aplicados permanentemente sem interferência.
+   *
+   * **Exemplo de uso:**
+   * ```html
+   * <!-- Para ocultar os filtros fixos -->
+   * <po-page-dynamic-table [p-visible-fixed-filters]="false"></po-page-dynamic-table>
+   * ```
+   */
+  @Input('p-visible-fixed-filters') visibleFixedFilters: boolean = true;
+
+  /* eslint-disable max-params */
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     super();
 
     const language = languageService.getShortLanguage();
@@ -345,6 +673,7 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
       ...poPageDynamicTableLiteralsDefault[language]
     };
   }
+  /* eslint-enable max-params */
 
   ngOnInit(): void {
     this.loadDataFromAPI();
@@ -374,18 +703,48 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
   }
 
   onQuickSearch(termTypedInQuickSearch) {
-    const quickSearchParam = termTypedInQuickSearch ? { search: termTypedInQuickSearch } : {};
+    const quickSearchParam = termTypedInQuickSearch ? { [this.quickSearchParam]: termTypedInQuickSearch } : {};
     this.params = this.concatFilters ? { ...this.params, ...quickSearchParam } : { ...quickSearchParam };
 
+    if (this._oldQuickSearchParam in this.params && this._oldQuickSearchParam !== this.quickSearchParam) {
+      delete this.params[this._oldQuickSearchParam];
+    }
+
+    this._oldQuickSearchParam = this.quickSearchParam;
     this.subscriptions.add(this.loadData(termTypedInQuickSearch ? { page: 1, ...this.params } : undefined).subscribe());
   }
 
   onSort(sortedColumn: PoTableColumnSort) {
+    if (this.height) {
+      const order = sortedColumn.type === 'ascending' ? true : false;
+      util.sortArrayOfObjects(this.items, sortedColumn.column.property, order);
+    }
     this.sortedColumn = sortedColumn;
+  }
+
+  onChangeVisibleColumns(value) {
+    this.changeVisibleColumns.emit(value);
+  }
+
+  onChangeFixedColumns(value: Array<string>) {
+    this.changeFixedColumns.emit(value);
+  }
+
+  onColumnRestoreManager(value: Array<string>) {
+    this.columnRestoreManager.emit(value);
+  }
+
+  onSortBy(sortedColumn: PoTableColumnSort) {
+    this.sortBy.emit(sortedColumn);
   }
 
   showMore() {
     this.subscriptions.add(this.loadData({ page: ++this.page, ...this.params }).subscribe());
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
   }
 
   get enableSelectionTable() {
@@ -396,6 +755,58 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     return !!this.actions.removeAll;
   }
 
+  /**
+   * Função que realiza a atualização dos dados da tabela.
+   *
+   * Para utilizá-la é necessário capturar a instância do `page dynamic table`, como por exemplo:
+   *
+   * ``` html
+   * <po-page-dynamic-table #dynamicTable [p-service-api]="serviceApi"></po-page-dynamic-table>
+   * ```
+   *
+   * ``` javascript
+   * import { PoPageDynamicTableComponent, PoDynamicFormField } from '@po-ui/ng-components';
+   *
+   * ...
+   *
+   * @ViewChild('dynamicTable', { static: true }) dynamicTable: PoPageDynamicTableComponent;
+   *
+   * pageCustomActions: Array<PoPageDynamicTableCustomAction> = [
+   * {
+   *   label: 'Update',
+   *   action: this.updateTable.bind(this),
+   *   icon: 'an-arrows-clockwise'
+   * }]
+   *
+   * updateTable() {
+   *   this.dynamicTable.updateDataTable();
+   * }
+   * ```
+   *
+   *
+   * @param {{page: number, key: value }} filter Propriedade para envio de um filtro customizado.
+   * Exemplo de envio:
+   *
+   *```
+   * this.dynamicTable.updateDataTable({page: 3, search: 'Brasil'});
+   * ```
+   * Caso não seja passado um filtro customizado para o método `updateDataTable` a tabela será atualizada conforme a página do ultimo item modificado.
+   */
+  public updateDataTable(filter?: any) {
+    const indexItemSelected = this.items.findIndex(item => item === this.itemSelectedAction);
+    const pageNumber = Math.floor(indexItemSelected / PAGE_SIZE_DEFAULT);
+    this.currentPage = pageNumber < 0 ? this.currentPage : pageNumber + 1;
+    if (this.currentPage === undefined) {
+      this.currentPage = 1;
+    }
+
+    if (filter) {
+      this.subscriptions.add(this.loadData(filter).subscribe());
+    } else {
+      this.subscriptions.add(this.loadData({ page: this.currentPage, ...this.params }).subscribe());
+    }
+  }
+
   private confirmRemove(
     actionRemove: PoPageDynamicTableActions['remove'],
     actionBeforeRemove: PoPageDynamicTableActions['beforeRemove'],
@@ -404,6 +815,7 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     const confirmOptions: PoDialogConfirmOptions = {
       title: this.literals.confirmRemoveTitle,
       message: this.literals.confirmRemoveMessage,
+      componentsSize: this.componentsSize,
       confirm: this.remove.bind(this, item, actionRemove, actionBeforeRemove)
     };
 
@@ -450,12 +862,18 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     }
 
     const orderParam = this.getOrderParam(this.sortedColumn);
-    const defaultParams: any = { page: 1, pageSize: 10 };
+    const defaultParams: any = { page: 1, pageSize: PAGE_SIZE_DEFAULT };
     const fullParams: any = { ...defaultParams, ...params, ...orderParam };
 
     return this.poPageDynamicService.getResources(fullParams).pipe(
       tap(response => {
-        this.items = fullParams.page === 1 ? response.items : [...this.items, ...response.items];
+        let newArray;
+        if (fullParams.page === 1) {
+          newArray = removeDuplicateItemsWithArrayKey(response.items, response.items, this.keys);
+        } else {
+          newArray = removeDuplicateItemsWithArrayKey(this.items, response.items, this.keys);
+        }
+        this.items = newArray ? [...newArray] : this.items;
         this.page = fullParams.page;
         this.hasNext = response.hasNext;
       })
@@ -478,6 +896,8 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
           this.tableCustomActions = response.tableCustomActions || this.tableCustomActions;
           this.keepFilters = response.keepFilters || this.keepFilters;
           this.concatFilters = response.concatFilters || this.concatFilters;
+          this.hideRemoveAllDisclaimer = response.hideRemoveAllDisclaimer || this.hideRemoveAllDisclaimer;
+          this.hideCloseDisclaimers = response.hideCloseDisclaimers || this.hideCloseDisclaimers;
           this.quickSearchWidth = response.quickSearchWidth || this.quickSearchWidth;
         }),
         switchMap(() => this.loadOptionsOnInitialize(onLoad))
@@ -492,11 +912,16 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     route: { path: string; component?; url?: string; params?: any },
     forceStopAutoRouter: boolean = false
   ) {
+    if (isExternalLink(route.path)) {
+      return PoUtils.openExternalLink(route.path);
+    }
+
     this.router.navigate([route.url || route.path], { queryParams: route.params }).catch(() => {
       if (forceStopAutoRouter || !this.autoRouter) {
         return;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       this.router.config.unshift(<Route>{
         path: route.path,
         component: route.component,
@@ -505,6 +930,11 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
 
       this.navigateTo(route, true);
     });
+  }
+
+  private createConcatenatedUrl(concatKeys: boolean, url: string, selectedItem): string {
+    const keys = this.keys.map(key => encodeURIComponent(selectedItem[key])).join();
+    return concatKeys ? `${url}/${keys}` : url;
   }
 
   private openDetail(action: PoPageDynamicTableActions['detail'], item) {
@@ -680,11 +1110,7 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     this.subscriptions.add(
       this.poPageDynamicTableActionsService
         .beforeRemove(actionBeforeRemove, uniqueKey, item)
-        .pipe(
-          switchMap(beforeRemove => {
-            return this.deleteAction(item, actionRemove, beforeRemove);
-          })
-        )
+        .pipe(switchMap(beforeRemove => this.deleteAction(item, actionRemove, beforeRemove)))
         .subscribe()
     );
   }
@@ -698,10 +1124,11 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     const allow = allowAction ?? true;
 
     if (allow) {
-      const uniqueKey = this.formatUniqueKey(item);
+      let uniqueKey = this.formatUniqueKey(item);
       const resourceToRemoveKey = this.returnResourcesKeys([item]);
 
       if (typeof actionRemove === 'boolean' || newUrl) {
+        uniqueKey = newUrl ? undefined : uniqueKey;
         return this.poPageDynamicService
           .deleteResource(uniqueKey, newUrl)
           .pipe(map(() => this.removeFromUI(resourceToRemoveKey, this.literals.removeSuccessNotification)));
@@ -733,11 +1160,7 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     this.subscriptions.add(
       this.poPageDynamicTableActionsService
         .beforeRemoveAll(actionBeforeRemoveAll, originalResourcesKeys)
-        .pipe(
-          switchMap(beforeRemove => {
-            return this.deleteAllAction(actionRemoveAll, beforeRemove, originalResourcesKeys);
-          })
-        )
+        .pipe(switchMap(beforeRemove => this.deleteAllAction(actionRemoveAll, beforeRemove, originalResourcesKeys)))
         .subscribe()
     );
   }
@@ -804,22 +1227,26 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
   private transformCustomActionsToPageListAction(
     customActions: Array<PoPageDynamicTableCustomAction>
   ): Array<PoPageAction> {
-    return customActions.map(customAction => {
-      return {
-        label: customAction.label,
-        action: this.callPageCustomAction.bind(this, customAction),
-        disabled: this.isDisablePageCustomAction.bind(this, customAction)
-      };
-    });
+    /* istanbul ignore next */
+    return customActions.map(customAction => ({
+      label: customAction.label,
+      action: this.callPageCustomAction.bind(this, customAction),
+      disabled: this.isDisablePageCustomAction.bind(this, customAction),
+      ...(customAction.icon && { icon: customAction.icon }),
+      visible: customAction.visible
+    }));
   }
 
-  private transformTableCustomActionsToTableActions(tableCustomActions: Array<PoPageDynamicTableCustomTableAction>) {
-    return tableCustomActions.map(tableCustomAction => {
-      return {
-        label: tableCustomAction.label,
-        action: this.callTableCustomAction.bind(this, tableCustomAction)
-      };
-    });
+  private transformTableCustomActionsToTableActions(
+    tableCustomActions: Array<PoPageDynamicTableCustomTableAction>
+  ): Array<PoTableAction> {
+    return tableCustomActions.map(tableCustomAction => ({
+      label: tableCustomAction.label,
+      icon: tableCustomAction.icon,
+      action: this.callTableCustomAction.bind(this, tableCustomAction),
+      disabled: tableCustomAction.disabled,
+      visible: tableCustomAction.visible
+    }));
   }
 
   private isDisablePageCustomAction(customAction): boolean {
@@ -841,6 +1268,7 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
   }
 
   private callTableCustomAction(customAction: PoPageDynamicTableCustomTableAction, selectedItem) {
+    this.itemSelectedAction = selectedItem;
     if (customAction.action) {
       const sendCustomActionSubscription = this.poPageDynamicTableActionsService
         .customAction(customAction.action, selectedItem)
@@ -852,7 +1280,13 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
 
       this.subscriptions.add(sendCustomActionSubscription);
     } else if (customAction.url) {
-      this.navigateTo({ path: customAction.url });
+      if (isExternalLink(customAction.url)) {
+        PoUtils.openExternalLink(this.createConcatenatedUrl(customAction.concatKeys, customAction.url, selectedItem));
+      } else {
+        this.navigateTo({
+          path: this.createConcatenatedUrl(customAction.concatKeys, customAction.url, selectedItem)
+        });
+      }
     }
   }
 
@@ -864,7 +1298,8 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
         {
           label: this.literals.pageActionRemoveAll,
           action: this.confirmRemoveAll.bind(this, action.removeAll, action.beforeRemoveAll),
-          disabled: this.disableRemoveAll.bind(this)
+          disabled: this.disableRemoveAll.bind(this),
+          type: 'danger'
         }
       ];
     }
@@ -913,7 +1348,13 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     this.poPageDynamicService.configServiceApi({ endpoint: this.serviceApi, metadata: serviceMetadataApi });
 
     const metadata$ = this.getMetadata(serviceApiFromRoute, onLoad);
-    const data$ = this.loadData();
+    let data$;
+    if (this.quickSearchValue) {
+      const paramsQuickSearchValue = { [this.quickSearchParam]: this.quickSearchValue };
+      data$ = this.loadData(paramsQuickSearchValue);
+    } else {
+      data$ = this.loadData();
+    }
 
     this.subscriptions.add(
       metadata$
@@ -967,6 +1408,8 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
       title: this.title,
       keepFilters: this.keepFilters,
       concatFilters: this.concatFilters,
+      hideRemoveAllDisclaimer: this.hideRemoveAllDisclaimer,
+      hideCloseDisclaimers: this.hideCloseDisclaimers,
       pageCustomActions: this.pageCustomActions,
       tableCustomActions: this.tableCustomActions,
       quickSearchWidth: this.quickSearchWidth
@@ -997,6 +1440,12 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
         },
         {
           nameProp: 'concatFilters'
+        },
+        {
+          nameProp: 'hideRemoveAllDisclaimer'
+        },
+        {
+          nameProp: 'hideCloseDisclaimers'
         },
         {
           nameProp: 'pageCustomActions',
@@ -1050,5 +1499,9 @@ export class PoPageDynamicTableComponent extends PoPageDynamicListBaseComponent 
     }
 
     this.tableActions = newTableActions;
+  }
+
+  private applySizeBasedOnA11y(): void {
+    this._componentsSize = validateSizeFn(this._initialComponentsSize);
   }
 }

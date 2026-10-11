@@ -1,27 +1,50 @@
-<po-field-container [p-help]="help" [p-label]="label" [p-optional]="!required && optional">
-  <div class="po-row po-pt-1 po-pb-1" #inp>
-    <div *ngFor="let option of options" class="po-radio-group-item po-md-{{ mdColumns }} po-lg-{{ columns }}">
-      <input
-        #inputRadio
-        class="po-radio-group-input"
-        type="radio"
-        [attr.name]="name"
-        [checked]="value === option.value"
-        [class.po-radio-group-input-checked]="value === option.value"
-        [disabled]="option.disabled === true || disabled"
-        [required]="required"
-        [value]="option.value"
-        (keyup)="onKeyUp($event, option.value)"
-      />
-      <label
-        class="po-radio-group-label"
-        [class.po-clickable]="!inputRadio.disabled"
-        [for]="name"
-        (click)="eventClick(option.value, option.disabled === true || disabled)"
-      >
-        {{ option.label }}
-      </label>
+@let poHelper = setHelper(label, additionalHelpTooltip);
+<po-field-container
+  [p-disabled]="disabled"
+  [p-label]="label"
+  [p-optional]="optional"
+  [p-required]="required"
+  [p-show-required]="showRequired"
+  [p-helper]="label ? poHelper.helperSettings : undefined"
+  [p-show-helper]="label ? displayAdditionalHelp : undefined"
+  [p-size]="size"
+  [p-text-wrap]="labelTextWrap()"
+  [p-compact-label]="compactLabel()"
+>
+  <div #inp role="radiogroup" [attr.aria-label]="label" [attr.data-options]="options.length">
+    <div class="po-field-container-content">
+      <div class="po-radio-group" [attr.name]="name">
+        @for (option of options; track option) {
+          <div class="po-radio-group-item po-md-{{ mdColumns }} po-lg-{{ columns }}">
+            <po-radio
+              #inputRadio
+              [name]="name"
+              [p-checked]="value === option.value"
+              [p-disabled]="option.disabled === true || disabled"
+              [p-label]="option.label"
+              [p-label-text-wrap]="true"
+              [p-required]="required"
+              [p-size]="size"
+              [p-value]="option.value"
+              (p-blur)="onBlur(inputRadio)"
+              (keydown)="onKeyDown($event, inputRadio)"
+              (keyup)="onKeyUp($event, option.value)"
+              (click)="eventClick(option.value, option.disabled === true || disabled)"
+            >
+            </po-radio>
+          </div>
+        }
+      </div>
     </div>
   </div>
-  <po-field-container-bottom></po-field-container-bottom>
+  <po-field-container-bottom
+    [p-append-in-body]="appendBox"
+    [p-help]="help"
+    [p-disabled]="disabled"
+    [p-error-limit]="errorLimit"
+    [p-error-pattern]="getErrorPattern()"
+    [p-size]="size"
+    [p-helper]="!label ? poHelper.helperSettings : undefined"
+    [p-show-helper]="!label ? displayAdditionalHelp : undefined"
+  ></po-field-container-bottom>
 </po-field-container>

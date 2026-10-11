@@ -1,21 +1,29 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 
-import { PoBreadcrumb, PoBreadcrumbItem } from '@po-ui/ng-components';
-import { PoCheckboxGroupOption, PoSelectOption } from '@po-ui/ng-components';
+import {
+  PoBreadcrumb,
+  PoBreadcrumbItem,
+  PoCheckboxGroupOption,
+  PoRadioGroupOption,
+  PoSelectOption
+} from '@po-ui/ng-components';
 
-import { PoNotificationService } from '@po-ui/ng-components';
-import { PoPageAction, PoPageFilter, PoPageListLiterals } from '@po-ui/ng-components';
+import { PoNotificationService, PoPageAction, PoPageFilter, PoPageListLiterals } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-page-list-labs',
-  templateUrl: './sample-po-page-list-labs.component.html'
+  templateUrl: './sample-po-page-list-labs.component.html',
+  standalone: false
 })
 export class SamplePoPageListLabsComponent implements OnInit {
+  private poNotification = inject(PoNotificationService);
+
   action: PoPageAction;
   actions: Array<PoPageAction>;
   breadcrumb: PoBreadcrumb;
   breadcrumbItem: PoBreadcrumbItem;
   breadcrumbParams: any;
+  componentsSize: string;
   customLiterals: PoPageListLiterals;
   disclaimerGroupHideRemoveAll: boolean;
   disclaimerGroupTitle: string;
@@ -26,6 +34,7 @@ export class SamplePoPageListLabsComponent implements OnInit {
   filterModel: string;
   literals: string;
   title: string;
+  subtitle: string;
 
   public disclaimerGroup;
 
@@ -36,23 +45,27 @@ export class SamplePoPageListLabsComponent implements OnInit {
     { label: 'Visible', value: 'visible' }
   ];
 
+  public readonly componentsSizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
+  ];
+
   public readonly filter: PoPageFilter = {
     action: this.showAction.bind(this),
     advancedAction: this.showAdvanceAction.bind(this)
   };
 
   public readonly iconOptions: Array<PoSelectOption> = [
-    { value: 'po-icon-news', label: 'po-icon-news' },
-    { value: 'po-icon-search', label: 'po-icon-search' },
-    { value: 'po-icon-world', label: 'po-icon-world' }
+    { value: 'an an-newspaper', label: 'an an-newspaper' },
+    { value: 'an an-magnifying-glass', label: 'an an-magnifying-glass' },
+    { value: 'an an-globe', label: 'an an-globe' },
+    { value: 'fa fa-podcast', label: 'fa fa-podcast' }
   ];
 
   public readonly typeOptions: Array<PoSelectOption> = [
     { label: 'Danger', value: 'danger' },
     { label: 'Default', value: 'default' }
   ];
-
-  constructor(private poNotification: PoNotificationService) {}
 
   ngOnInit() {
     this.restore();
@@ -123,6 +136,7 @@ export class SamplePoPageListLabsComponent implements OnInit {
     this.breadcrumb = { items: [] };
     this.breadcrumbItem = { label: undefined, link: undefined };
     this.breadcrumbParams = {};
+    this.componentsSize = 'medium';
     this.customLiterals = undefined;
     this.disclaimerGroup = {
       title: this.disclaimerGroupTitle,
@@ -136,6 +150,7 @@ export class SamplePoPageListLabsComponent implements OnInit {
     this.filter.width = undefined;
     this.literals = '';
     this.title = 'PO Page List';
+    this.subtitle = '';
 
     this.restoreDisclaimerModel();
     this.restoreActionForm();

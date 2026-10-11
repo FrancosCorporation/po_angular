@@ -1,6 +1,8 @@
 import {
   AfterContentInit,
+  ChangeDetectorRef,
   Component,
+  ElementRef,
   OnChanges,
   OnDestroy,
   OnInit,
@@ -8,19 +10,17 @@ import {
   SimpleChange,
   ViewChild,
   ViewContainerRef,
-  ChangeDetectorRef,
-  ElementRef
+  inject
 } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { callFunction, isExternalLink, isTypeof, openExternalLink } from '../../../utils/util';
+import { callFunction, isExternalLink, isTypeof, PoUtils } from '../../../utils/util';
 import { PoLanguageService } from './../../../services/po-language/po-language.service';
 
-import { PoPageAction } from '../po-page-action.interface';
-import { PoDisclaimer } from '../../po-disclaimer/po-disclaimer.interface';
 import { PoDisclaimerGroupRemoveAction } from '../../po-disclaimer-group/po-disclaimer-group-remove-action.interface';
+import { PoDisclaimer } from '../../po-disclaimer/po-disclaimer.interface';
+import { PoPageAction } from '../interfaces/po-page-action.interface';
 
-import { PoPageContentComponent } from '../po-page-content/po-page-content.component';
 import { PoPageListBaseComponent } from './po-page-list-base.component';
 
 /**
@@ -46,33 +46,33 @@ import { PoPageListBaseComponent } from './po-page-list-base.component';
  */
 @Component({
   selector: 'po-page-list',
-  templateUrl: './po-page-list.component.html'
+  templateUrl: './po-page-list.component.html',
+  standalone: false
 })
 export class PoPageListComponent
   extends PoPageListBaseComponent
-  implements AfterContentInit, OnChanges, OnDestroy, OnInit {
+  implements AfterContentInit, OnChanges, OnDestroy, OnInit
+{
+  renderer = inject(Renderer2);
+  private readonly router = inject(Router);
+  private readonly changeDetector = inject(ChangeDetectorRef);
+
+  @ViewChild('filterInput') filterInput: ElementRef;
+
   advancedSearch: string;
   dropdownActions: Array<PoPageAction>;
   isMobile: boolean;
   limitPrimaryActions: number = 3;
 
-  @ViewChild('filterInput') filterInput: ElementRef;
-
-  private isRecalculate = true;
-  private maxWidthMobile: number = 480;
-
   callFunction = callFunction;
 
-  @ViewChild(PoPageContentComponent, { static: true }) poPageContent: PoPageContentComponent;
+  private isRecalculate = true;
+  private readonly maxWidthMobile: number = 480;
 
   /* istanbul ignore next */
-  constructor(
-    viewRef: ViewContainerRef,
-    languageService: PoLanguageService,
-    public renderer: Renderer2,
-    private router: Router,
-    private changeDetector: ChangeDetectorRef
-  ) {
+  constructor() {
+    const languageService = inject(PoLanguageService);
+
     super(languageService);
     this.initializeListeners();
   }
@@ -100,7 +100,7 @@ export class PoPageListComponent
 
   callAction(item: PoPageAction): void {
     if (item.url) {
-      isExternalLink(item.url) ? openExternalLink(item.url) : this.router.navigate([item.url]);
+      isExternalLink(item.url) ? PoUtils.openExternalLink(item.url) : this.router.navigate([item.url]);
     } else if (item.action) {
       item.action();
     }
@@ -130,27 +130,6 @@ export class PoPageListComponent
     return `po-sm-${smWidth} po-md-${mdWidth} po-lg-${width} po-xl-${width}`;
   }
 
-  private onResize(event: Event): void {
-    const width = (event.target as Window).innerWidth;
-
-    if (width < this.maxWidthMobile) {
-      this.isMobile = true;
-      this.limitPrimaryActions = 2;
-      this.setDropdownActions();
-    } else {
-      this.isMobile = false;
-      this.limitPrimaryActions = 3;
-      this.setDropdownActions();
-    }
-  }
-
-  private setIsMobile(): void {
-    if (window.innerWidth < this.maxWidthMobile) {
-      this.isMobile = true;
-      this.limitPrimaryActions = 2;
-    }
-  }
-
   setDropdownActions(): void {
     if (this.visibleActions.length > this.limitPrimaryActions) {
       this.dropdownActions = this.visibleActions.slice(this.limitPrimaryActions - 1);
@@ -160,6 +139,12 @@ export class PoPageListComponent
   callActionFilter(field: string) {
     this.filter[field](this.filterInput.nativeElement.value);
     this.changeDetector.detectChanges();
+  }
+  /**
+   * Limpa o campo de pesquisa.
+   */
+  clearInputSearch() {
+    this.filterInput.nativeElement.value = null;
   }
 
   onkeypress(key) {
@@ -222,5 +207,26 @@ export class PoPageListComponent
 
   private removeListeners() {
     this.resizeListener();
+  }
+
+  private onResize(event: Event): void {
+    const width = (event.target as Window).innerWidth;
+
+    if (width < this.maxWidthMobile) {
+      this.isMobile = true;
+      this.limitPrimaryActions = 2;
+      this.setDropdownActions();
+    } else {
+      this.isMobile = false;
+      this.limitPrimaryActions = 3;
+      this.setDropdownActions();
+    }
+  }
+
+  private setIsMobile(): void {
+    if (window.innerWidth < this.maxWidthMobile) {
+      this.isMobile = true;
+      this.limitPrimaryActions = 2;
+    }
   }
 }

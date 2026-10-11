@@ -1,10 +1,10 @@
-import { Component, ChangeDetectorRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { NgForm } from '@angular/forms';
 
 import { Observable, Subject, Subscription } from 'rxjs';
 
+import { PoDynamicFormField } from './interfaces/po-dynamic-form-field.interface';
 import { PoDynamicFormBaseComponent } from './po-dynamic-form-base.component';
-import { PoDynamicFormField } from './po-dynamic-form-field.interface';
 import { PoDynamicFormLoad } from './po-dynamic-form-load/po-dynamic-form-load.interface';
 import { PoDynamicFormLoadService } from './po-dynamic-form-load/po-dynamic-form-load.service';
 import { PoDynamicFormValidation } from './po-dynamic-form-validation/po-dynamic-form-validation.interface';
@@ -25,20 +25,35 @@ import { PoDynamicFormValidationService } from './po-dynamic-form-validation/po-
  *  <file name="sample-po-dynamic-form-register/sample-po-dynamic-form-register.component.ts"> </file>
  *  <file name="sample-po-dynamic-form-register/sample-po-dynamic-form-register.service.ts"> </file>
  * </example>
+ *
+ * <example name="po-dynamic-form-container" title="PO Dynamic Form - Container">
+ *  <file name="sample-po-dynamic-form-container/sample-po-dynamic-form-container.component.html"> </file>
+ *  <file name="sample-po-dynamic-form-container/sample-po-dynamic-form-container.component.ts"> </file>
+ *  <file name="sample-po-dynamic-form-container/sample-po-dynamic-form-container.service.ts"> </file>
+ * </example>
+ *
  */
 
 @Component({
   selector: 'po-dynamic-form',
-  templateUrl: './po-dynamic-form.component.html'
+  templateUrl: './po-dynamic-form.component.html',
+  standalone: false
 })
 export class PoDynamicFormComponent extends PoDynamicFormBaseComponent implements OnInit, OnDestroy {
-  private _form: NgForm;
+  @ViewChild('fieldsComponent') fieldsComponent: {
+    focus: (property: string) => void;
+    updatePreviousValue: () => void;
+    showAdditionalHelp: (property: string) => void;
+  };
 
   disabledForm: boolean;
+  displayAdditionalHelp: boolean = false;
+
+  private _form: NgForm;
 
   private onLoadSubscription: Subscription;
   private sendFormSubscription: Subscription;
-  private comboOptionSubject = new Subject<any>();
+  private readonly comboOptionSubject = new Subject<any>();
 
   @ViewChild('dynamicForm') set form(value: NgForm) {
     // necessario para nao ocorrer o ExpressionChangedAfterItHasBeenCheckedError
@@ -53,12 +68,10 @@ export class PoDynamicFormComponent extends PoDynamicFormBaseComponent implement
     return this._form || <any>{};
   }
 
-  @ViewChild('fieldsComponent') fieldsComponent: { focus: (property: string) => void; updatePreviousValue: () => void };
-
   constructor(
-    private changes: ChangeDetectorRef,
-    private loadService: PoDynamicFormLoadService,
-    private validationService: PoDynamicFormValidationService
+    private readonly changes: ChangeDetectorRef,
+    private readonly loadService: PoDynamicFormLoadService,
+    private readonly validationService: PoDynamicFormValidationService
   ) {
     super();
   }
@@ -111,6 +124,38 @@ export class PoDynamicFormComponent extends PoDynamicFormBaseComponent implement
 
   sendObjectValue(objectValue: any) {
     this.comboOptionSubject.next(objectValue);
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `keydown`.
+   *
+   * ```
+   * import { PoDynamicModule } from '@po-ui/ng-components';
+   * ...
+   * @ViewChild('dynamicForm', { static: true }) dynamicForm: PoDynamicFormComponent;
+   *
+   * fields: Array<PoDynamicFormField> = [
+   *  {
+   *    property: 'name',
+   *    ...
+   *    help: 'Mensagem de ajuda.',
+   *    helper: 'Mensagem de ajuda complementar com o componente po-helper implementado.',
+   *    keydown: this.onKeyDown.bind(this, 'name')
+   *  },
+   * ]
+   *
+   * onKeyDown(property: string, event: KeyboardEvent): void {
+   *  if (event.code === 'F9') {
+   *    this.dynamicForm.showAdditionalHelp(property);
+   *  }
+   * }
+   * ```
+   *
+   * @param { string } property Identificador da coluna.
+   */
+  showAdditionalHelp(property: string) {
+    this.fieldsComponent.showAdditionalHelp(property);
   }
 
   validateForm(field: PoDynamicFormField) {

@@ -1,14 +1,14 @@
 import { HttpClient } from '@angular/common/http';
-import { Inject } from '@angular/core';
+import { Directive, Inject } from '@angular/core';
 
 import { Observable } from 'rxjs';
 
-import { isLanguage, reloadCurrentPage } from '../../utils/util';
+import { PoUtils } from '../../utils/util';
 import { PoLanguageService } from '../po-language/po-language.service';
 
-import { I18N_CONFIG } from './po-i18n-config-injection-token';
 import { PoI18nConfig } from './interfaces/po-i18n-config.interface';
 import { PoI18nLiterals } from './interfaces/po-i18n-literals.interface';
+import { I18N_CONFIG } from './po-i18n-config-injection-token';
 
 /**
  * @description
@@ -35,6 +35,24 @@ import { PoI18nLiterals } from './interfaces/po-i18n-literals.interface';
  * > O método `getLiterals()` pode receber um objeto do tipo da interface `PoI18nLiterals` como parâmetro,
  * porém, nenhuma das propriedades são obrigatórias. Caso nenhum parâmetro seja passado, serão buscadas
  * todas as literais do contexto definido com padrão, no idioma definido como padrão.
+ *
+ * * ## Alterações a partir da versão 19
+ * A partir da versão 19, para evitar conflitos com bibliotecas de terceiros que também utilizam i18n,
+ * é necessário passar explicitamente o contexto ao chamar `getLiterals`, garantindo a correta exibição das literais.
+ * Caso `getLiterals` seja chamado sem parâmetros, o retorno pode vir das configurações da biblioteca de terceiros.
+ *
+ * **Exemplo de chamada com contexto explícito:**
+ * ```typescript
+ * poI18nService.getLiterals({ context: 'general' }).subscribe(literals => console.log(literals));
+ * ```
+ *
+ * **Cenário de Contextos Iguais:**
+ * Caso tanto a aplicação quanto uma biblioteca de terceiros utilizem o mesmo nome de contexto,
+ * o PO UI fará um merge das literais, priorizando os valores definidos na aplicação cliente.
+ *
+ * **Recomendações:**
+ * - Sempre informar o contexto ao chamar `getLiterals` para evitar conflitos de literais.
+ * - Caso a aplicação utilize `lazy loading`, utilizar `setLanguage()` para garantir a correta configuração de idioma.
  *
  * Exemplos de requisição:
  * ```
@@ -144,9 +162,11 @@ import { PoI18nLiterals } from './interfaces/po-i18n-literals.interface';
  *   }));
  *
  * });
+ *
  * ```
  */
 
+@Directive()
 export class PoI18nBaseService {
   private varI18n: any = {};
 
@@ -157,9 +177,9 @@ export class PoI18nBaseService {
   private servicesContext: any = {};
 
   constructor(
-    @Inject(I18N_CONFIG) private config?: PoI18nConfig,
-    @Inject(HttpClient) private http?: HttpClient,
-    private languageService?: PoLanguageService
+    @Inject(I18N_CONFIG) private readonly config?: PoI18nConfig,
+    @Inject(HttpClient) private readonly http?: HttpClient,
+    private readonly languageService?: PoLanguageService
   ) {
     this.setConfig(config);
   }
@@ -183,6 +203,22 @@ export class PoI18nBaseService {
    */
   getLanguage(): string {
     return this.languageService.getLanguage();
+  }
+
+  getLiterals(options: PoI18nLiterals = {}): Observable<object> {
+    const language = options['language'] ? options['language'].toLowerCase() : this.getLanguage();
+    const context = options['context'] ? options['context'] : this.contextDefault;
+    const literals: Array<string> = options['literals'] ? options['literals'] : [];
+
+    return new Observable(observer => {
+      if (this.servicesContext[context]) {
+        // Faz o processo de busca de um contexto que contém serviço
+        this.getLiteralsFromContextService(language, context, literals, observer);
+      } else {
+        // Faz o processo de busca de um contexto que utiliza constante
+        this.getLiteralsFromContextConstant(language, context, literals, observer);
+      }
+    });
   }
 
   /**
@@ -217,14 +253,14 @@ export class PoI18nBaseService {
    * buscar novamente as literais no novo idioma configurado.
    */
   setLanguage(language: string, reload: boolean = false): void {
-    if (!isLanguage(language)) {
+    if (!PoUtils.isLanguage(language)) {
       return;
     }
 
     this.languageService.setLanguage(language);
 
     if (reload) {
-      reloadCurrentPage();
+      PoUtils.reloadCurrentPage();
     }
   }
 
@@ -252,22 +288,6 @@ export class PoI18nBaseService {
         }
       }
     }
-  }
-
-  getLiterals(options: PoI18nLiterals = {}): Observable<object> {
-    const language = options['language'] ? options['language'].toLowerCase() : this.getLanguage();
-    const context = options['context'] ? options['context'] : this.contextDefault;
-    const literals: Array<string> = options['literals'] ? options['literals'] : [];
-
-    return new Observable(observer => {
-      if (this.servicesContext[context]) {
-        // Faz o processo de busca de um contexto que contém serviço
-        this.getLiteralsFromContextService(language, context, literals, observer);
-      } else {
-        // Faz o processo de busca de um contexto que utiliza constante
-        this.getLiteralsFromContextConstant(language, context, literals, observer);
-      }
-    });
   }
 
   // Processo de busca de um contexto que contém serviço.
@@ -438,7 +458,7 @@ export class PoI18nBaseService {
   }
 
   // Atualiza a variável local com as literais com os objetos passados na configuração
-  private setVarI18n(contexts: Object) {
+  private setVarI18n(contexts: object) {
     // Percorre os contextos
     for (const context of Object.keys(contexts)) {
       const contextContent = contexts[context];

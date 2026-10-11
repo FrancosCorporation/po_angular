@@ -39,17 +39,19 @@ const poControlPositionSidesDefault: Array<string> = [
   'right-top'
 ];
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoControlPositionService {
   private arrowDirection: string;
   private customPositions: Array<string>;
-  private differenceDiagonalToWidthArrow: number = 3;
+  private readonly differenceDiagonalToWidthArrow: number = 3;
   private element: HTMLElement;
   private elementOffset: number;
   private isCornerAligned: boolean;
   private isSetElementWidth: boolean = false;
   // offset da seta em relação ao canto do componente
-  private offsetArrow: number = 12;
+  private readonly offsetArrow: number = 12;
   private targetElement: HTMLElement;
 
   /**
@@ -80,7 +82,7 @@ export class PoControlPositionService {
    * @param targetElement elemento de onde deve partir a exibição
    * @param customPositions posições que sobrescreve as posições padrões
    * @param isSetElementWidth indica se deve definir o tamanho do elemento a ser exibido, caso for verdadeiro será igual do targetElement
-   * @param isCornerAligned indica se o elemento filho será alinhado nos cantos do elemneto pai.
+   * @param isCornerAligned indica se o elemento filho será alinhado nos cantos do elemento pai.
    */
   setElements(
     element: ElementRef | HTMLElement,
@@ -187,7 +189,7 @@ export class PoControlPositionService {
         innerWidth: window.innerWidth,
         innerHeight: window.innerHeight
       },
-      element: this.element.getBoundingClientRect(),
+      element: this.element?.getBoundingClientRect(),
       target: this.targetElement ? this.targetElement.getBoundingClientRect() : { top: 0, bottom: 0, right: 0, left: 0 }
     };
   }
@@ -210,9 +212,9 @@ export class PoControlPositionService {
       case 'top':
         return overflows.top || overflows.right || overflows.left;
       case 'top-right':
-        return overflows.top || overflows.right;
+        return overflows.top || overflows.right || overflows.left;
       case 'top-left':
-        return overflows.top || overflows.left;
+        return overflows.top || overflows.left || overflows.right;
       case 'right':
         return overflows.right || overflows.top || overflows.bottom;
       case 'right-top':
@@ -222,9 +224,9 @@ export class PoControlPositionService {
       case 'bottom':
         return overflows.bottom || overflows.right || overflows.left;
       case 'bottom-right':
-        return overflows.bottom || overflows.right;
+        return overflows.bottom || overflows.right || overflows.left;
       case 'bottom-left':
-        return overflows.bottom || overflows.left;
+        return overflows.bottom || overflows.left || overflows.right;
       case 'left':
         return overflows.left || overflows.top || overflows.bottom;
       case 'left-top':

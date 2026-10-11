@@ -1,13 +1,13 @@
 import { HttpResponse, HttpErrorResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 
-import * as HttpStatus from 'http-status-codes';
+import { StatusCodes } from 'http-status-codes';
 import { Observable, of, Subject } from 'rxjs';
 import { expand, map, reduce } from 'rxjs/operators';
 
 import { PoStorageService } from '@po-ui/ng-storage';
 
-import { toBase64, toFile } from '../../utils/utils';
+import { PoUtils } from '../../utils/utils';
 
 import { PoEventSourcingErrorResponse } from '../../models/po-event-sourcing-error-response.model';
 import { PoEventSourcingItem } from './interfaces/po-event-sourcing-item.interface';
@@ -25,19 +25,21 @@ import { PoSyncConfig } from '../po-sync/interfaces/po-sync-config.interface';
 import { PoSyncResponse } from '../po-sync/interfaces/po-sync-response.interface';
 import { PoSyncSchema } from './../po-sync/interfaces/po-sync-schema.interface';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoEventSourcingService {
   static readonly event_sourcing_name: string = 'EventSourcing';
 
   private static readonly VALID_HTTP_STATUS_CODES = [
-    HttpStatus.OK, // 200
-    HttpStatus.CREATED, // 201
-    HttpStatus.ACCEPTED, // 202
-    HttpStatus.NON_AUTHORITATIVE_INFORMATION, // 203
-    HttpStatus.NO_CONTENT, // 204
-    HttpStatus.RESET_CONTENT, // 205
-    HttpStatus.PARTIAL_CONTENT, // 206
-    HttpStatus.MULTI_STATUS // 207
+    StatusCodes.OK, // 200
+    StatusCodes.CREATED, // 201
+    StatusCodes.ACCEPTED, // 202
+    StatusCodes.NON_AUTHORITATIVE_INFORMATION, // 203
+    StatusCodes.NO_CONTENT, // 204
+    StatusCodes.RESET_CONTENT, // 205
+    StatusCodes.PARTIAL_CONTENT, // 206
+    StatusCodes.MULTI_STATUS // 207
   ];
 
   config: PoSyncConfig;
@@ -45,9 +47,16 @@ export class PoEventSourcingService {
 
   private emitter: any;
   private eventSub: Observable<null>;
-  private responseSubject = new Subject<PoSyncResponse>();
+  private readonly responseSubject = new Subject<PoSyncResponse>();
 
   private schemasSyncConfig = {};
+
+  constructor(
+    private readonly poSchemaDefinition: PoSchemaDefinitionService,
+    private readonly poSchemaService: PoSchemaService,
+    private readonly poStorage: PoStorageService,
+    private readonly poHttpClient: PoHttpClientService
+  ) {}
 
   private static getUrl(eventSourcingItem, schema, requestType): string {
     const schemaUrl = PoSchemaUtil.getUrl(schema, requestType);
@@ -65,13 +74,6 @@ export class PoEventSourcingService {
       return schemaUrl ? schemaUrl : PoSchemaUtil.getUrl(schema, PoRequestType.GET);
     }
   }
-
-  constructor(
-    private poSchemaDefinition: PoSchemaDefinitionService,
-    private poSchemaService: PoSchemaService,
-    private poStorage: PoStorageService,
-    private poHttpClient: PoHttpClientService
-  ) {}
 
   create(schemaName: string, newItem: any, customRequestId?: string): Promise<any> {
     const eventSourcingItem = this.createEventSourcingItem(
@@ -115,20 +117,6 @@ export class PoEventSourcingService {
     return eventSourcingItem.id;
   }
 
-  /* Avalia se o body é do tipo File e se for converte para base64 */
-  private async serializeBody(requestData: PoHttpRequestData): Promise<PoHttpRequestData> {
-    let { body, mimeType, bodyType, fileName } = requestData;
-
-    if (body instanceof File) {
-      bodyType = 'File';
-      mimeType = body.type;
-      fileName = body.name;
-      body = await toBase64(body);
-    }
-
-    return { ...requestData, body, mimeType, bodyType, fileName };
-  }
-
   responsesSubject(): Observable<PoSyncResponse> {
     return this.responseSubject.asObservable();
   }
@@ -155,13 +143,12 @@ export class PoEventSourcingService {
   }
 
   syncGet(): Promise<any> {
-    const syncGetFunction = async () => {
-      return this.poSchemaDefinition.getAll().then(schemas => {
+    const syncGetFunction = async () =>
+      this.poSchemaDefinition.getAll().then(schemas => {
         const schemaPromises = this.updateStorageSchemas(schemas);
 
         return Promise.all(schemaPromises);
       });
-    };
 
     return this.poSchemaService.limitedCallWrap(syncGetFunction);
   }
@@ -193,6 +180,20 @@ export class PoEventSourcingService {
       customRequestId
     );
     return this.insertEventSourcingQueue(eventSourcingItem);
+  }
+
+  /* Avalia se o body é do tipo File e se for converte para base64 */
+  private async serializeBody(requestData: PoHttpRequestData): Promise<PoHttpRequestData> {
+    let { body, mimeType, bodyType, fileName } = requestData;
+
+    if (body instanceof File) {
+      bodyType = 'File';
+      mimeType = body.type;
+      fileName = body.name;
+      body = await PoUtils.toBase64(body);
+    }
+
+    return { ...requestData, body, mimeType, bodyType, fileName };
   }
 
   private buildUrlParams(schema: PoSyncSchema, baseUrl: string, pageNumber: number): string {
@@ -284,7 +285,7 @@ export class PoEventSourcingService {
     }
   }
 
-  private diffServerItems(currentUrlDiff): Observable<HttpResponse<Object>> {
+  private diffServerItems(currentUrlDiff): Observable<HttpResponse<object>> {
     return this.poHttpClient.get(currentUrlDiff);
   }
 
@@ -434,7 +435,7 @@ export class PoEventSourcingService {
 
   private sendResponseSubject(
     eventSourcingItem: PoEventSourcingItem,
-    response: HttpResponse<Object> | HttpErrorResponse | PoEventSourcingErrorResponse,
+    response: HttpResponse<object> | HttpErrorResponse | PoEventSourcingErrorResponse,
     isSubjectError: boolean = false
   ): Promise<any> {
     const poSyncResponse: PoSyncResponse = {
@@ -462,9 +463,9 @@ export class PoEventSourcingService {
     record?: PoEventSourcingItem['record'],
     headers?: Array<PoHttpHeaderOption>
   ): Promise<PoHttpRequestData> {
-    let body = record.body;
+    let body = record?.body ?? record ?? {};
 
-    if (record.bodyType === 'File') {
+    if (record?.bodyType === 'File') {
       body = await this.createFormData(body, record.fileName, record.mimeType, record.formField);
     }
 
@@ -477,7 +478,7 @@ export class PoEventSourcingService {
     mimeType: string,
     formField: string = 'file'
   ): Promise<FormData> {
-    const file = await toFile(body, fileName, mimeType);
+    const file = await PoUtils.toFile(body, fileName, mimeType);
     const formData: FormData = new FormData();
 
     formData.append(formField, file, fileName);

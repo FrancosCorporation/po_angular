@@ -1,13 +1,15 @@
-import { Input, Directive, ViewChild } from '@angular/core';
+import { Directive, HostBinding, HostListener, Input, ViewChild } from '@angular/core';
 
 import { poLocaleDefault } from './../../../services/po-language/po-language.constant';
 import { PoLanguageService } from './../../../services/po-language/po-language.service';
 
+import { PoFieldSize } from '../../../enums/po-field-size.enum';
+import { getDefaultSizeFn, validateSizeFn } from '../../../utils/util';
 import { PoBreadcrumb } from '../../po-breadcrumb/po-breadcrumb.interface';
 import { PoDisclaimerGroup } from '../../po-disclaimer-group/po-disclaimer-group.interface';
-import { PoPageAction } from '../po-page-action.interface';
+import { PoPageAction } from '../interfaces/po-page-action.interface';
+import { PoPageFilter } from '../interfaces/po-page-filter.interface';
 import { PoPageContentComponent } from '../po-page-content/po-page-content.component';
-import { PoPageFilter } from './../po-page-filter.interface';
 import { PoPageListLiterals } from './po-page-list-literals.interface';
 
 export const poPageListLiteralsDefault = {
@@ -32,25 +34,67 @@ export const poPageListLiteralsDefault = {
  * podendo ser apresentado como lista ou tabela.
  *
  * Este componente possibilita realizar filtro dos dados, no qual permite que seja atribuido uma função que será executada no momento
- * da filtragem. Este comportamento pode ser acionado tanto ao *click* do ícone [po-icon-search](/guides/icons)
+ * da filtragem. Este comportamento pode ser acionado tanto ao *click* do ícone [an-magnifying-glass](https://po-ui.io/icons)
  * quanto ao pressionar da tecla *ENTER* quando o foco estiver no campo de pesquisa.
  *
  * Para facilitar a manipulação e visualização dos filtros aplicados, é possível também utilizar o componente
  * [`po-disclaimer-group`](/documentation/po-disclaimer-group).
+ *
+ * #### Tokens customizáveis
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade         | Descrição                                   | Valor Padrão                          |
+ * |---------------------|---------------------------------------------|---------------------------------------|
+ * | **Header**          |                                             |                                       |
+ * | `--padding`         | Espaçamento do header                       | `var(--spacing-xs) var(--spacing-md)` |
+ * | `--gap`             | Espaçamento entre os breadcrumbs e o título | `var(--spacing-md)`                   |
+ * | `--gap-actions`     | Espaçamento entre as ações                  | `var(--spacing-xs)`                   |
+ * | `--font-family`     | Família tipográfica do título               | `var(--font-family-theme)`            |
+ * | **Content**         |                                             |                                       |
+ * | `--padding-content` | Espaçamento do conteúdo                     | `var(--spacing-xs) var(--spacing-sm)` |
  */
 @Directive()
 export abstract class PoPageListBaseComponent {
-  private _actions?: Array<PoPageAction> = [];
-  private _disclaimerGroup?: PoDisclaimerGroup;
-  private _literals: PoPageListLiterals;
-  private _title: string;
+  @ViewChild(PoPageContentComponent, { static: true }) poPageContent: PoPageContentComponent;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Objeto que implementa as propriedades da interface `PoBreadcrumb`.
+   */
+  @Input('p-breadcrumb') breadcrumb?: PoBreadcrumb;
+
+  /**
+   * @description
+   *
+   * Objeto que implementa as propriedades da interface `PoPageFilter`.
+   */
+  @Input('p-filter') filter: PoPageFilter;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Valor padrão na busca rápida ao inicializar o componente
+   *
+   */
+  @Input('p-quick-search-value') quickSearchValue: string;
 
   visibleActions: Array<PoPageAction> = [];
 
   protected language: string;
   protected resizeListener: () => void;
 
-  @ViewChild(PoPageContentComponent, { static: true }) poPageContent: PoPageContentComponent;
+  private _actions?: Array<PoPageAction> = [];
+  private _disclaimerGroup?: PoDisclaimerGroup;
+  private _componentsSize?: string = undefined;
+  private _initialComponentsSize?: string = undefined;
+  private _literals: PoPageListLiterals;
+  private _title: string;
 
   /**
    * @optional
@@ -74,9 +118,25 @@ export abstract class PoPageListBaseComponent {
    *
    * @description
    *
-   * Objeto que implementa as propriedades da interface `PoBreadcrumb`.
+   * Define o tamanho dos componentes de formulário no template:
+   * - `small`: aplica a medida small de cada componente (disponível apenas para acessibilidade AA).
+   * - `medium`: aplica a medida medium de cada componente.
+   *
+   * > Caso a acessibilidade AA não esteja configurada, o tamanho `medium` será mantido.
+   * Para mais detalhes, consulte a documentação do [po-theme](https://po-ui.io/documentation/po-theme).
+   *
+   * @default `medium`
    */
-  @Input('p-breadcrumb') breadcrumb?: PoBreadcrumb;
+  set componentsSize(value: string) {
+    this._initialComponentsSize = value;
+    this.applySizeBasedOnA11y();
+  }
+
+  @Input('p-components-size')
+  @HostBinding('attr.p-components-size')
+  get componentsSize(): string {
+    return this._componentsSize ?? getDefaultSizeFn(PoFieldSize);
+  }
 
   /**
    * @optional
@@ -96,13 +156,6 @@ export abstract class PoPageListBaseComponent {
   get disclaimerGroup(): PoDisclaimerGroup {
     return this._disclaimerGroup;
   }
-
-  /**
-   * @description
-   *
-   * Objeto que implementa as propriedades da interface `PoPageFilter`.
-   */
-  @Input('p-filter') filter: PoPageFilter;
 
   /**
    * @optional
@@ -163,8 +216,37 @@ export abstract class PoPageListBaseComponent {
     return this._title;
   }
 
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Subtitulo do Header da página.
+   *
+   * Suporta formatação básica com as tags `<b>` (negrito), `<strong>` (negrito), `<i>` (itálico), `<em>` (itálico) e
+   * `<u>` (sublinhado).
+   *
+   * Exemplo:
+   * ```typescript
+   * subtitle = 'Manage <b>active</b> and <i>pending</i> processes';
+   * ```
+   *
+   * > Requer que `p-title` esteja definido.
+   */
+  @Input('p-subtitle') subtitle: string;
+
   constructor(languageService: PoLanguageService) {
     this.language = languageService.getShortLanguage();
+  }
+
+  @HostListener('window:PoUiThemeChange')
+  protected onThemeChange(): void {
+    this.applySizeBasedOnA11y();
+  }
+
+  private applySizeBasedOnA11y(): void {
+    const size = validateSizeFn(this._initialComponentsSize, PoFieldSize);
+    this._componentsSize = size;
   }
 
   // Seta a lista de ações no dropdown.

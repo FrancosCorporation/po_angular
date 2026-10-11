@@ -1,6 +1,6 @@
-import { EventEmitter, Input, Output, Directive } from '@angular/core';
+import { EventEmitter, Input, Output, Directive, TemplateRef } from '@angular/core';
 
-import { convertToBoolean } from '../../utils/util';
+import { convertToBoolean, uuid } from '../../utils/util';
 
 import { PoStepComponent } from './po-step/po-step.component';
 import { PoStepperItem } from './po-stepper-item.interface';
@@ -49,13 +49,95 @@ const poStepperOrientationDefault = PoStepperOrientation.Horizontal;
  *
  * - Evite `labels` extensos que quebram o layout do `po-stepper`, use `labels` diretos, curtos e intuitivos.
  * - Utilize apenas um `po-stepper` por página.
+ *
+ * #### Tokens customizáveis
+ *
+ * É possível alterar o estilo do componente usando os seguintes tokens (CSS):
+ *
+ * > Para maiores informações, acesse o guia [Personalizando o Tema Padrão com Tokens CSS](https://po-ui.io/guides/theme-customization).
+ *
+ * | Propriedade                              | Descrição                                             | Valor Padrão                                      |
+ * |------------------------------------------|-------------------------------------------------------|---------------------------------------------------|
+ * | **Label**                                |                                                       |                                                   |
+ * | `--font-family`                          | Família tipográfica usada                             | `var(--font-family-theme)`                        |
+ * | `--font-size`                            | Tamanho da fonte                                      | `var(--font-size-default)`                        |
+ * | `--font-weight`                          | Peso da fonte                                         | `var(--font-weight-normal)`                       |
+ * | **Step - Done**                          |                                                       |                                                   |
+ * | `--text-color`                           | Cor do texto no step concluído                        | `var(--color-neutral-dark-70)`                    |
+ * | `--color-icon-done`                      | Cor do ícone no step concluído                        | `var(--color-neutral-dark-70)`                    |
+ * | `--background-done`                      | Cor de fundo no step concluído                        | `var(--color-neutral-light-00)`                   |
+ * | **Line - Done**                          |                                                       |                                                   |
+ * | `--color-line-done`                      | Cor da linha no step concluído                        | `var(--color-neutral-mid-40)`                     |
+ * | **Step - Current**                       |                                                       |                                                   |
+ * | `--color-icon-current`                   | Cor do ícone no step atual                            | `var(--color-neutral-light-00)`                   |
+ * | `--background-current`                   | Cor de fundo no step atual                            | `var(--color-action-default)`                     |
+ * | `--font-weight-current`                  | Peso da fonte no step atual                           | `var(--font-weight-bold)`                         |
+ * | **Step - Next**                          |                                                       |                                                   |
+ * | `--font-size-circle`                     | Tamanho da fonte no círculo do próximo step           | `var(--font-size-sm)`                             |
+ * | `--color-next`                           | Cor do ícone no próximo step                          | `var(--color-action-disabled)`                    |
+ * | `--text-color-next`                      | Cor do texto no próximo step                          | `var(--color-neutral-light-30)`                   |
+ * | **Focused**                              |                                                       |                                                   |
+ * | `--outline-color-focused`                | Cor do outline do estado de focus                     | `var(--color-action-focus)`                       |
  */
 @Directive()
 export class PoStepperBaseComponent {
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * <a id="stepIconsProperty"></a>
+   *
+   * Habilita a exibição de ícone ao invés de número no centro do círculo dos *steps*.
+   *
+   * @default `false`
+   */
+  @Input('p-step-icons') stepIcons: boolean;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o tamanho dos *steps* em *pixels*, possibilitando um maior destaque.
+   *
+   * O valor informado deve ser entre `24` e `64`.
+   *
+   * > Valores que não se enquadrarem a esta regra serão ignorados, mantendo-se o valor *default*.
+   *
+   * @default `24`
+   */
+  @Input('p-step-size') stepSize: number;
+
+  /** Ação que será executada quando o usuário mudar o passo do `po-stepper`. */
+  @Output('p-change-step') onChangeStep = new EventEmitter<number | PoStepComponent>();
+
+  private _alignCenter?: boolean = true;
   private _orientation?: PoStepperOrientation = poStepperOrientationDefault;
   private _sequential?: boolean = true;
   private _step: number = 1;
   private _steps: Array<PoStepperItem> = [];
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define o alinhamento dos *steps* e *labels* no *stepper*, dependendo da orientação.
+   *
+   * - Quando `true`, ficam centralizados em ambas as orientações (horizontal e vertical).
+   * - Quando `false`, ficam alinhados à esquerda na orientação horizontal e ao topo na orientação vertical.
+   *
+   * @default `true`
+   */
+
+  @Input('p-align-center') set alignCenter(alignCenter: boolean) {
+    this._alignCenter = convertToBoolean(alignCenter);
+  }
+
+  get alignCenter(): boolean {
+    return this._alignCenter;
+  }
 
   /**
    * @optional
@@ -113,42 +195,16 @@ export class PoStepperBaseComponent {
    */
   @Input('p-steps') set steps(steps: Array<PoStepperItem>) {
     this._steps = Array.isArray(steps) ? steps : [];
-    this._steps.forEach(step => (step.status = PoStepperStatus.Default));
-    this.step = 1;
+    this._steps.forEach(step => {
+      step.status = step.status ?? PoStepperStatus.Default;
+      step.id = step.id ?? uuid();
+    });
+    this.initializeSteps();
   }
 
   get steps(): Array<PoStepperItem> {
     return this._steps;
   }
-
-  /**
-   *
-   * @optional
-   *
-   * @description
-   *
-   * <a id="stepIconsProperty"></a>
-   *
-   * Habilita a exibição de ícone ao invés de número no centro do círculo dos *steps*.
-   *
-   * @default `false`
-   */
-  @Input('p-step-icons') stepIcons: boolean;
-
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Define o tamanho dos *steps* em *pixels*, possibilitando um maior destaque.
-   *
-   * O valor informado deve ser entre `24` e `64`.
-   *
-   * > Valores que não se enquadrarem a esta regra serão ignorados, mantendo-se o valor *default*.
-   *
-   * @default `24`
-   */
-  @Input('p-step-size') stepSize: number;
 
   /**
    * @optional
@@ -169,6 +225,68 @@ export class PoStepperBaseComponent {
     return this._sequential;
   }
 
-  /** Ação que será executada quando o usuário mudar o passo do `po-stepper`. */
-  @Output('p-change-step') onChangeStep = new EventEmitter<number | PoStepComponent>();
+  /**
+   * @optional
+   *
+   * @description
+   * Permite definir o ícone do step no status concluído.
+   * Esta propriedade permite usar ícones da [Biblioteca de ícones](https://po-ui.io/icons)
+   * ```
+   * <po-stepper p-step-icon-done="an an-check-circle">
+   *    ...
+   * </po-stepper>
+   * ```
+   * Outra opção seria a customização do ícone através do `TemplateRef`, conforme exemplo abaixo:
+   * ```
+   * <po-stepper [p-step-icon-done]="doneIcon">
+   *    ...
+   * </po-stepper>
+   *
+   * <ng-template #doneIcon>
+   *    <i class="an an-check-fat"></i>
+   * </ng-template>
+   * ```
+   * > Deve-se usar `font-size: inherit` para ajustar ícones que não se ajustam automaticamente.
+   *
+   * @default `po-icon-ok`
+   */
+  @Input('p-step-icon-done') iconDone?: string | TemplateRef<void>;
+
+  /**
+   * @optional
+   *
+   * @description
+   * Permite definir o ícone do step no status ativo.
+   * Esta propriedade permite usar ícones da [Biblioteca de ícones](https://po-ui.io/icons).
+   * ```
+   * <po-stepper p-step-icon-active="an an-pencil-simple-line">
+   *    ...
+   * </po-stepper>
+   * ```
+   * Para customizar o ícone através do `TemplateRef`, veja a documentação da propriedade `p-step-icon-done`.
+   *
+   * > Deve-se usar `font-size: inherit` para ajustar ícones que não se ajustam automaticamente.
+   *
+   * @default `po-icon-edit`
+   */
+  @Input('p-step-icon-active') iconActive?: string | TemplateRef<void>;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Desabilita o clique nos steps.
+   *
+   * @default `false`
+   */
+  @Input('p-disable-click') disabledClick: boolean = false;
+
+  private initializeSteps(): void {
+    const hasStatus = this._steps.some(step => step.status !== PoStepperStatus.Default);
+
+    if (!hasStatus && this.step === 1) {
+      this.step = 1;
+    }
+  }
 }

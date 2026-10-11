@@ -39,3 +39,8 @@ Passos para reproduzir:
   - [ ] macOS
   - [ ] Ubuntu
   - [ ] Outros
+
+#### Observações
+
+Issues sem interação do solicitante por mais de 15 dias corridos serão encerradas.
+Caso você seja TOTVS favor entrar em contato internamente procurando a space do THF no TDN.

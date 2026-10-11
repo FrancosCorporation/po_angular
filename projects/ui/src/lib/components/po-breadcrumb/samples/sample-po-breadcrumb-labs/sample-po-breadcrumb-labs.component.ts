@@ -1,18 +1,19 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 
 import { PoBreadcrumbItem, PoNotificationService } from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-breadcrumb-labs',
-  templateUrl: './sample-po-breadcrumb-labs.component.html'
+  templateUrl: './sample-po-breadcrumb-labs.component.html',
+  standalone: false
 })
 export class SamplePoBreadcrumbLabsComponent implements OnInit {
+  private poNotification = inject(PoNotificationService);
+
   breadcrumbItem: PoBreadcrumbItem;
   breadcrumbItems: Array<PoBreadcrumbItem>;
   favoriteService: string;
   paramsService: object;
-
-  constructor(private poNotification: PoNotificationService) {}
 
   ngOnInit() {
     this.restore();

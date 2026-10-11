@@ -48,7 +48,7 @@
       class="po-lg-6"
       name="city"
       [(ngModel)]="city"
-      p-icon="po-icon-map"
+      p-icon="an an-map-trifold"
       p-label="Select a location"
       p-placeholder="Select a location"
       p-required
@@ -56,26 +56,19 @@
       [p-options]="citiesOptions"
     >
       <ng-template p-combo-option-template let-option>
-        <ng-container *ngIf="option.options; then OptionsGroupTitle; else optionsGroup"></ng-container>
-        <ng-template #OptionsGroupTitle>
+        @if (option.options) {
           <div class="po-row">
             <po-avatar
-              class="po-sm-2 po-md-3 po-lg-1"
+              class="po-sm-2 po-md-3 po-lg-1 sample-combo-avatar-bg"
               p-size="xs"
-              style="background-color: #fbfbfb"
               [p-src]="getStateByLabel(option.label)"
             >
             </po-avatar>
-            <p class="po-combo-item-title po-sm-10 po-md-9 po-lg-11">{{ option.label }}</p>
+            <p class="po-sm-10 po-md-9 po-lg-11">{{ option.label }}</p>
           </div>
-        </ng-template>
-        <ng-template #optionsGroup>
-          <div class="po-combo-item">
-            <div class="po-row">
-              <div class="po-sm-10 po-md-9 po-lg-11">{{ option.label }}</div>
-            </div>
-          </div>
-        </ng-template>
+        } @else {
+          <div class="po-sm-10 po-md-9 po-lg-11">{{ option.label }}</div>
+        }
       </ng-template>
     </po-combo>
 
@@ -94,11 +87,13 @@
       class="po-lg-6"
       name="medicalSpecialty"
       [(ngModel)]="medicalSpecialty"
-      p-icon="po-icon-exam"
+      p-icon="an an-flask"
       p-label="Medical Specialty/Exam"
       p-required
       p-sort
       [p-options]="medicalSpecialtyOptions"
+      p-field-label="specialty"
+      p-field-value="specialtyValue"
     >
     </po-combo>
   </div>
@@ -118,7 +113,7 @@
     <po-button
       class="po-md-3"
       p-label="Schedule"
-      p-type="primary"
+      p-kind="primary"
       [p-disabled]="schedulingForm.invalid"
       (p-click)="confirmPreAppointment(name)"
     >

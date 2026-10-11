@@ -1,14 +1,20 @@
-import { Directive } from '@angular/core';
-import { FormControl } from '@angular/forms';
+import { Component } from '@angular/core';
+import { UntypedFormControl } from '@angular/forms';
 
-import * as UtilsFunction from '../../../utils/util';
-import * as ValidatorsFunctions from '../validators';
 import { expectPropertiesValues } from '../../../util-test/util-expect.spec';
+import { PoUtils as UtilsFunction } from '../../../utils/util';
+import { PoValidators as ValidatorsFunctions } from '../validators';
 
+import { PoThemeA11yEnum } from '../../../services';
 import { PoRadioGroupBaseComponent } from './po-radio-group-base.component';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-@Directive()
-class PoRadioGroup extends PoRadioGroupBaseComponent {
+@Component({
+  selector: 'po-radio-group-base-host',
+  template: '',
+  standalone: false
+})
+class PoRadioHostGroupComponent extends PoRadioGroupBaseComponent {
   inputEl = {
     checked: false,
     value: ''
@@ -20,7 +26,17 @@ class PoRadioGroup extends PoRadioGroupBaseComponent {
 }
 
 describe('PoRadioGroupBase: ', () => {
-  const component = new PoRadioGroup();
+  let component: PoRadioHostGroupComponent;
+  let fixture: ComponentFixture<PoRadioHostGroupComponent>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoRadioHostGroupComponent]
+    });
+
+    fixture = TestBed.createComponent(PoRadioHostGroupComponent);
+    component = fixture.componentInstance;
+  });
 
   it('should be instance of PoRadioGroupBaseComponent', () => {
     expect(component instanceof PoRadioGroupBaseComponent).toBeTruthy();
@@ -71,6 +87,14 @@ describe('PoRadioGroupBase: ', () => {
     component.changeValue('1');
     expect(component.change.emit).not.toHaveBeenCalled();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('should register function registerOnTouched', () => {
+    component['onTouched'] = undefined;
+    const func = () => true;
+
+    component.registerOnTouched(func);
+    expect(component['onTouched']).toBe(func);
   });
 
   describe('Methods: ', () => {
@@ -134,7 +158,7 @@ describe('PoRadioGroupBase: ', () => {
     });
 
     it('validate: should return required obj if `requiredFailed` is true', () => {
-      const formControl = new FormControl(undefined);
+      const formControl = new UntypedFormControl(undefined);
       const validObj = {
         required: {
           valid: false
@@ -143,12 +167,12 @@ describe('PoRadioGroupBase: ', () => {
 
       spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(true);
 
-      expect(component.validate(new FormControl(formControl))).toEqual(validObj);
+      expect(component.validate(new UntypedFormControl(formControl))).toEqual(validObj);
       expect(ValidatorsFunctions.requiredFailed).toHaveBeenCalled();
     });
 
     it('validate: should return undefined if `requiredFailed` is false', () => {
-      const formControl = new FormControl('1');
+      const formControl = new UntypedFormControl('1');
 
       spyOn(ValidatorsFunctions, 'requiredFailed').and.returnValue(false);
 
@@ -191,24 +215,98 @@ describe('PoRadioGroupBase: ', () => {
     });
   });
 
+  describe('p-change-model:', () => {
+    it('should emit changeModel when writeValue receives a new value different from modelLastUpdate', () => {
+      const newValue = 'option1';
+      component.modelLastUpdate = undefined;
+      component.options = [
+        { label: 'Option 1', value: 'option1' },
+        { label: 'Option 2', value: 'option2' }
+      ];
+
+      spyOn(component, 'getElementByValue').and.returnValue(true);
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(newValue);
+
+      expect(component.changeModel.emit).toHaveBeenCalledWith(newValue);
+      expect(component.modelLastUpdate).toBe(newValue);
+    });
+
+    it('should NOT emit changeModel when writeValue receives the same value as modelLastUpdate', () => {
+      const sameValue = 'option1';
+      component.modelLastUpdate = sameValue;
+      component.options = [
+        { label: 'Option 1', value: 'option1' },
+        { label: 'Option 2', value: 'option2' }
+      ];
+
+      spyOn(component, 'getElementByValue').and.returnValue(true);
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(sameValue);
+
+      expect(component.changeModel.emit).not.toHaveBeenCalled();
+      expect(component.modelLastUpdate).toBe(sameValue);
+    });
+
+    it('should emit changeModel when user selects a different radio option via changeValue', () => {
+      const newValue = 'option2';
+      component.value = 'option1';
+      component.modelLastUpdate = 'option1';
+      component['onChangePropagate'] = (v: any) => {};
+
+      spyOn(component.changeModel, 'emit');
+
+      component.changeValue(newValue);
+
+      expect(component.changeModel.emit).toHaveBeenCalledWith(newValue);
+      expect(component.modelLastUpdate).toBe(newValue);
+    });
+
+    it('should NOT emit change event when writeValue is called (only changeModel should emit)', () => {
+      const newValue = 'option1';
+      component.modelLastUpdate = undefined;
+      component.options = [
+        { label: 'Option 1', value: 'option1' },
+        { label: 'Option 2', value: 'option2' }
+      ];
+
+      spyOn(component, 'getElementByValue').and.returnValue(true);
+      spyOn(component.change, 'emit');
+      spyOn(component.changeModel, 'emit');
+
+      component.writeValue(newValue);
+
+      expect(component.change.emit).not.toHaveBeenCalled();
+      expect(component.changeModel.emit).toHaveBeenCalledWith(newValue);
+    });
+  });
+
   describe('Properties:', () => {
-    const validValues = [true, 'true', 1, ''];
-    const invalidValues = [false, 'false', 0, null, undefined, NaN];
     const validateModel: any = 'validateModel';
 
     it('p-disabled: should be update with valid and invalid values.', () => {
       spyOn(component, validateModel);
 
-      expectPropertiesValues(component, 'disabled', validValues, true);
-      expectPropertiesValues(component, 'disabled', invalidValues, false);
+      component.disabled = true;
+      expect(component.disabled).toBeTrue();
+
+      component.disabled = false;
+      expect(component.disabled).toBeFalse();
+
       expect(component[validateModel]).toHaveBeenCalled();
     });
 
     it('p-required: should be update with valid and invalid values.', () => {
       spyOn(component, validateModel);
 
-      expectPropertiesValues(component, 'required', validValues, true);
-      expectPropertiesValues(component, 'required', invalidValues, false);
+      component.required = true;
+      expect(component.required).toBeTrue();
+
+      component.required = false;
+      expect(component.required).toBeFalse();
+
       expect(component[validateModel]).toHaveBeenCalled();
     });
 
@@ -220,6 +318,7 @@ describe('PoRadioGroupBase: ', () => {
     });
 
     it('p-columns: should update property with `6` if invalid value', () => {
+      const invalidValues = [false, 'false', 0, null, undefined, NaN];
       expectPropertiesValues(component, 'columns', invalidValues, 6);
     });
 
@@ -234,6 +333,83 @@ describe('PoRadioGroupBase: ', () => {
 
       expect(UtilsFunction.convertToInt).toHaveBeenCalled();
       expect(component['getGridSystemColumns']).toHaveBeenCalled();
+    });
+
+    it('p-compact-label: should update property with `true` when input is true', () => {
+      fixture.componentRef.setInput('p-compact-label', true);
+      fixture.detectChanges();
+
+      expect(component.compactLabel()).toBe(true);
+    });
+
+    it('p-compact-label: should have default value as false', () => {
+      expect(component.compactLabel()).toBe(false);
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+
+        component.size = 'large';
+        expect(component.size).toBe('large');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+
+        component.size = 'large';
+        expect(component.size).toBe('large');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
     });
   });
 });

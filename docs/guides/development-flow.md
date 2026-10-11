@@ -14,7 +14,7 @@
   - [Modificando Componentes](guides/development-flow#modifying-components)
   - [Subindo as modificações localmente](guides/development-flow#preview-changes)
   - [Testes Unitários](guides/development-flow#tests)
-  - [TS Lint](guides/development-flow#lint)
+  - [ES Lint](guides/development-flow#lint)
   - [Po Style](guides/development-flow#po-style)
   - [Build das modificações](guides/development-flow#build)
   - [Criando Pull Request](guides/development-flow#pr)
@@ -79,16 +79,16 @@ Este guia tem por objetivo definir as regras para criação de *Issues* relacion
       <div class="po-pl-md-5 po-pr-lg-5">
         <img class="card-list-icon" src="./assets/graphics/contribute/setup.png">
         <h3 class="po-font-subtitle po-pb-1">Setup Inicial</h3>
-          <blockquote>Para seguir o guia é fundamental o conhecimento da <a href="https://git-scm.com/book/en/v2">ferramenta Git.</a>
+          <blockquote class="po-text-color-neutral-dark-40">Para seguir o guia é fundamental o conhecimento da <a href="https://git-scm.com/book/en/v2">ferramenta Git.</a>
           </blockquote>
         <ul>
-          <li>Para utilizar o PO UI, é pré-requisito ter o <code>Node.js</code> instalado (versão 10.13.0 ou acima) e o seu gerenciador de pacote favorito na versão mais atual.</li>
+          <li>Para utilizar o PO UI, é pré-requisito ter o <code>Node.js</code> instalado (versão 18.13.0 ou acima) e o seu gerenciador de pacote favorito na versão mais atual.</li>
           <li>
             <p>É importante que tenha a versão equivalente do Angular instalada. Instale-o via <code>npm</code> ou <code>yarn</code>:</p>
             <p>Instalando com npm:</p>
-            <pre><code>npm i -g @angular/cli@^10</code></pre>
+            <pre><code>npm i -g @angular/cli</code></pre>
             <p>Caso opte pelo yarn:</p>
-            <pre><code>yarn global add @angular/cli@^10.0.2</code></pre>
+            <pre><code>yarn global add @angular/cli</code></pre>
           </li>
           <li>Faça um <a href="https://github.com/po-ui/po-angular"><em>fork</em> do repositório PO UI</a>.
             <blockquote>Membros do <em>Core Team</em> devem gerar uma nova <em>branch</em> ao invés do <em>fork</em>.</blockquote>
@@ -125,9 +125,7 @@ Este guia tem por objetivo definir as regras para criação de *Issues* relacion
         <h3 class="po-font-subtitle po-pb-1">Subindo as modificações localmente</h3>
         <ul>
           <li><p>As modificações de código e documentação realizadas podem ser conferidas executando os comandos:</p>
-            <pre><code>npm run build
-npm run build:portal
-ng serve portal</code></pre></li>
+            <pre><code>npm run build:portal && ng serve portal</code></pre></li>
           <li>O navegador exibirá o portal na url <code>http://localhost:4200/</code>.</li>
           <li>A partir disso, navegue até o componente para verificação das modificações.</li>
           <li>Pedimos para que atente para a inclusão da melhoria em nossos <em>samples</em>, em especial no sample <code>labs</code>. Na inviabilidade de usar os <em>samples</em> já existentes, considere a necessidade de criar um novo <em>sample</em> de uso.</li>
@@ -156,8 +154,8 @@ ng serve portal</code></pre></li>
     <div class="po-row">
       <div class="po-pl-md-5 po-pr-lg-5">
         <img class="card-list-icon" src="./assets/graphics/contribute/lint.png">
-        <h3 class="po-font-subtitle po-pb-1">TSLint</h3>
-        <p>O PO UI utiliza o TSLint como linter de Typescript. Execute <code>ng lint</code> para fazer a checagem de código-fonte e verificar eventuais erros programáticos, estilísticos, construções suspeitas, entre outros.</p>
+        <h3 class="po-font-subtitle po-pb-1">ESLint</h3>
+        <p>O PO UI utiliza o ESLint como linter padrão. Execute <code>ng lint</code> para fazer a checagem de código-fonte e verificar eventuais erros programáticos, estilísticos, construções suspeitas, entre outros.</p>
       </div>
     </div>
   </div>
@@ -198,6 +196,7 @@ ng serve portal</code></pre>
         <h3 class="po-font-subtitle po-pb-1">Criando Pull Request</h3>
         <p>Crie uma nova pull request com a master branch como base. Confira <a href="https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request-from-a-fork">como criar pull request a partir de um fork</a>.</p>
         <p>É importante que siga guia contendo as <a href="https://github.com/po-ui/po-angular/blob/master/CONTRIBUTING.md#pull-requests">regras para geração de Pull Requests</a>.</p>
+        <p>Ao abrir a <em>pull request</em>, uma análise automática comenta na PR os componentes alterados, os componentes que os consomem, o risco estimado e onde testar. Use esse relatório como ponto de partida para o teste integrado.</p>
       </div>
     </div>
   </div>

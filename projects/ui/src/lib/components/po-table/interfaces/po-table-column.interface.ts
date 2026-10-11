@@ -1,8 +1,8 @@
-import { PoTableBoolean } from './po-table-boolean.interface';
 import { PoTableColumnIcon } from '../po-table-column-icon/po-table-column-icon.interface';
 import { PoTableColumnLabel } from '../po-table-column-label/po-table-column-label.interface';
 import { PoTableDetail } from '../po-table-detail/po-table-detail.interface';
 import { PoTableSubtitleColumn } from '../po-table-subtitle-footer/po-table-subtitle-column.interface';
+import { PoTableBoolean } from './po-table-boolean.interface';
 
 /**
  * @usedBy PoTableComponent
@@ -60,6 +60,16 @@ export interface PoTableColumn {
    * - <span class="dot po-color-11"></span> `color-11`
    * - <span class="dot po-color-12"></span> `color-12`
    *
+   * > Também é possível utilizar as 35 cores da paleta **Caption Tag Colors**:
+   *
+   *   - <span class="dot po-caption-tag-01"></span> `caption-tag-01` <span class="dot po-caption-tag-02"></span> `caption-tag-02` <span class="dot po-caption-tag-03"></span> `caption-tag-03` <span class="dot po-caption-tag-04"></span> `caption-tag-04` <span class="dot po-caption-tag-05"></span> `caption-tag-05`
+   *   - <span class="dot po-caption-tag-06"></span> `caption-tag-06` <span class="dot po-caption-tag-07"></span> `caption-tag-07` <span class="dot po-caption-tag-08"></span> `caption-tag-08` <span class="dot po-caption-tag-09"></span> `caption-tag-09` <span class="dot po-caption-tag-10"></span> `caption-tag-10`
+   *   - <span class="dot po-caption-tag-11"></span> `caption-tag-11` <span class="dot po-caption-tag-12"></span> `caption-tag-12` <span class="dot po-caption-tag-13"></span> `caption-tag-13` <span class="dot po-caption-tag-14"></span> `caption-tag-14` <span class="dot po-caption-tag-15"></span> `caption-tag-15`
+   *   - <span class="dot po-caption-tag-16"></span> `caption-tag-16` <span class="dot po-caption-tag-17"></span> `caption-tag-17` <span class="dot po-caption-tag-18"></span> `caption-tag-18` <span class="dot po-caption-tag-19"></span> `caption-tag-19` <span class="dot po-caption-tag-20"></span> `caption-tag-20`
+   *   - <span class="dot po-caption-tag-21"></span> `caption-tag-21` <span class="dot po-caption-tag-22"></span> `caption-tag-22` <span class="dot po-caption-tag-23"></span> `caption-tag-23` <span class="dot po-caption-tag-24"></span> `caption-tag-24` <span class="dot po-caption-tag-25"></span> `caption-tag-25`
+   *   - <span class="dot po-caption-tag-26"></span> `caption-tag-26` <span class="dot po-caption-tag-27"></span> `caption-tag-27` <span class="dot po-caption-tag-28"></span> `caption-tag-28` <span class="dot po-caption-tag-29"></span> `caption-tag-29` <span class="dot po-caption-tag-30"></span> `caption-tag-30`
+   *   - <span class="dot po-caption-tag-31"></span> `caption-tag-31` <span class="dot po-caption-tag-32"></span> `caption-tag-32` <span class="dot po-caption-tag-33"></span> `caption-tag-33` <span class="dot po-caption-tag-34"></span> `caption-tag-34` <span class="dot po-caption-tag-35"></span> `caption-tag-35`
+   *
    * > Existe a possibilidade de informar uma função que retorne um dos valores aceitos, serão passados
    * por parâmetro a linha e a coluna atual, por exemplo:
    *
@@ -72,7 +82,7 @@ export interface PoTableColumn {
    *
    * ```
    * { property: 'columnIcon', label: 'Like', type: 'icon', color: 'color-08', icons: [
-   *   { value: 'po-icon-star', action: () => this.notification() }
+   *   { value: 'an an-star', action: () => this.notification() }
    * ]},
    * ```
    */
@@ -96,17 +106,17 @@ export interface PoTableColumn {
   disabled?: Function;
 
   /**
-   * Formato de exibição do valor da coluna:
-   * - Formato para moeda (currency). Exemplos: 'BRL', 'USD'.
-   * - Formato para data (date): aceita apenas os caracteres de dia(dd), mês(MM ou mm) e ano (yyyy ou yy),
-   * caso não seja informado um formato o mesmo será 'dd/MM/yyyy'. Exemplos: 'dd/MM/yyyy', 'dd-MM-yy', 'mm/dd/yyyy'.
-   * - Formato para horário (time): aceita apenas os caracteres de hora(HH), minutos(mm), segundos(ss) e
-   *  milisegundos(f-ffffff), os milisegundos são opcionais, caso não seja informado um formato o mesmo será
-   * 'HH:mm:ss'. Exemplos: 'HH:mm', 'HH:mm:ss.ffffff', 'HH:mm:ss.ff', 'mm:ss.fff'.
-   * - Formato para números (number): aceita um valor seguindo o padrão [**DecimalPipe**](https://angular.io/api/common/DecimalPipe)
-   *  para formatação, e caso não seja informado, o número será exibido na sua forma original. Exemplo:
+   * Formato de exibição do valor da coluna.
    *
-   *  +  Com o valor de entrada: `50` e a valor para formatação: `'1.2-5'` o resultado será: `50.00`
+   * | Formatação | Type da Coluna  | Descrição | Exemplos |
+   * |------------|-----------------|-----------|----------|
+   * | Monetário  | `currency`      | Formato para valores monetários. Informe o código da moeda (ISO 4217). | `'BRL'`, `'USD'`, `'EUR'`, `'RUB'` |
+   * | Data       | `date`          | Aceita apenas os caracteres de dia(dd), mês(MM) e ano (yyyy ou yy), caso não seja informado um formato o mesmo será 'dd/MM/yyyy' | `'dd/MM/yyyy'`, `'dd-MM-yy'`, `'mm/dd/yyyy'` |
+   * | Data/Hora  | `dateTime`      | Aceita os caracteres de dia(dd), mês(MM), ano(yyyy), hora(HH para 24h ou hh para 12h), minutos(mm), segundos(ss), milissegundos(SSS) e período(a para AM/PM). Caso não seja informado um formato o mesmo será 'dd/MM/yyyy HH:mm:ss' | `'dd/MM/yyyy HH:mm'`, `'dd/MM/yyyy HH:mm:ss'`, `'dd/MM/yyyy HH:mm:ss.SSS'`, `'MM/dd/yyyy hh:mm a'`, `'yyyy-MM-dd HH:mm'`, `'short'`, `'medium'` |
+   * | Hora       | `time`          | Aceita apenas os caracteres de hora(HH), minutos(mm), segundos(ss) e milisegundos(f-ffffff), os milisegundos são opcionais, caso não seja informado um formato o mesmo será 'HH:mm:ss' | `'HH:mm'`, `'HH:mm:ss.ffffff'`, `'HH:mm:ss.ff'`, `'mm:ss.fff'` |
+   * | Número     | `number`        | Aceita um valor seguindo o padrão [**DecimalPipe**](https://angular.dev/api/common/DecimalPipe) para formatação, e caso não seja informado, o número será exibido na sua forma original. | `'1.2-5'` (ex.: `50` → `50.00`) |
+   *
+   * Observação: caso não seja informado um formato, o valor será exibido em sua forma original.
    */
   format?: string;
 
@@ -118,15 +128,15 @@ export interface PoTableColumn {
    *
    * ```
    *  { property: 'columnIcon', label: 'Icons', type: 'icon', action: this.favorite.bind(this), icons: [
-   *    { value: 'delete', icon: 'po-icon-plus', color: 'color-06', action: this.add.bind(this), tooltip: 'Adiciona um novo item' },
-   *    { value: 'edit', icon: 'po-icon-edit', action: this.edit.bind(this) },
-   *    { value: 'delete', icon: 'po-icon-delete', color: 'color-12', action: this.remove.bind(this) }
+   *    { value: 'delete', icon: 'an an-plus', color: 'color-06', action: this.add.bind(this), tooltip: 'Adiciona um novo item' },
+   *    { value: 'edit', icon: 'an an-pencil-simple', action: this.edit.bind(this) },
+   *    { value: 'delete', icon: 'an an-trash', color: 'color-12', action: this.remove.bind(this) }
    *  ]},
    * ```
    *
    * ```
    *  ...
-   *  { id: 1, columnIcon: ['po-icon-edit', 'po-icon-remove', 'po-icon-star'] }
+   *  { id: 1, columnIcon: ['an an-pencil-simple', 'an an-trash', 'an an-star'] }
    *  ...
    *
    * ```
@@ -146,8 +156,8 @@ export interface PoTableColumn {
    *
    * ```
    * { property: 'flightStatus', label: 'Status', type: 'label', width:'100px', labels: [
-   *  { value: 'confirmed', color: 'color-11', label: 'Confirmado', tooltip: 'Flight Status' },
-   *  { value: 'delayed', color: 'color-08', label: 'Atrasado', tooltip: 'Flight Status' }
+   *  { value: 'confirmed', color: 'caption-tag-13', label: 'Confirmado', tooltip: 'Flight Status' },
+   *  { value: 'delayed', color: 'caption-tag-08', label: 'Atrasado', tooltip: 'Flight Status' }
    * }
    * ```
    *
@@ -161,8 +171,25 @@ export interface PoTableColumn {
    */
   link?: string;
 
-  /** Nome identificador da coluna. */
+  /** Nome identificador da coluna. Também permite objetos aninhados conforme exemplo abaixo.
+   *
+   * ```
+   * { property: 'address.street', label: 'Rua' }
+   * ```
+   */
   property?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Controla se a coluna será considerada como "ordenavel". Caso seja definido um valor falso, a coluna não será usada para
+   * ordenação.
+   *
+   * @default `true`
+   */
+  sortable?: boolean;
 
   /**
    * Define um array de objetos para as colunas de legenda. Onde, `subtitles` é uma lista de objetos do tipo PoTableSubtitle na qual
@@ -170,8 +197,8 @@ export interface PoTableColumn {
    *
    * ```
    * { property: 'flightStatus', label: 'Status', color: 'subtitle', width:'100px', subtitles: [
-   *  { value: 'confirmed', color: 'color-11', label: 'Confirmado', content: '1' },
-   *  { value: 'delayed', color: 'color-08', label: 'Atrasado', content: '2' }
+   *  { value: 'confirmed', color: 'caption-tag-13', label: 'Confirmado', content: '1' },
+   *  { value: 'delayed', color: 'caption-tag-08', label: 'Atrasado', content: '2' }
    * }
    * ```
    * Nesse exemplo a coluna escolhida para legenda é 'flightStatus', se o valor dessa coluna for 'confirmed', o texto da legenda será
@@ -185,7 +212,7 @@ export interface PoTableColumn {
    *
    * > O tooltip só será visível se for uma coluna do tipo *link*.
    *
-   * > Caso a propriedade `p-hide-text-overflow` esteja habilitada e o conteúdo da célula exceder a largura da coluna,
+   * > Caso o conteúdo da célula exceder a largura da coluna,
    * é ignorado o valor atribuído ao *tooltip* e será exibido justamente o conteúdo da célula.
    */
   tooltip?: string;
@@ -199,14 +226,17 @@ export interface PoTableColumn {
    * - `currency`: valores monetários.
    *
    * - `date`: valor de datas.
-   *  + Aceita os tipos _string_ e _Date_ padrão do Javascript,
-   *  por exemplo: `'2017-11-28'` ou `new Date(2017, 10, 28)`.
+   *   + Aceita os tipos _string_ e _Date_ padrão do Javascript,
+   *   por exemplo: `'2017-11-28'` ou `new Date(2017, 10, 28)`.
    *
    * - `dateTime`: valor de data com horário.
-   *  + Aceita o tipo _string_ no formato **ISO-8601** extendido **'yyyy-mm-ddThh:mm:ss+|-hh:mm'**
-   * e o tipo _Date_ padrão do Javascript, por exemplo: `'2017-11-28T00:00:00-02:00'` ou `new Date(2017, 10, 28)`.
+   *   + Aceita o tipo _string_ no formato **ISO-8601** extendido **'yyyy-mm-ddTHH:mm:ss+|-hh:mm'**
+   *   ou **'yyyy-mm-ddTHH:mm+|-hh:mm'** (sem segundos),
+   *   e o tipo _Date_ padrão do Javascript, por exemplo: `'2017-11-28T00:00:00-02:00'`, `'2017-11-28T14:30-02:00'` ou `new Date(2017, 10, 28)`.
+   *   + A formatação de exibição pode ser configurada pela propriedade `format`.
    *
    * - `detail`: array de objetos para o master-detail.
+   *   + Incompatível com `virtual-scroll`, que requer altura fixa nas linhas.
    * - `icon`: *array* de *string* ou objetos para a coluna de ícones.
    * - `label`: texto com destaque.
    * - `link`: habilita link na coluna para ação ou navegação.
@@ -215,7 +245,7 @@ export interface PoTableColumn {
    * - `subtitle`: array de objetos para a coluna de legenda.
    *
    * - `time`: valor de horário.
-   *  + Aceita o tipo _string_ nos formatos **'HH:mm:ss'** ou **'HH:mm:ss.ffffff'**, por exemplo: `'23:12:45'`.
+   *   + Aceita o tipo _string_ nos formatos **'HH:mm:ss'** ou **'HH:mm:ss.ffffff'**, por exemplo: `'23:12:45'`.
    * - `cellTemplate`: Indica que a coluna será utilizada como template, em conjunto com o
    * [PoTableCellTemplate](/documentation/po-table-cell-template).
    * - `columnTemplate`: Indica que a coluna será utilizada como template, em conjunto com o
@@ -240,8 +270,67 @@ export interface PoTableColumn {
   visible?: boolean;
 
   /**
-   * A largura da coluna pode ser informada em pixels ou porcentagem.
-   * > Exemplo: '100px' ou '20%'.
+   *
+   * hoje o tamanho mínimo das colunas é de 32px, respeitando o padding lateral.
+   * Boas Práticas:
+   * Indicamos:
+   * - para colunas com 2 das propriedades (property, [p-draggable] e [p-sort]) : 96px
+   * - para colunas com 3 propriedades (property, [p-draggable] e [p-sort]) : 144px
+   *
    */
   width?: string;
+
+  fixed?: boolean;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Define uma máscara para formatação do valor exibido na coluna.
+   *
+   * A máscara é aplicada somente para **exibição** na tabela, formatando o valor bruto
+   * armazenado no model antes de apresentá-lo ao usuário.
+   *
+   * Caracteres válidos para a máscara:
+   * - `9` : aceita um dígito numérico (0-9).
+   * - `@` : aceita um caractere alfabético (a-z, A-Z).
+   * - `w` : aceita um caractere alfanumérico (a-z, A-Z, 0-9).
+   * - Demais caracteres são considerados fixos e inseridos automaticamente na formatação
+   * (por exemplo: `.`, `-`, `/`, `(`, `)`, `+`, ` `).
+   *
+   * Exemplos de uso:
+   * ```
+   * // CPF
+   * { property: 'cpf', label: 'CPF', mask: '999.999.999-99' }
+   *
+   * // CNPJ
+   * { property: 'cnpj', label: 'CNPJ', mask: '99.999.999/9999-99' }
+   *
+   * // Telefone
+   * { property: 'phone', label: 'Telefone', mask: '(99) 99999-9999' }
+   *
+   * // CEP
+   * { property: 'zipCode', label: 'CEP', mask: '99999-999' }
+   * ```
+   *
+   * > Esta propriedade é utilizada apenas para colunas do tipo `string` (padrão).
+   * Caso a coluna possua um `type` diferente de `string`, a máscara será ignorada.
+   */
+  mask?: string;
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Quando `true`, exclui a coluna dos metadados enviados ao endpoint de IA configurado
+   * em `p-search-ai-field`, independentemente de estar visível na tabela.
+   *
+   * Útil para ocultar colunas de controle interno (IDs, flags técnicos, etc.) da
+   * interpretação da linguagem natural.
+   *
+   * @default `false`
+   */
+  searchAiIgnore?: boolean;
 }

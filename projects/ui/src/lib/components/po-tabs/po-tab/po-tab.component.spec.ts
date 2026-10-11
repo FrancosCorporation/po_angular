@@ -1,23 +1,23 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 
-import { configureTestSuite } from './../../../util-test/util-expect.spec';
-
+import { PoTabsService } from '../po-tabs.service';
 import { PoTabComponent } from './po-tab.component';
+import { SimpleChange, SimpleChanges } from '@angular/core';
 
 describe('PoTabComponent:', () => {
   let component: PoTabComponent;
   let fixture: ComponentFixture<PoTabComponent>;
-
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      declarations: [PoTabComponent]
-    });
-  });
+  let tabsService: PoTabsService;
 
   beforeEach(() => {
+    TestBed.configureTestingModule({
+      declarations: [PoTabComponent],
+      providers: [PoTabsService]
+    }).compileComponents();
+
     fixture = TestBed.createComponent(PoTabComponent);
     component = fixture.componentInstance;
-
+    tabsService = TestBed.inject(PoTabsService);
     fixture.detectChanges();
   });
 
@@ -45,5 +45,18 @@ describe('PoTabComponent:', () => {
 
       expect(component['elementRef'].nativeElement.style.display).toBe('');
     });
+
+    it('should trigger onChanges after 100ms delay', fakeAsync(() => {
+      spyOn(tabsService, 'triggerOnChanges');
+
+      const changes: SimpleChanges = {
+        active: new SimpleChange(null, true, true)
+      };
+
+      component.ngOnChanges(changes);
+      tick(101);
+
+      expect(tabsService.triggerOnChanges).toHaveBeenCalled();
+    }));
   });
 });

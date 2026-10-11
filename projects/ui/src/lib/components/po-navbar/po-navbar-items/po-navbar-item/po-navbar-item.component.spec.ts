@@ -1,7 +1,6 @@
+import { provideNgReflectAttributes } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RouterModule } from '@angular/router';
-
-import { configureTestSuite } from 'projects/ui/src/lib/util-test/util-expect.spec';
 
 import { PoNavbarItemComponent } from './po-navbar-item.component';
 
@@ -10,14 +9,13 @@ describe('PoNavbarItemComponent:', () => {
   let fixture: ComponentFixture<PoNavbarItemComponent>;
   let nativeElement: any;
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
       declarations: [PoNavbarItemComponent],
-      imports: [RouterModule.forRoot([], { relativeLinkResolution: 'legacy' })]
-    });
-  });
+      imports: [RouterModule.forRoot([], {})],
+      providers: [provideNgReflectAttributes()]
+    }).compileComponents();
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(PoNavbarItemComponent);
     component = fixture.componentInstance;
 
@@ -112,8 +110,7 @@ describe('PoNavbarItemComponent:', () => {
 
       spyOn(component, 'itemClick');
 
-      const eventClick = document.createEvent('MouseEvents');
-      eventClick.initEvent('click', false, true);
+      const eventClick = new Event('click');
 
       const anchor = nativeElement.querySelector('a');
       anchor.dispatchEvent(eventClick);

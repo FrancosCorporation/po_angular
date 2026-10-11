@@ -1,0 +1,20 @@
+<div class="po-accordion-manager-header">
+  <button
+    #accordionHeaderButtonManagerElement
+    class="po-accordion-manager-button po-clickable"
+    type="button"
+    (click)="onClick()"
+    [attr.aria-expanded]="expandedAllItems"
+    [p-tooltip]="getTooltip()"
+  >
+    <div #accordionHeaderManagerElement class="po-text-ellipsis po-accordion-manager-button-content">
+      {{ expandedAllItems ? literals.closeAllItems : literals.expandAllItems }}
+    </div>
+    <po-icon
+      p-icon="ICON_LAST_PAGE"
+      [ngClass]="expandedAllItems ? 'icon-down' : 'icon-up'"
+      class="po-accordion-manager-icon"
+    >
+    </po-icon>
+  </button>
+</div>

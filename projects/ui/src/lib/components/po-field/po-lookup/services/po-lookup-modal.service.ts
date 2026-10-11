@@ -1,9 +1,9 @@
-import { Injectable, ComponentRef, EventEmitter } from '@angular/core';
+import { ComponentRef, EventEmitter, Injectable, inject } from '@angular/core';
 
-import { PoDynamicFormField } from './../../../po-dynamic/po-dynamic-form/po-dynamic-form-field.interface';
-import { PoComponentInjectorService } from '../../../../services/po-component-injector/po-component-injector.service';
 import { PoLookupColumn } from '../../../../components/po-field/po-lookup/interfaces/po-lookup-column.interface';
 import { PoLookupFilter } from '../../../../components/po-field/po-lookup/interfaces/po-lookup-filter.interface';
+import { PoComponentInjectorService } from '../../../../services/po-component-injector/po-component-injector.service';
+import { PoDynamicFormField } from '../../../po-dynamic/po-dynamic-form/interfaces/po-dynamic-form-field.interface';
 import { PoLookupLiterals } from '../interfaces/po-lookup-literals.interface';
 import { PoLookupModalComponent } from '../po-lookup-modal/po-lookup-modal.component';
 
@@ -12,13 +12,15 @@ import { PoLookupModalComponent } from '../po-lookup-modal/po-lookup-modal.compo
  *
  * Serviço responsável por controlar a abertura do componente Po Lookup Modal.
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class PoLookupModalService {
-  private componentRef: ComponentRef<any> = null;
+  private readonly poComponentInjector = inject(PoComponentInjectorService);
 
   selectValueEvent: EventEmitter<any> = new EventEmitter<any>();
 
-  constructor(private poComponentInjector: PoComponentInjectorService) {}
+  private componentRef: ComponentRef<any> = null;
 
   /**
    * Método responsável por abrir a modal de busca das informações.
@@ -29,16 +31,52 @@ export class PoLookupModalService {
    * @param filterParams {any} Valor que será repassado aos métodos do serviço para auxiliar no filtro dos dados.
    * @param title {string} Definição do título da modal.
    * @param literals {PoLookupLiterals} Literais utilizadas no componente.
+   * @param selectedItems {any} Valor que está selecionado que será repassado para o modal para apresentar na tabela.
+   * @param fieldLabel {string} Valor que será utilizado como descrição do campo.
+   * @param fieldValue {string} Valor que será utilizado como valor do campo.
+   * @param changeVisibleColumns {function} Função que será executada quando for alterada a visibilidade das colunas.
+   * @param columnRestoreManager {function} Função que será executada quando for restaurar as colunas padrão.
    */
   openModal(params: {
     advancedFilters: Array<PoDynamicFormField>;
     service: PoLookupFilter;
     columns: Array<PoLookupColumn>;
     filterParams: any;
+    hideColumnsManager: boolean;
     title: string;
     literals: PoLookupLiterals;
+    infiniteScroll: boolean;
+    multiple: boolean;
+    selectedItems: Array<any>;
+    fieldLabel: string;
+    fieldValue: string;
+    size: string;
+    spacing: string;
+    textWrap: boolean;
+    virtualScroll: boolean;
+    changeVisibleColumns: Function;
+    columnRestoreManager: Function;
   }): void {
-    const { advancedFilters, service, columns, filterParams, title, literals } = params;
+    const {
+      advancedFilters,
+      service,
+      columns,
+      filterParams,
+      hideColumnsManager,
+      title,
+      literals,
+      infiniteScroll,
+      multiple,
+      selectedItems,
+      fieldLabel,
+      fieldValue,
+      size,
+      spacing,
+      textWrap,
+      virtualScroll,
+      changeVisibleColumns,
+      columnRestoreManager
+    } = params;
 
     this.componentRef = this.poComponentInjector.createComponentInApplication(PoLookupModalComponent);
     this.componentRef.instance.advancedFilters = advancedFilters;
@@ -50,8 +88,27 @@ export class PoLookupModalService {
     this.componentRef.instance.model.subscribe($event => {
       this.selectValue($event);
     });
+    this.componentRef.instance.infiniteScroll = infiniteScroll;
+    this.componentRef.instance.multiple = multiple;
+    this.componentRef.instance.selectedItems = selectedItems;
+    this.componentRef.instance.fieldLabel = fieldLabel;
+    this.componentRef.instance.fieldValue = fieldValue;
+    this.componentRef.instance.changeVisibleColumns = changeVisibleColumns;
+    this.componentRef.instance.columnRestoreManager = columnRestoreManager;
+    this.componentRef.instance.hideColumnsManager = hideColumnsManager;
+    this.componentRef.instance.size = size;
+    this.componentRef.instance.spacing = spacing;
+    this.componentRef.instance.textWrap = textWrap;
+    this.componentRef.instance.virtualScroll = virtualScroll;
     this.componentRef.changeDetectorRef.detectChanges();
     this.componentRef.instance.openModal();
+  }
+
+  setChangeColumns(columns) {
+    if (this.componentRef !== null) {
+      this.componentRef.instance.columns = columns;
+      this.componentRef.changeDetectorRef.detectChanges();
+    }
   }
 
   // Este metodo é chamado quando é selecionado um item na lookup modal.

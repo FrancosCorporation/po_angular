@@ -1,13 +1,25 @@
-import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  Output,
+  ViewChild,
+  inject
+} from '@angular/core';
 
 import { PoUploadLiterals } from '../../interfaces/po-upload-literals.interface';
 
 @Component({
   selector: 'po-upload-drag-drop-area',
   templateUrl: './po-upload-drag-drop-area.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false
 })
 export class PoUploadDragDropAreaComponent {
+  elementRef = inject(ElementRef);
+
   @Input('p-directory-compatible') directoryCompatible: boolean;
 
   @Input('p-disabled') disabled: boolean;
@@ -21,8 +33,6 @@ export class PoUploadDragDropAreaComponent {
   @Output('p-select-files') selectFiles: EventEmitter<any> = new EventEmitter<any>();
 
   @ViewChild('selectFilesLink') selectFilesLinkElement: ElementRef;
-
-  constructor(public elementRef: ElementRef) {}
 
   focus() {
     this.selectFilesLinkElement.nativeElement.focus();

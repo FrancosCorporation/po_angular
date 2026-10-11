@@ -1,61 +1,104 @@
-<po-field-container [p-label]="label" [p-help]="help" [p-optional]="!required && optional">
-  <select
-    #select
-    class="po-select"
-    [attr.name]="name"
-    [disabled]="disabled"
-    [ngClass]="{ 'po-select-mobile': isMobile, 'po-invisible': isInvisibleSelectNative }"
-    [required]="required"
-    (change)="onSelectChange($event.target.value)"
-  >
-    <option *ngIf="isMobile" disabled hidden selected></option>
-    <option *ngFor="let option of options" [disabled]="readonly" [value]="option.value" (click)="onOptionClick(option)">
-      {{ option?.label }}
-    </option>
-  </select>
+@let poHelper = setHelper(label, additionalHelpTooltip);
+<po-field-container
+  [p-disabled]="isDisabled"
+  [p-id]="id"
+  [p-label]="label"
+  [p-optional]="optional"
+  [p-required]="required"
+  [p-show-required]="showRequired"
+  [p-helper]="label ? poHelper.helperSettings : undefined"
+  [p-show-helper]="label ? displayAdditionalHelp : undefined"
+  [p-size]="size"
+  [p-text-wrap]="labelTextWrap()"
+  [p-compact-label]="compactLabel()"
+>
+  <div class="po-field-container-content">
+    <div class="po-field-container-content-helper-wrapper">
+      <div class="po-field-container-input">
+        <select
+          #select
+          class="po-select po-select-phosphor"
+          [class.po-select-loading]="loading"
+          [class.po-select-placeholder]="!selectedValue?.toString() && !!placeholder"
+          [attr.data-focused-element]="!isDisabled"
+          [attr.data-inactive-component]="disabled || readonly || loading"
+          [attr.name]="name"
+          [disabled]="isDisabled"
+          [id]="id"
+          [required]="required"
+          (blur)="onBlur($event)"
+          (change)="onSelectChange($event.target.value)"
+          (keydown)="onKeyDown($event)"
+        >
+          @if (!isSafari) {
+            @if (!selectedValue?.toString() || !!placeholder) {
+              <option
+                [disabled]="!!placeholder"
+                [hidden]="!selectedValue?.toString() && !placeholder"
+                [selected]="!selectedValue?.toString()"
+                [value]="placeholder ?? ''"
+              >
+                {{ placeholder }}
+              </option>
+            }
+            <option [hidden]="true">{{ displayValue }}</option>
+          }
 
-  <div class="po-select-container">
-    <div
-      #selectButton
-      class="po-select-button"
-      [ngClass]="{ 'po-select-button-disabled': disabled, 'po-select-button-readonly': readonly }"
-      (click)="toggleButton()"
-    >
-      <span>{{ displayValue || placeholder }}</span>
+          @if (isSafari) {
+            <option>{{ displayValue || placeholder }}</option>
+          }
 
-      <div class="po-field-icon-container-right">
-        <span
-          #icon
-          class="po-icon {{ selectIcon }} po-field-icon"
-          [ngClass]="{ 'po-field-icon-disabled': disabled, 'po-field-icon-readonly': readonly }"
-        ></span>
+          @if (optionWithoutGroup.length > 0) {
+            @for (item of optionWithoutGroup; track item) {
+              <option [disabled]="readonly" [value]="item?.[this.fieldValue]">
+                {{ item?.[this.fieldLabel] }}
+              </option>
+            }
+          }
+          @if (listGroupOptions.length > 0) {
+            @for (item of listGroupOptions; track item) {
+              @if (item?.options.length > 0) {
+                <optgroup label="{{ item?.label }}" [disabled]="readonly">
+                  @for (subItem of item.options; track subItem) {
+                    <option [value]="subItem?.[this.fieldValue]" [disabled]="readonly">
+                      {{ subItem?.[this.fieldLabel] }}
+                    </option>
+                  }
+                </optgroup>
+              }
+            }
+          }
+        </select>
+
+        @if (loading) {
+          <div class="po-field-icon-container-right">
+            <po-loading-icon [p-size]="mapSizeToIcon(size)"></po-loading-icon>
+          </div>
+        }
       </div>
+
+      @if ((!this.label && poHelperComponent()) || (!this.label && poHelper.hideAdditionalHelp)) {
+        <po-helper
+          #helperEl
+          class="po-field-helper-button"
+          [p-size]="size"
+          [p-helper]="poHelper.helperSettings"
+          [p-disabled]="isDisabled"
+          [p-append-in-body]="appendBox"
+        >
+        </po-helper>
+      }
     </div>
-
-    <ul #contentList class="po-select-content" [ngClass]="{ 'po-invisible': isMobile }">
-      <li
-        *ngFor="let option of options"
-        [class.po-select-item-selected]="selectedValue == option.value"
-        [value]="option.value"
-        (click)="onOptionClick(option)"
-      >
-        <div class="po-select-item">
-          <ng-container *ngIf="selectOptionTemplate; then optionTemplate; else defaultOptionTemplate"></ng-container>
-
-          <ng-template #defaultOptionTemplate>
-            <span>{{ option?.label }}</span>
-          </ng-template>
-
-          <ng-template
-            #optionTemplate
-            [ngTemplateOutlet]="selectOptionTemplate?.templateRef"
-            [ngTemplateOutletContext]="{ $implicit: option }"
-          >
-          </ng-template>
-        </div>
-      </li>
-    </ul>
   </div>
 
-  <po-field-container-bottom></po-field-container-bottom>
+  @if (!readonly) {
+    <po-field-container-bottom
+      [p-append-in-body]="appendBox"
+      [p-help]="help"
+      [p-disabled]="isDisabled"
+      [p-error-pattern]="getErrorPattern()"
+      [p-error-limit]="errorLimit"
+      [p-size]="size"
+    ></po-field-container-bottom>
+  }
 </po-field-container>

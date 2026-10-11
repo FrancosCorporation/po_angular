@@ -8,6 +8,8 @@ import { PoButtonModule } from '../po-button/po-button.module';
 import { PoDisclaimerGroupModule } from '../po-disclaimer-group/po-disclaimer-group.module';
 import { PoDropdownModule } from '../po-dropdown/po-dropdown.module';
 import { PoFieldModule } from '../po-field/po-field.module';
+import { PoHelperModule } from '../po-helper/po-helper.module';
+import { PoIconModule } from '../po-icon';
 import { PoLanguageModule } from './../../services/po-language/po-language.module';
 import { PoModalModule } from './../po-modal/po-modal.module';
 import { PoPageContentComponent } from './po-page-content/po-page-content.component';
@@ -18,11 +20,13 @@ import { PoPageHeaderComponent } from './po-page-header/po-page-header.component
 import { PoPageListComponent } from './po-page-list/po-page-list.component';
 import { PoPageSlideComponent } from './po-page-slide/po-page-slide.component';
 import { PoPageComponent } from './po-page.component';
+import { PoPageSlideModule } from './po-page-slide/po-page-slide.module';
 
 /**
  * @description
- * Módulo dos componentes po-page-default, po-page-detail, po-page-edit,
- * po-page-list e po-page-slide.
+ *
+ * Módulo responsável pelos componentes de estrutura de página: `po-page-default`, `po-page-detail`,
+ * `po-page-edit`, `po-page-list` e `po-page-slide`.
  */
 @NgModule({
   imports: [
@@ -34,8 +38,11 @@ import { PoPageComponent } from './po-page.component';
     PoDisclaimerGroupModule,
     PoDropdownModule,
     PoFieldModule,
+    PoHelperModule,
+    PoIconModule,
     PoLanguageModule,
-    PoModalModule
+    PoModalModule,
+    PoPageSlideModule
   ],
   declarations: [
     PoPageComponent,
@@ -44,8 +51,7 @@ import { PoPageComponent } from './po-page.component';
     PoPageDetailComponent,
     PoPageEditComponent,
     PoPageHeaderComponent,
-    PoPageListComponent,
-    PoPageSlideComponent
+    PoPageListComponent
   ],
   exports: [
     PoPageDefaultComponent,

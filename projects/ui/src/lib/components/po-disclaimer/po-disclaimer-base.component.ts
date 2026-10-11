@@ -1,6 +1,8 @@
+import { PoLanguageService } from './../../services/po-language/po-language.service';
 import { EventEmitter, Input, Output, Directive } from '@angular/core';
 
 import { convertToBoolean } from '../../utils/util';
+import { PoDisclaimerLiterals } from './po-disclaimer.literals';
 
 const PO_DISCLAIMER_TYPES = ['default', 'danger'];
 const PO_DISCLAIMER_DEFAULT_TYPE = 'default';
@@ -17,11 +19,6 @@ const PO_DISCLAIMER_DEFAULT_TYPE = 'default';
  */
 @Directive()
 export class PoDisclaimerBaseComponent {
-  private _type: string = 'default';
-  private _hideClose?: boolean = false;
-
-  showDisclaimer = true;
-
   /**
    * Label que aparecerá dentro do po-disclaimer.
    * Quando não for definido um label será apresentada a propriedade p-value.
@@ -33,6 +30,32 @@ export class PoDisclaimerBaseComponent {
 
   /** Nome da propriedade vinculada à este po-disclaimer. */
   @Input('p-property') property?: string;
+
+  @Input('p-disclaimer-custom-width') disclaimerCustomWidth: number = 201;
+
+  @Input('p-last-disclaimer') lastDisclaimer: boolean = false;
+
+  @Input('p-append-in-body') appendInBody: boolean = false;
+
+  @Input('p-tooltip-position') tooltipPosition: string = 'bottom';
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Evento disparado ao fechar o disclaimer.
+   * Para este evento será passado como parâmetro um objeto com value, label e property.
+   */
+  @Output('p-close-action') closeAction: EventEmitter<any> = new EventEmitter<any>();
+
+  @Output('p-click-number') clickNumber: EventEmitter<any> = new EventEmitter<any>();
+
+  literals: any;
+  showDisclaimer = true;
+
+  private _type: string = 'default';
+  private _hideClose?: boolean = false;
 
   /**
    * @description
@@ -51,16 +74,6 @@ export class PoDisclaimerBaseComponent {
   }
 
   /**
-   * @optional
-   *
-   * @description
-   *
-   * Evento disparado ao fechar o disclaimer.
-   * Para este evento será passado como parâmetro um objeto com value, label e property.
-   */
-  @Output('p-close-action') closeAction: EventEmitter<any> = new EventEmitter<any>();
-
-  /**
    * @description
    *
    * Tipo do po-disclaimer. Pode ser 'default' ou 'danger'.
@@ -76,6 +89,13 @@ export class PoDisclaimerBaseComponent {
     return this._type;
   }
 
+  constructor(private readonly languageService: PoLanguageService) {
+    const language = this.languageService?.getShortLanguage();
+    this.literals = {
+      ...PoDisclaimerLiterals[language]
+    };
+  }
+
   close(): void {
     this.showDisclaimer = false;
     this.closeAction.emit({ value: this.value, label: this.label, property: this.property });
@@ -83,5 +103,9 @@ export class PoDisclaimerBaseComponent {
 
   getLabel() {
     return this.label ? this.label : this.value;
+  }
+
+  setAriaLabel() {
+    return this.label ? this.label + ' ' + this.literals.remove : this.value + ' ' + this.literals.remove;
   }
 }

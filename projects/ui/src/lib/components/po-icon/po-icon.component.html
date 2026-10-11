@@ -1,0 +1,7 @@
+@if (class) {
+  <i #iconElement [class]="class" aria-hidden="true">
+    <ng-content></ng-content>
+  </i>
+} @else {
+  <ng-template [ngTemplateOutlet]="icon"></ng-template>
+}

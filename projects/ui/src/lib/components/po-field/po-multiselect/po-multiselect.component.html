@@ -1,53 +1,138 @@
-<po-field-container [p-label]="label" [p-help]="help" [p-optional]="!required && optional">
-  <div class="po-field-container-content" [class.po-multiselect-show]="dropdownOpen">
-    <input
-      #inputElement
-      class="po-input po-input-icon-right po-clickable"
-      readonly
-      type="text"
-      [value]="getPlaceholder()"
-      [disabled]="disabled"
-      (keydown)="onKeyDown($event)"
-      (click)="toggleDropdownVisibility()"
-    />
+@let poHelper = setHelper(label, additionalHelpTooltip);
+@let needsHelper = !label && (poHelperComponent() || poHelper.hideAdditionalHelp);
 
-    <div class="po-field-icon-container-right">
-      <span
-        #iconElement
-        class="po-icon po-field-icon {{ dropdownIcon }}"
-        [ngClass]="disabled ? 'po-field-icon-disabled' : ''"
-        (click)="toggleDropdownVisibility()"
-      >
-      </span>
-    </div>
-
-    <div #disclaimerContainer class="po-multiselect-field" [class.po-multiselect-field-disabled]="disabled">
-      <po-disclaimer
-        *ngFor="let disclaimer of visibleDisclaimers"
-        [p-label]="disclaimer.label"
-        [p-value]="disclaimer.value"
-        [p-hide-close]="disclaimer.value === '' || disabled"
-        [class.po-clickable]="disclaimer.value === '' && !disabled"
-        (click)="openDropdown(disclaimer.value === '')"
-        (p-close-action)="closeDisclaimer(disclaimer.value)"
-      >
-      </po-disclaimer>
-    </div>
-  </div>
-
-  <po-multiselect-dropdown
-    #dropdownElement
-    [p-hide-search]="hideSearch"
-    [p-literals]="literals"
-    [p-options]="options"
-    [p-visible-options]="visibleOptionsDropdown"
-    [p-selected-values]="getValuesFromOptions(selectedOptions)"
-    [p-placeholder-search]="placeholderSearch"
-    (p-change)="changeItems($event)"
-    (p-change-search)="changeSearch($event)"
-    (p-close-dropdown)="controlDropdownVisibility(false)"
+<div #outerContainer>
+  <po-field-container
+    [p-disabled]="isDisabled"
+    [p-label]="label"
+    [p-optional]="optional"
+    [p-required]="required"
+    [p-show-required]="showRequired"
+    [p-helper]="label ? poHelper.helperSettings : undefined"
+    [p-show-helper]="label ? displayAdditionalHelp : undefined"
+    [p-size]="size"
+    [p-text-wrap]="labelTextWrap()"
+    [p-compact-label]="compactLabel()"
   >
-  </po-multiselect-dropdown>
+    <div
+      cdkOverlayOrigin
+      #trigger="cdkOverlayOrigin"
+      class="po-field-container-content"
+      [class.po-multiselect-show]="dropdownOpen"
+    >
+      <div class="po-field-container-content-helper-wrapper">
+        <div class="po-field-container-input">
+          <div
+            #inputElement
+            [tabindex]="isDisabled ? -1 : 0"
+            [attr.disabled]="isDisabled"
+            [attr.aria-label]="label"
+            [attr.data-focused-element]="!isDisabled"
+            [attr.data-inactive-component]="isDisabled"
+            [attr.p-size]="size"
+            class="po-input-icon-right po-multiselect-input"
+            [class.po-multiselect-input-auto]="autoHeight"
+            [class.po-multiselect-input-static]="!autoHeight"
+            [class.po-multiselect-input-disabled]="isDisabled"
+            [class.po-multiselect-input-font]="!disabled && !visibleTags?.length"
+            [class.po-multiselect-input-auto-dynamic-height]="isExpandedHeight"
+            (keydown)="onKeyDown($event)"
+            (click)="!isDisabled && toggleDropdownVisibility()"
+            (blur)="onBlur($event)"
+          >
+            @if (!disabled && !loading && !visibleTags?.length) {
+              <div class="po-multiselect-input-placeholder" ria-hidden="true">
+                <span>{{ placeholder ? placeholder : literals.selectItem }}</span>
+              </div>
+            }
 
-  <po-field-container-bottom></po-field-container-bottom>
-</po-field-container>
+            @for (tag of visibleTags; track tag; let i = $index) {
+              <po-tag
+                [p-value]="tag[fieldLabel]"
+                [p-literals]="i + 1 === visibleTags.length && hasMoreTag ? literalsTag : undefined"
+                [p-removable]="true"
+                [class.po-clickable]="tag[fieldValue] === '' && !disabled"
+                [p-disabled]="isDisabled"
+                (p-close)="closeTag(tag[fieldValue], $event)"
+                [p-append-in-body]="appendBox"
+              ></po-tag>
+            }
+
+            <div class="po-field-icon-container-right">
+              @if (loading) {
+                <po-loading-icon [p-size]="mapSizeToIcon(size)"></po-loading-icon>
+              } @else {
+                <po-icon
+                  p-icon="{{ dropdownIcon }}"
+                  #iconElement
+                  class="po-field-icon {{ disabled ? 'po-icon-input-disabled' : 'po-icon-input' }}"
+                  [class.po-field-icon-aa]="size === 'small'"
+                  [ngClass]="disabled ? 'po-field-icon-disabled' : ''"
+                >
+                </po-icon>
+              }
+            </div>
+          </div>
+        </div>
+
+        @if (needsHelper) {
+          <po-helper
+            #helperEl
+            class="po-field-helper-button"
+            [p-size]="size"
+            [p-helper]="poHelper.helperSettings"
+            [p-disabled]="isDisabled"
+            [p-append-in-body]="appendBox"
+          >
+          </po-helper>
+        }
+      </div>
+    </div>
+
+    @if (appendBox) {
+      <ng-template
+        cdkConnectedOverlay
+        [cdkConnectedOverlayOrigin]="trigger"
+        [cdkConnectedOverlayOpen]="true"
+        [cdkConnectedOverlayDisableClose]="true"
+      >
+        <ng-container *ngTemplateOutlet="dropdownListbox"></ng-container>
+      </ng-template>
+    } @else {
+      <ng-container *ngTemplateOutlet="dropdownListbox"> </ng-container>
+    }
+
+    <po-field-container-bottom
+      [p-append-in-body]="appendBox"
+      [p-help]="help"
+      [p-disabled]="isDisabled"
+      [p-error-pattern]="getErrorPattern()"
+      [p-error-limit]="errorLimit"
+      [p-size]="size"
+    ></po-field-container-bottom>
+  </po-field-container>
+
+  <ng-template #dropdownListbox>
+    <po-multiselect-dropdown
+      #dropdownElement
+      [p-searching]="isServerSearching"
+      [p-hide-search]="hideSearch"
+      [p-hide-select-all]="hideSelectAll"
+      [p-literals]="literals"
+      [p-options]="options"
+      [p-visible-options]="visibleOptionsDropdown"
+      [p-selected-options]="selectedOptions"
+      [p-placeholder-search]="placeholderSearch"
+      [p-field-value]="fieldValue"
+      [p-field-label]="fieldLabel"
+      [p-multiselect-template]="multiselectOptionTemplate"
+      [p-size]="size"
+      [p-container-width]="containerWidth"
+      (p-change)="changeItems($event)"
+      (p-change-search)="changeSearch($event)"
+      (p-close-dropdown)="controlDropdownVisibility(false)"
+      (keydown)="onKeyDownDropdown($event, 0)"
+    >
+    </po-multiselect-dropdown>
+  </ng-template>
+</div>

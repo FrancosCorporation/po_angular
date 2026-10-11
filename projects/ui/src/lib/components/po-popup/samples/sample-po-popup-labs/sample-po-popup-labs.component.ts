@@ -1,28 +1,32 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 
-import { PoNotificationService, PoCheckboxGroupOption, PoSelectOption, PoPopupAction } from '@po-ui/ng-components';
+import {
+  PoCheckboxGroupOption,
+  PoNotificationService,
+  PoPopupAction,
+  PoRadioGroupOption,
+  PoSelectOption
+} from '@po-ui/ng-components';
 
 @Component({
   selector: 'sample-po-popup-labs',
   templateUrl: './sample-po-popup-labs.component.html',
-  styles: [
-    `
-      .sample-button-container {
-        margin-top: 20px;
-        margin-bottom: 20px;
-      }
-    `
-  ]
+  styleUrls: ['./sample-po-popup-labs.component.css'],
+  standalone: false
 })
 export class SamplePoPopupLabsComponent implements OnInit {
+  private poNotification = inject(PoNotificationService);
+
   @ViewChild('target', { read: ElementRef, static: true }) targetRef: ElementRef;
 
-  action: PoPopupAction;
+  action: PoPopupAction & { parent?: string };
   actions: Array<PoPopupAction>;
   customPositions: Array<string>;
+  parentList: Array<PoSelectOption>;
   position: string;
   positions: string;
   properties: Array<string>;
+  size: string;
 
   public readonly actionOptions: Array<PoCheckboxGroupOption> = [
     { label: 'Disabled', value: 'disabled' },
@@ -32,9 +36,11 @@ export class SamplePoPopupLabsComponent implements OnInit {
   ];
 
   public readonly iconOptions: Array<PoSelectOption> = [
-    { value: 'po-icon-news', label: 'po-icon-news' },
-    { value: 'po-icon-search', label: 'po-icon-search' },
-    { value: 'po-icon-world', label: 'po-icon-world' }
+    { value: 'an an-newspaper', label: 'an an-newspaper' },
+    { value: 'an an-magnifying-glass', label: 'an an-magnifying-glass' },
+    { value: 'an an-globe', label: 'an an-globe' },
+    { label: 'fa fa-address-card', value: 'fa fa-address-card' },
+    { label: 'fa fa-bell', value: 'fa fa-bell' }
   ];
 
   public readonly positionOptions: Array<PoSelectOption> = [
@@ -54,21 +60,37 @@ export class SamplePoPopupLabsComponent implements OnInit {
 
   public readonly propertiesOptions: Array<PoCheckboxGroupOption> = [{ value: 'hideArrow', label: 'Hide arrow' }];
 
+  public readonly sizeOptions: Array<PoRadioGroupOption> = [
+    { label: 'small', value: 'small' },
+    { label: 'medium', value: 'medium' }
+  ];
+
   public readonly typeOptions: Array<PoSelectOption> = [
     { label: 'Danger', value: 'danger' },
     { label: 'Default', value: 'default' }
   ];
 
-  constructor(private poNotification: PoNotificationService) {}
-
   ngOnInit() {
     this.restore();
   }
 
-  addAction(action: PoPopupAction) {
-    const newAction = Object.assign({}, action);
+  addAction(action: PoPopupAction & { parent?: string }) {
+    const newAction: PoPopupAction = { ...action };
     newAction.action = newAction.action ? this.showAction.bind(this, newAction.action) : undefined;
-    this.actions.push(newAction);
+
+    if (!action.parent) {
+      this.actions = [...this.actions, newAction];
+    } else {
+      const parentNode = this.getActionNode(this.actions, action.parent);
+      if (parentNode) {
+        parentNode.subItems = [...(parentNode.subItems || []), newAction];
+      } else {
+        this.actions = [...this.actions, newAction];
+      }
+    }
+
+    this.actions = [].concat(this.actions);
+    this.parentList = this.updateParentList(this.actions);
 
     this.restoreActionForm();
   }
@@ -80,17 +102,62 @@ export class SamplePoPopupLabsComponent implements OnInit {
   restore() {
     this.actions = [];
     this.customPositions = [];
+    this.parentList = [];
     this.position = undefined;
     this.positions = '';
     this.properties = [];
+    this.size = 'medium';
     this.restoreActionForm();
   }
 
   restoreActionForm() {
     this.action = {
       label: undefined,
-      visible: null
-    };
+      visible: null,
+      parent: undefined
+    } as any;
+  }
+
+  private getActionNode(items: Array<PoPopupAction>, value: string): PoPopupAction | undefined {
+    if (!items || !Array.isArray(items) || !value) {
+      return undefined;
+    }
+
+    for (const item of items) {
+      if (item.label === value || (item as any).value === value) {
+        return item;
+      }
+
+      if (item.subItems && Array.isArray(item.subItems)) {
+        const found = this.getActionNode(item.subItems, value);
+        if (found) {
+          return found;
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  private updateParentList(
+    items: Array<PoPopupAction>,
+    level = 0,
+    parentList: Array<PoSelectOption> = []
+  ): Array<PoSelectOption> {
+    if (!items || !Array.isArray(items)) {
+      return parentList;
+    }
+
+    items.forEach(item => {
+      const { label } = item;
+      parentList.push({ label: `${'-'.repeat(level)} ${label}`, value: label });
+
+      if (item.subItems && Array.isArray(item.subItems)) {
+        this.updateParentList(item.subItems, level + 1, parentList);
+      }
+    });
+
+    return parentList;
   }
 
   private showAction(action: string): any {

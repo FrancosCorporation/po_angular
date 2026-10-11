@@ -2,14 +2,20 @@ import { Injectable } from '@angular/core';
 
 import { PoTableColumn } from '@po-ui/ng-components';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class SamplePoPageDynamicSearchHiringProcessesService {
   filter(filters) {
     let filteredItems = [...this.getItems()];
 
     Object.keys(filters).forEach(filter => {
       filteredItems = filteredItems.filter(register => {
-        return register[filter].toLocaleLowerCase().includes(filters[filter].toLocaleLowerCase());
+        if (typeof register[filter] === 'string') {
+          return register[filter].toLocaleLowerCase().includes(filters[filter].toLocaleLowerCase());
+        } else {
+          return register[filter] === filters[filter];
+        }
       });
     });
 
@@ -32,7 +38,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
       { property: 'name', label: 'Name' },
       { property: 'age', label: 'Age' },
       { property: 'city', label: 'City' },
-      { property: 'jobDescription', label: 'Job description', type: 'string' }
+      { property: 'jobDescription', label: 'Job description', type: 'string' },
+      { property: 'active', label: 'Active', type: 'boolean', boolean: { trueLabel: 'Yes', falseLabel: 'No' } }
     ];
   }
 
@@ -53,7 +60,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
         age: 24,
         idCard: 'AB34lxi90',
         job: 'abc',
-        jobDescription: 'Systems Analyst'
+        jobDescription: 'Systems Analyst',
+        active: true
       },
       {
         hireStatus: '2',
@@ -62,7 +70,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
         age: 23,
         idCard: 'HG56lds54',
         job: 'def',
-        jobDescription: 'Trainee'
+        jobDescription: 'Trainee',
+        active: true
       },
       {
         hireStatus: '3',
@@ -71,7 +80,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
         age: 31,
         idCard: 'DF23cfr65',
         job: 'ghi',
-        jobDescription: 'Programmer'
+        jobDescription: 'Programmer',
+        active: false
       },
       {
         hireStatus: '1',
@@ -80,7 +90,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
         age: 29,
         idCard: 'GF45fgh34',
         job: 'jkl',
-        jobDescription: 'Web developer'
+        jobDescription: 'Web developer',
+        active: true
       },
       {
         hireStatus: '1',
@@ -89,7 +100,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
         age: 34,
         idCard: 'RF76jut21',
         job: 'mno',
-        jobDescription: 'Recruiter'
+        jobDescription: 'Recruiter',
+        active: true
       },
       {
         hireStatus: '2',
@@ -98,7 +110,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
         age: 32,
         idCard: 'HY21kgu65',
         job: 'pqr',
-        jobDescription: 'Consultant'
+        jobDescription: 'Consultant',
+        active: false
       },
       {
         hireStatus: '1',
@@ -107,7 +120,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
         age: 24,
         idCard: 'UL78flg68',
         job: 'stu',
-        jobDescription: 'DBA'
+        jobDescription: 'DBA',
+        active: true
       },
       {
         hireStatus: '2',
@@ -116,7 +130,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
         age: 29,
         idCard: 'JH12oli98',
         job: 'ghi',
-        jobDescription: 'Programmer'
+        jobDescription: 'Programmer',
+        active: false
       }
     ];
   }
@@ -142,6 +157,8 @@ export class SamplePoPageDynamicSearchHiringProcessesService {
       actions: [{ label: 'Find on Google', disabled: false }],
       filters: [
         { property: 'idCard', gridColumns: 6 },
+        { property: 'hireStatus', initValue: '1' },
+        { property: 'age', initValue: 24, type: 'number' },
         { property: 'city', initValue: 'Ontario' }
       ],
       keepFilters: true

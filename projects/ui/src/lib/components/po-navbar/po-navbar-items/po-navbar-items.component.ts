@@ -1,4 +1,14 @@
-import { Component, ElementRef, Input, OnDestroy, OnInit, QueryList, ViewChild, ViewChildren } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Input,
+  OnDestroy,
+  OnInit,
+  QueryList,
+  ViewChild,
+  ViewChildren,
+  inject
+} from '@angular/core';
 import { NavigationCancel, NavigationEnd, Router } from '@angular/router';
 
 import { Subscription } from 'rxjs';
@@ -8,12 +18,11 @@ import { PoNavbarItemComponent } from './po-navbar-item/po-navbar-item.component
 
 @Component({
   selector: 'po-navbar-items',
-  templateUrl: './po-navbar-items.component.html'
+  templateUrl: './po-navbar-items.component.html',
+  standalone: false
 })
 export class PoNavbarItemsComponent implements OnInit, OnDestroy {
-  selectedItem: PoNavbarItem;
-
-  private routeSubscription: Subscription;
+  private readonly router = inject(Router);
 
   @ViewChild('navbarItemsContainer', { read: ElementRef, static: true }) navbarItemsContainer: ElementRef;
 
@@ -21,7 +30,9 @@ export class PoNavbarItemsComponent implements OnInit, OnDestroy {
 
   @Input('p-items') items: Array<PoNavbarItem>;
 
-  constructor(private router: Router) {}
+  selectedItem: PoNavbarItem;
+
+  private routeSubscription: Subscription;
 
   ngOnDestroy() {
     this.routeSubscription.unsubscribe();

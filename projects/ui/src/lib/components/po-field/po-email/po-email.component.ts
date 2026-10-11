@@ -1,5 +1,17 @@
-import { AfterViewInit, Component, ElementRef, forwardRef, OnDestroy } from '@angular/core';
-import { AbstractControl, NG_VALUE_ACCESSOR, NG_VALIDATORS } from '@angular/forms';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  forwardRef,
+  OnDestroy,
+  inject,
+  OnChanges,
+  SimpleChanges
+} from '@angular/core';
+import { AbstractControl, NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { uuid } from '../../../utils/util';
 
 import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 
@@ -7,13 +19,13 @@ import { PoInputGeneric } from '../po-input-generic/po-input-generic';
 const providers = [
   {
     provide: NG_VALUE_ACCESSOR,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoEmailComponent),
     multi: true
   },
   {
     provide: NG_VALIDATORS,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoEmailComponent),
     multi: true
   }
@@ -24,15 +36,13 @@ const providers = [
  *
  * @description
  *
- * po-email é um input específico para receber E-mail, com o pattern já configurado.
+ * O `po-email` é um input específico para receber E-mail, com o pattern já configurado.
  *
  * @example
  *
  * <example name="po-email-basic" title="PO Email Basic">
  *  <file name="sample-po-email-basic/sample-po-email-basic.component.html"> </file>
  *  <file name="sample-po-email-basic/sample-po-email-basic.component.ts"> </file>
- *  <file name="sample-po-email-basic/sample-po-email-basic.component.e2e-spec.ts"> </file>
- *  <file name="sample-po-email-basic/sample-po-email-basic.component.po.ts"> </file>
  * </example>
  *
  * <example name="po-email-labs" title="PO Email Labs">
@@ -48,23 +58,55 @@ const providers = [
 @Component({
   selector: 'po-email',
   templateUrl: '../po-input/po-input.component.html',
-  providers
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  providers,
+  standalone: false
 })
-export class PoEmailComponent extends PoInputGeneric implements AfterViewInit, OnDestroy {
-  icon = 'po-icon-mail';
+export class PoEmailComponent extends PoInputGeneric implements AfterViewInit, OnDestroy, OnChanges {
+  id = `po-email[${uuid()}]`;
+  icon = 'ICON_MAIL';
 
   type = 'email';
 
-  pattern = '^([\\w-]+(?:\\.[\\w-]+)*)@((?:[\\w-]+\\.)*\\w[\\w-]{0,66})\\.([a-z]{2,6}(?:\\.[a-z]{2})?)$';
+  // Consideramos o uso do nosso pattern com a seguinte expressão.
+  // Antes do símbolo @:
+  // - não há limite de caracteres.
+  // - não pode haver espaços em branco, caracteres acentuados, caracteres especiais ou símbolos.
+  // - pode começar com letras, números, hífen ou undescore (underline).
+  //
+  // Depois do símbolo @:
+  // - o domínio tem um limite de até 66 caracteres após um separador.
+  // - separador deve ser um 'ponto' (.).
+  // - o primeiro bloco pode conter letras, números, hífen ou underscore (underline).
+  // - após o primeiro separador é permitido apenas letras.
+  // - não pode haver espaços em branco, caracteres acentuados, caracteres especiais ou símbolos.
+  //
+  // Limite total de 254 caracteres para o e-mail.
+  //
+  // As recomendações foram consultadas nas RFC 1034, RFC 5321 e RFC 5322.
+  //
+  // RFC 1034 - https://datatracker.ietf.org/doc/html/rfc1034#section-3
+  // RFC 5321 - https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.1
+  // RFC 5322 - https://datatracker.ietf.org/doc/html/rfc5322#section-3.4
+  pattern = '^([\\w-]+(?:\\.[\\w-]+)*)@((?:[\\w-]+\\.)*\\w[\\w-]{0,66})\\.([A-Za-z]{2,66}(?:\\.[A-Za-z]{2})?)$';
 
   mask = '';
 
-  private listener = this.validateClassesForPattern.bind(this);
+  private readonly listener = this.validateClassesForPattern.bind(this);
 
   /* istanbul ignore next */
-  constructor(el: ElementRef) {
-    super(el);
+  constructor() {
+    const el = inject(ElementRef);
+    const cd = inject(ChangeDetectorRef);
+
+    super(el, cd);
     this.maxlength = 254;
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
   }
 
   ngAfterViewInit() {

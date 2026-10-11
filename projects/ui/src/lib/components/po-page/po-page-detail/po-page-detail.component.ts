@@ -24,7 +24,8 @@ import { PoPageDetailBaseComponent } from './po-page-detail-base.component';
  */
 @Component({
   selector: 'po-page-detail',
-  templateUrl: './po-page-detail.component.html'
+  templateUrl: './po-page-detail.component.html',
+  standalone: false
 })
 export class PoPageDetailComponent extends PoPageDetailBaseComponent {
   hasAnyAction(): boolean {
@@ -33,9 +34,9 @@ export class PoPageDetailComponent extends PoPageDetailBaseComponent {
 
   hasEditFn(property: string): string {
     if (property === 'icon') {
-      return this.hasEvent('edit') ? '' : 'po-icon-delete';
+      return this.hasEvent('edit') ? '' : 'ICON_DELETE';
     } else if (property === 'type') {
-      return this.hasEvent('edit') ? 'default' : 'primary';
+      return this.hasEvent('edit') ? 'secondary' : 'primary';
     } else {
       return '';
     }
@@ -43,9 +44,9 @@ export class PoPageDetailComponent extends PoPageDetailBaseComponent {
 
   hasEditOrRemoveFn(property: string): string {
     if (property === 'icon') {
-      return this.hasEvent('edit') || this.hasEvent('remove') ? '' : 'po-icon-arrow-left';
+      return this.hasEvent('edit') || this.hasEvent('remove') ? '' : 'ICON_ARROW_LEFT';
     } else if (property === 'type') {
-      return this.hasEvent('edit') || this.hasEvent('remove') ? 'default' : 'primary';
+      return this.hasEvent('edit') || this.hasEvent('remove') ? 'secondary' : 'primary';
     } else {
       return '';
     }

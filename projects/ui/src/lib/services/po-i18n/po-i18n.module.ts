@@ -1,5 +1,5 @@
-import { HttpClient, HttpClientModule } from '@angular/common/http';
-import { APP_INITIALIZER, ModuleWithProviders, NgModule } from '@angular/core';
+import { ModuleWithProviders, NgModule, inject, provideAppInitializer } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 
 import { PoLanguageService } from './../po-language/po-language.service';
 
@@ -144,7 +144,6 @@ import { PoLanguageModule } from '../po-language/po-language.module';
  * Para aplicações que utilizem a abordagem de módulos com carregamento *lazy loading*, caso seja
  * definida outra configuração do `PoI18nModule`, deve-se atentar os seguintes detalhes:
  *
- * - Caso existam literais comuns na aplicação, estas devem ser reimportadas;
  * - Não defina outra *default language* para este módulo. Caso for definida, será sobreposta para
  * toda a aplicação;
  * - Caso precise de módulos carregados via *lazy loading* com linguagens diferentes, utilize o
@@ -153,7 +152,7 @@ import { PoLanguageModule } from '../po-language/po-language.module';
  */
 
 @NgModule({
-  imports: [HttpClientModule, PoLanguageModule]
+  imports: [PoLanguageModule]
 })
 export class PoI18nModule {
   static config(config: PoI18nConfig): ModuleWithProviders<PoI18nModule> {
@@ -162,14 +161,13 @@ export class PoI18nModule {
       providers: [
         {
           provide: I18N_CONFIG,
-          useValue: config
+          useValue: config,
+          multi: true
         },
-        {
-          provide: APP_INITIALIZER,
-          useFactory: initializeLanguageDefault,
-          multi: true,
-          deps: [I18N_CONFIG, PoLanguageService]
-        },
+        provideAppInitializer(() => {
+          const initializerFn = initializeLanguageDefault(inject(I18N_CONFIG), inject(PoLanguageService));
+          return initializerFn();
+        }),
         {
           provide: PoI18nService,
           useFactory: returnPoI18nService,
@@ -180,12 +178,12 @@ export class PoI18nModule {
   }
 }
 
-export function initializeLanguageDefault(config: PoI18nConfig, languageService: PoLanguageService) {
-  // tslint:disable-next-line:prefer-immediate-return
-  const setDefaultLanguage = () => {
-    if (config.default.language) {
+export function initializeLanguageDefault(configs: Array<PoI18nConfig>, languageService: PoLanguageService) {
+  const config = configs.find(c => c.default); // Busca a configuração com `default`
+
+  return () => {
+    if (config?.default.language) {
       languageService.setLanguageDefault(config.default.language);
     }
   };
-  return setDefaultLanguage;
 }

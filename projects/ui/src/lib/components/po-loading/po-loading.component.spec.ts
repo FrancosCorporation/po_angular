@@ -33,7 +33,9 @@ describe('PoLoadingComponent', () => {
     component.text = expectedContent;
     fixture.detectChanges();
 
-    const contentComponent = nativeElement.querySelector('.po-loading-label').innerHTML;
+    const contentComponent = nativeElement
+      .querySelector('.po-loading-label')
+      .innerHTML.substr(0, expectedContent.length);
 
     expect(contentComponent).toBe(expectedContent);
   });
@@ -53,6 +55,13 @@ describe('PoLoadingComponent', () => {
       fixture.detectChanges();
 
       expect(nativeElement.querySelector('.po-loading-label')).toBeTruthy();
+    });
+    it('po-loading-label: should show default label when text is not defined.', () => {
+      component.text = undefined;
+
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('.po-loading-label')).toBeDefined();
     });
   });
 });

@@ -4,13 +4,14 @@ import { PoModalPasswordRecoveryComponent, PoModalPasswordRecoveryType } from '@
 
 @Component({
   selector: 'sample-po-modal-password-recovery-request',
-  templateUrl: './sample-po-modal-password-recovery-request.component.html'
+  templateUrl: './sample-po-modal-password-recovery-request.component.html',
+  standalone: false
 })
 export class SamplePoModalPasswordRecoveryRequestComponent {
-  type: PoModalPasswordRecoveryType = PoModalPasswordRecoveryType.All;
-  urlRecovery: string = 'https://po-sample-api.herokuapp.com/v1/users';
-
   @ViewChild(PoModalPasswordRecoveryComponent) poModalPasswordRecovery: PoModalPasswordRecoveryComponent;
+
+  type: PoModalPasswordRecoveryType = PoModalPasswordRecoveryType.All;
+  urlRecovery: string = 'https://po-sample-api.onrender.com/v1/users';
 
   openPasswordRecoveryModal() {
     this.poModalPasswordRecovery.open();

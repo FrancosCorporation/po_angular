@@ -1,9 +1,11 @@
-import { Directive } from '@angular/core';
-import { fakeAsync, tick } from '@angular/core/testing';
-import { AbstractControl, FormControl } from '@angular/forms';
+import { ChangeDetectorRef, Directive } from '@angular/core';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { AbstractControl, FormControl, UntypedFormControl, Validators } from '@angular/forms';
 
 import { expectPropertiesValues, expectSettersMethod } from '../../../util-test/util-expect.spec';
 
+import { Subject } from 'rxjs';
+import { PoThemeA11yEnum } from '../../../services';
 import { PoInputBaseComponent } from './po-input-base.component';
 import { PoMask } from './po-mask';
 
@@ -21,47 +23,59 @@ class PoInput extends PoInputBaseComponent {
   writeValueModel(value: string) {}
 }
 
-describe('PoInputBase:', () => {
+describe('PoInputBase:', async () => {
   let component: PoInput;
+  let changeDetectorRef: jasmine.SpyObj<ChangeDetectorRef>;
+  const fakeSubscription = <any>{ unsubscribe: () => {} };
 
-  beforeEach(() => {
-    component = new PoInput();
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({}).compileComponents();
+
+    changeDetectorRef = jasmine.createSpyObj('ChangeDetectorRef', ['markForCheck', 'detectChanges']);
+
+    component = TestBed.runInInjectionContext(() => new PoInput(changeDetectorRef as any));
   });
 
   it('should be created', () => {
     expect(component instanceof PoInput).toBeTruthy();
   });
 
+  it('ngOnDestroy: should unsubscribe `subscription` on destroy', () => {
+    component['subscription'] = fakeSubscription;
+
+    spyOn(component['subscription'], <any>'unsubscribe');
+
+    component.ngOnDestroy();
+
+    expect(component['subscription'].unsubscribe).toHaveBeenCalled();
+  });
+
   it('should set disabled', () => {
     spyOn(component, <any>'validateModel');
 
-    expectSettersMethod(component, 'setDisabled', '', 'disabled', true);
-    expectSettersMethod(component, 'setDisabled', 'true', 'disabled', true);
-    expectSettersMethod(component, 'setDisabled', 'false', 'disabled', false);
+    expectSettersMethod(component, 'setDisabled', true, 'disabled', true);
+    expectSettersMethod(component, 'setDisabled', false, 'disabled', false);
 
     expect(component['validateModel']).toHaveBeenCalled();
   });
 
   it('should set readonly', () => {
-    expectSettersMethod(component, 'setReadonly', '', 'readonly', true);
-    expectSettersMethod(component, 'setReadonly', 'true', 'readonly', true);
-    expectSettersMethod(component, 'setReadonly', 'false', 'readonly', false);
+    expectSettersMethod(component, 'setReadonly', true, 'readonly', true);
+    expectSettersMethod(component, 'setReadonly', false, 'readonly', false);
   });
 
   it('should set required', () => {
     spyOn(component, <any>'validateModel');
 
-    expectSettersMethod(component, 'setRequired', '', 'required', true);
-    expectSettersMethod(component, 'setRequired', 'true', 'required', true);
-    expectSettersMethod(component, 'setRequired', 'false', 'required', false);
+    expectSettersMethod(component, 'setRequired', true, 'required', true);
+    expectSettersMethod(component, 'setRequired', false, 'required', false);
 
     expect(component['validateModel']).toHaveBeenCalled();
   });
 
   it('should set clean', () => {
-    expectSettersMethod(component, 'setClean', '', 'clean', true);
-    expectSettersMethod(component, 'setClean', 'true', 'clean', true);
-    expectSettersMethod(component, 'setClean', 'false', 'clean', false);
+    expectSettersMethod(component, 'setClean', true, 'clean', true);
+    expectSettersMethod(component, 'setClean', false, 'clean', false);
   });
 
   it('should set pattern', () => {
@@ -74,24 +88,19 @@ describe('PoInputBase:', () => {
   });
 
   it('should set mask', () => {
-    spyOn(component, <any>'validateModel');
-
     expectSettersMethod(component, 'setMask', '', 'mask', '');
     expectSettersMethod(component, 'setMask', '(999)', 'mask', '(999)');
-
-    expect(component['validateModel']).toHaveBeenCalled();
   });
 
   it('should set maskFormatModel', () => {
     spyOn(component, <any>'validateModel');
 
-    expectSettersMethod(component, 'setMaskFormatModel', '', 'maskFormatModel', true);
-    expectSettersMethod(component, 'setMaskFormatModel', 'true', 'maskFormatModel', true);
-    expectSettersMethod(component, 'setMaskFormatModel', 'false', 'maskFormatModel', false);
+    expectSettersMethod(component, 'setMaskFormatModel', true, 'maskFormatModel', true);
+    expectSettersMethod(component, 'setMaskFormatModel', false, 'maskFormatModel', false);
 
     component.objMask = new PoMask('', true);
 
-    expectSettersMethod(component, 'setMaskFormatModel', 'true', 'maskFormatModel', true);
+    expectSettersMethod(component, 'setMaskFormatModel', true, 'maskFormatModel', true);
     expect(component.objMask.formatModel).toBeTruthy();
 
     expect(component['validateModel']).toHaveBeenCalled();
@@ -113,7 +122,7 @@ describe('PoInputBase:', () => {
     component.pattern = '';
 
     spyOn(component, 'extraValidation');
-    component.validate(new FormControl());
+    component.validate(new UntypedFormControl());
     expect(component.extraValidation).toHaveBeenCalled();
   });
 
@@ -151,8 +160,37 @@ describe('PoInputBase:', () => {
     component.pattern = '[0-1]';
 
     spyOn(component, 'extraValidation');
-    expect(component.validate(new FormControl('2'))).not.toBeNull();
+    expect(component.validate(new UntypedFormControl('2'))).not.toBeNull();
     expect(component.extraValidation).not.toHaveBeenCalled();
+  });
+
+  it('should call markForCheck when status is INVALID', fakeAsync(() => {
+    component['cd'] = { markForCheck: () => {} } as any;
+    component.errorPattern = 'Erro inválido';
+    const controlMock = {
+      statusChanges: new Subject<string>()
+    } as any;
+
+    spyOn(component['cd'], 'markForCheck');
+
+    component.validate(controlMock);
+
+    controlMock.statusChanges.next('INVALID');
+    tick();
+
+    expect(component.isInvalid).toBeTrue();
+    expect(component['cd'].markForCheck).toHaveBeenCalled();
+  }));
+
+  it('validate: should set hasValidatorRequired to true if showErrorMessageRequired is true and control has required validator', () => {
+    component.hasValidatorRequired = false;
+    component.showErrorMessageRequired = true;
+
+    const controlMock = new FormControl('', Validators.required);
+
+    component.validate(controlMock);
+
+    expect(component.hasValidatorRequired).toBeTrue();
   });
 
   it('should register function OnChangePropagate', () => {
@@ -164,11 +202,11 @@ describe('PoInputBase:', () => {
   });
 
   it('should register function registerOnTouched', () => {
-    component.onTouched = undefined;
+    component['onTouched'] = undefined;
     const func = () => true;
 
     component.registerOnTouched(func);
-    expect(component.onTouched).toBe(func);
+    expect(component['onTouched']).toBe(func);
   });
 
   it('should call writeValueModel', () => {
@@ -178,6 +216,10 @@ describe('PoInputBase:', () => {
   });
 
   describe('Properties:', () => {
+    it('p-compact-label: should have default value as false', () => {
+      expect(component.compactLabel()).toBe(false);
+    });
+
     it('p-placeholder: should update property p-placeholder with valid value.', () => {
       component.placeholder = 'teste';
       expect(component.placeholder).toBe('teste');
@@ -218,14 +260,252 @@ describe('PoInputBase:', () => {
       expectPropertiesValues(component, 'minlength', invalidValues, undefined);
     });
 
-    it('p-no-autocomplete: should update property with valid values with valid values.', () => {
-      const invalidValues = [undefined, null, 0, 'false', 'string'];
-      expectPropertiesValues(component, 'noAutocomplete', invalidValues, false);
+    it('p-no-autocomplete: should update property to false.', () => {
+      component.noAutocomplete = false;
+      expect(component.noAutocomplete).toBeFalse();
     });
 
-    it('p-no-autocomplete: should update property with valid values with valid values.', () => {
-      const validValues = [true, 'true', 1, ' '];
-      expectPropertiesValues(component, 'noAutocomplete', validValues, true);
+    it('p-no-autocomplete: should update property to true.', () => {
+      component.noAutocomplete = true;
+      expect(component.noAutocomplete).toBeTrue();
+    });
+
+    describe('p-mask-no-length-validation:', () => {
+      describe('with p-maxlength:', () => {
+        it('validate: should return maxlength false when `maskNoLengthValidation` is false and value exceeds maxlength', () => {
+          component.maxlength = 5;
+          component.maskNoLengthValidation = false;
+          component.getScreenValue = () => '123456';
+
+          const result = component.validate(new FormControl('123456'));
+
+          expect(result).toEqual({
+            maxlength: {
+              valid: false
+            }
+          });
+        });
+
+        it('validate: should return null when `maskNoLengthValidation` is false and value is within maxlength', () => {
+          component.maxlength = 6;
+          component.maskNoLengthValidation = false;
+          component.getScreenValue = () => '123456';
+
+          const result = component.validate(new FormControl('123456'));
+
+          expect(result).toBeNull();
+        });
+
+        it('validate: should return maxlength false when `maskNoLengthValidation` is true, ignoring special characters, and value exceeds maxlength', () => {
+          component.maxlength = 5;
+          component.maskNoLengthValidation = true;
+          component.getScreenValue = () => '12-3456';
+
+          const result = component.validate(new FormControl('12-3456'));
+
+          expect(result).toEqual({
+            maxlength: {
+              valid: false
+            }
+          });
+        });
+
+        it('validate: should return null when `maskNoLengthValidation` is true and alphanumeric value is within maxlength ignoring special characters', () => {
+          component.maxlength = 6;
+          component.maskNoLengthValidation = true;
+          component.getScreenValue = () => '12-345';
+
+          const result = component.validate(new FormControl('12-345'));
+
+          expect(result).toBeNull();
+        });
+
+        it('validate: should handle special characters-only input correctly when `maskNoLengthValidation` is true', () => {
+          component.maxlength = 1;
+          component.maskNoLengthValidation = true;
+          component.getScreenValue = () => '---';
+
+          const result = component.validate(new FormControl('---'));
+
+          expect(result).toBeNull();
+        });
+
+        it('validate: should handle null or undefined values gracefully', () => {
+          component.maxlength = 5;
+          component.maskNoLengthValidation = true;
+
+          let result = component.validate(new FormControl(null));
+          expect(result).toBeNull();
+
+          result = component.validate(new FormControl(undefined));
+          expect(result).toBeNull();
+        });
+
+        it('validate: should return maxlength false when `maskFormatModel` is true, bypassing maskNoLengthValidation', () => {
+          component.maxlength = 5;
+          component.maskFormatModel = true;
+          component.maskNoLengthValidation = true;
+          component.getScreenValue = () => '123456';
+
+          const result = component.validate(new FormControl('123456'));
+
+          expect(result).toEqual({
+            maxlength: {
+              valid: false
+            }
+          });
+        });
+      });
+
+      describe('with p-minlength:', () => {
+        it('validate: should return minlength false when `maskNoLengthValidation` is false and value is below minlength', () => {
+          component.minlength = 5;
+          component.maskNoLengthValidation = false;
+          component.getScreenValue = () => '123';
+
+          const result = component.validate(new FormControl('123'));
+
+          expect(result).toEqual({
+            minlength: {
+              valid: false
+            }
+          });
+        });
+
+        it('validate: should return null when `maskNoLengthValidation` is false and value meets minlength', () => {
+          component.minlength = 3;
+          component.maskNoLengthValidation = false;
+          component.getScreenValue = () => '123';
+
+          const result = component.validate(new FormControl('123'));
+
+          expect(result).toBeNull();
+        });
+
+        it('validate: should return minlength false when `maskNoLengthValidation` is true, ignoring special characters, and value is below minlength', () => {
+          component.minlength = 5;
+          component.maskNoLengthValidation = true;
+          component.getScreenValue = () => '1-2-3';
+
+          const result = component.validate(new FormControl('1-2-3'));
+
+          expect(result).toEqual({
+            minlength: {
+              valid: false
+            }
+          });
+        });
+
+        it('validate: should return null when `maskNoLengthValidation` is true and alphanumeric value meets minlength ignoring special characters', () => {
+          component.minlength = 3;
+          component.maskNoLengthValidation = true;
+          component.getScreenValue = () => '1-2-3';
+
+          const result = component.validate(new FormControl('1-2-3'));
+
+          expect(result).toBeNull();
+        });
+
+        it('validate: should handle special characters-only input correctly when `maskNoLengthValidation` is true', () => {
+          component.minlength = 1;
+          component.maskNoLengthValidation = true;
+          component.getScreenValue = () => '---';
+
+          const result = component.validate(new FormControl('---'));
+
+          expect(result).toEqual({
+            minlength: {
+              valid: false
+            }
+          });
+        });
+
+        it('validate: should handle null or undefined values gracefully', () => {
+          component.minlength = 5;
+          component.maskNoLengthValidation = true;
+
+          let result = component.validate(new FormControl(null));
+          expect(result).toBeNull();
+
+          result = component.validate(new FormControl(undefined));
+          expect(result).toBeNull();
+        });
+
+        it('validate: should return minlength false when `maskFormatModel` is true, bypassing maskNoLengthValidation', () => {
+          component.minlength = 5;
+          component.maskFormatModel = true;
+          component.maskNoLengthValidation = true;
+          component.getScreenValue = () => '123';
+
+          const result = component.validate(new FormControl('123'));
+
+          expect(result).toEqual({
+            minlength: {
+              valid: false
+            }
+          });
+        });
+      });
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('onThemeChange: should call applySizeBasedOnA11y', () => {
+        spyOn<any>(component, 'applySizeBasedOnA11y');
+        component['onThemeChange']();
+        expect((component as any).applySizeBasedOnA11y).toHaveBeenCalled();
+      });
     });
   });
 
@@ -233,6 +513,7 @@ describe('PoInputBase:', () => {
     it('controlChangeModelEmitter: should not emit changeModel if previous model value is equal to current model value', () => {
       const newModelValue: number = 1;
       component.modelLastUpdate = 1;
+      component.emitAllChanges = false;
 
       spyOn(component.changeModel, 'emit');
       component.controlChangeModelEmitter.call(component, newModelValue);
@@ -241,14 +522,64 @@ describe('PoInputBase:', () => {
     });
 
     it(`controlChangeModelEmitter: should emit changeModel with new value if previous
-        model value is different from current model value`, () => {
+    model value is different from current model value`, () => {
       const newModelValue: number = 2;
       component.modelLastUpdate = 1;
+      component.emitAllChanges = true;
 
       spyOn(component.changeModel, 'emit');
       component.controlChangeModelEmitter.call(component, newModelValue);
 
       expect(component.changeModel.emit).toHaveBeenCalledWith(newModelValue);
+    });
+
+    describe('emitAdditionalHelp:', () => {
+      it('should emit additionalHelp when isAdditionalHelpEventTriggered returns true', () => {
+        spyOn(component.additionalHelp, 'emit');
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        (component as any).label = 'this.label';
+        component.emitAdditionalHelp();
+
+        expect(component.additionalHelp.emit).toHaveBeenCalled();
+      });
+
+      it('should not emit additionalHelp when isAdditionalHelpEventTriggered returns false', () => {
+        spyOn(component.additionalHelp, 'emit');
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        component.emitAdditionalHelp();
+
+        expect(component.additionalHelp.emit).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('getAdditionalHelpTooltip:', () => {
+      it('should return null when isAdditionalHelpEventTriggered returns true', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBeNull();
+      });
+
+      it('should return additionalHelpTooltip when isAdditionalHelpEventTriggered returns false', () => {
+        const tooltip = 'Test Tooltip';
+        component.additionalHelpTooltip = tooltip;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBe(tooltip);
+      });
+
+      it('should return undefined when additionalHelpTooltip is undefined and isAdditionalHelpEventTriggered returns false', () => {
+        component.additionalHelpTooltip = undefined;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+
+        const result = component.getAdditionalHelpTooltip();
+
+        expect(result).toBeUndefined();
+      });
     });
 
     it('validateModel: shouldn`t call `validatorChange` when it is falsy', () => {
@@ -273,6 +604,24 @@ describe('PoInputBase:', () => {
       expect(component.disabled).toBe(expectedValue);
     });
 
+    it('setDisabledState: should call markForCheck if changeDetector is not undefined', () => {
+      component['cd'] = <any>{ markForCheck: () => {} };
+      spyOn(component['cd'], 'markForCheck');
+
+      component.setDisabledState(true);
+
+      expect(component['cd'].markForCheck).toHaveBeenCalled();
+    });
+
+    it('writeValue: should call markForCheck if changeDetector is not undefined', () => {
+      component['cd'] = <any>{ markForCheck: () => {} };
+      spyOn(component['cd'], 'markForCheck');
+
+      component.writeValue('1');
+
+      expect(component['cd'].markForCheck).toHaveBeenCalled();
+    });
+
     it('registerOnValidatorChange: should register validatorChange function', () => {
       const registerOnValidatorChangeFn = () => {};
 
@@ -280,12 +629,177 @@ describe('PoInputBase:', () => {
       expect(component['validatorChange']).toBe(registerOnValidatorChangeFn);
     });
 
+    describe('p-loading:', () => {
+      it('should set loading=true and call markForCheck', () => {
+        component.loading = true;
+
+        expect(component.loading).toBeTrue();
+        expect(changeDetectorRef.markForCheck).toHaveBeenCalled();
+      });
+
+      it('should set loading=false and call markForCheck', () => {
+        component.loading = false;
+
+        expect(component.loading).toBeFalse();
+        expect(changeDetectorRef.markForCheck).toHaveBeenCalled();
+      });
+
+      it('loading should not affect disabled state', () => {
+        component.disabled = false;
+
+        component.loading = true;
+        expect(component.disabled).toBeFalse();
+
+        component.disabled = true;
+        component.loading = false;
+        expect(component.disabled).toBeTrue();
+      });
+
+      it('should not throw when cd is undefined', () => {
+        component['cd'] = undefined;
+        expect(() => (component.loading = true)).not.toThrow();
+      });
+
+      it('mapSizeToIcon: should map sizes to icon sizes', () => {
+        expect(component.mapSizeToIcon('small')).toBe('xs');
+        expect(component.mapSizeToIcon('medium')).toBe('sm');
+        expect(component.mapSizeToIcon('large')).toBe('sm');
+        expect(component.mapSizeToIcon(undefined)).toBe('sm');
+        expect(component.mapSizeToIcon('invalid')).toBe('sm');
+      });
+    });
+
+    describe('isDisabled:', () => {
+      it('should return false when disabled and loading are false', () => {
+        component.disabled = false;
+        component.loading = false;
+
+        expect(component.isDisabled).toBeFalse();
+      });
+
+      it('should return true when disabled is true and loading is false', () => {
+        component.disabled = true;
+        component.loading = false;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+
+      it('should return true when disabled is false and loading is true', () => {
+        component.disabled = false;
+        component.loading = true;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+
+      it('should return true when disabled and loading are true', () => {
+        component.disabled = true;
+        component.loading = true;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+
+      it('should keep disabled true after loading toggles from true to false', () => {
+        component.disabled = true;
+        component.loading = true;
+
+        expect(component.isDisabled).toBeTrue();
+
+        component.loading = false;
+
+        expect(component.isDisabled).toBeTrue();
+      });
+    });
+
+    describe('showAdditionalHelp:', () => {
+      beforeEach(() => {
+        (component as any).label = undefined;
+        (component as any).helperEl = {
+          helperIsVisible: jasmine.createSpy('helperIsVisible'),
+          closeHelperPopover: jasmine.createSpy('closeHelperPopover'),
+          openHelperPopover: jasmine.createSpy('openHelperPopover')
+        };
+      });
+
+      it('should emit additionalHelp and call helper.eventOnClick when isHelpEvt=true and helper has eventOnClick', () => {
+        const helperMock = { eventOnClick: jasmine.createSpy('eventOnClick') };
+        spyOn(component as any, 'poHelperComponent').and.returnValue(helperMock);
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(true);
+        spyOn(component.additionalHelp, 'emit');
+
+        const result = component.showAdditionalHelp();
+
+        expect(component.additionalHelp.emit).toHaveBeenCalled();
+        expect(helperMock.eventOnClick).toHaveBeenCalled();
+        expect((component as any).helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect((component as any).helperEl.openHelperPopover).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+      });
+
+      it('should close the popover when helperEl.helperIsVisible() is true (without event and without clickable helper)', () => {
+        component.additionalHelpTooltip = undefined;
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+        spyOn(component as any, 'poHelperComponent').and.returnValue('qualquer-coisa');
+
+        (component as any).helperEl.helperIsVisible.and.returnValue(true);
+
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).helperEl.closeHelperPopover).toHaveBeenCalled();
+        expect((component as any).helperEl.openHelperPopover).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+      });
+
+      it('should open the popover when helperEl.helperIsVisible() is false and there is additionalHelpTooltip', () => {
+        component.additionalHelpTooltip = 'Ajuda extra';
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+        spyOn(component as any, 'poHelperComponent').and.returnValue(undefined);
+
+        (component as any).helperEl.helperIsVisible.and.returnValue(false);
+
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).helperEl.openHelperPopover).toHaveBeenCalled();
+        expect((component as any).helperEl.closeHelperPopover).not.toHaveBeenCalled();
+        expect(result).toBeUndefined();
+      });
+
+      it('should not call eventOnClick when helper is string; should follow popover logic', () => {
+        spyOn(component as any, 'isAdditionalHelpEventTriggered').and.returnValue(false);
+        spyOn(component as any, 'poHelperComponent').and.returnValue('helper-em-string');
+
+        (component as any).helperEl.helperIsVisible.and.returnValue(false);
+
+        const result = component.showAdditionalHelp();
+
+        expect((component as any).helperEl.openHelperPopover).toHaveBeenCalled();
+        expect(result).toBeUndefined();
+      });
+
+      it('should toggle `displayAdditionalHelp` from false to true', () => {
+        component.displayAdditionalHelp = false;
+
+        const result = component.showAdditionalHelp();
+
+        expect(result).toBeTrue();
+        expect(component.displayAdditionalHelp).toBeTrue();
+      });
+
+      it('should toggle `displayAdditionalHelp` from true to false', () => {
+        component.displayAdditionalHelp = true;
+
+        const result = component.showAdditionalHelp();
+
+        expect(result).toBeFalse();
+        expect(component.displayAdditionalHelp).toBeFalse();
+      });
+    });
+
     it('validate: should call validatePatternOnWriteValue if pattern failed', () => {
       component.pattern = '[a-z]';
       component.getScreenValue = () => '2';
 
       spyOn(component, <any>'validatePatternOnWriteValue');
-      expect(component.validate(new FormControl('2'))).not.toBeNull();
+      expect(component.validate(new UntypedFormControl('2'))).not.toBeNull();
       expect(component['validatePatternOnWriteValue']).toHaveBeenCalled();
     });
 
@@ -293,7 +807,7 @@ describe('PoInputBase:', () => {
       component.minlength = 10;
       component.getScreenValue = () => '2';
 
-      expect(component.validate(new FormControl('2'))).toEqual({
+      expect(component.validate(new UntypedFormControl('2'))).toEqual({
         minlength: {
           valid: false
         }

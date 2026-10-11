@@ -1,9 +1,22 @@
-import { AbstractControl, NG_VALUE_ACCESSOR, NG_VALIDATORS } from '@angular/forms';
-import { Component, ElementRef, forwardRef, Input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  forwardRef,
+  HostListener,
+  Input,
+  inject,
+  OnChanges,
+  SimpleChanges
+} from '@angular/core';
+import { AbstractControl, NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
-import { minFailed, maxFailed } from '../validators';
+import { maxFailed, minFailed } from '../validators';
 
 import { PoNumberBaseComponent } from './po-number-base.component';
+
+import { uuid } from '../../../utils/util';
 
 /**
  * @docsExtends PoInputBaseComponent
@@ -34,6 +47,7 @@ import { PoNumberBaseComponent } from './po-number-base.component';
 @Component({
   selector: 'po-number',
   templateUrl: './po-number.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -45,14 +59,37 @@ import { PoNumberBaseComponent } from './po-number-base.component';
       useExisting: forwardRef(() => PoNumberComponent),
       multi: true
     }
-  ]
+  ],
+  standalone: false
 })
-export class PoNumberComponent extends PoNumberBaseComponent {
+export class PoNumberComponent extends PoNumberBaseComponent implements OnChanges {
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Indica uma máscara para o campo, porém é incompatível com o `po-number`.
+   * > **Componentes compatíveis:** `po-input`,`po-decimal`.
+   *
+   * @override
+   */
+  override mask?: string = '';
+
+  /**
+   * @optional
+   *
+   * @description
+   *
+   * Intervalo.
+   *
+   * @default 1
+   */
+  @Input('p-step') step?: string = '1';
+
   /** Valor mínimo.
    *
    * > Quando o valor mínimo for um número com decimais aconselha-se utilizar junto da propriedade `p-step` também passando a ela um valor decimal.
    */
-
   min?: number;
   @Input('p-min') set setMin(min: number) {
     this.min = !isNaN(min) ? min : undefined;
@@ -69,20 +106,25 @@ export class PoNumberComponent extends PoNumberBaseComponent {
     this.validateModel();
   }
 
-  /**
-   * @optional
-   *
-   * @description
-   *
-   * Intervalo.
-   *
-   * @default 1
-   */
-  @Input('p-step') step?: string = '1';
+  id = `po-number[${uuid()}]`;
 
   /* istanbul ignore next */
-  constructor(el: ElementRef) {
-    super(el);
+  constructor() {
+    const el = inject(ElementRef);
+    const cd = inject(ChangeDetectorRef);
+
+    super(el, cd);
+  }
+
+  @HostListener('wheel', ['$event'])
+  onWheel(event: Event) {
+    event.preventDefault();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
   }
 
   extraValidation(abstractControl: AbstractControl): { [key: string]: any } {
@@ -126,7 +168,8 @@ export class PoNumberComponent extends PoNumberBaseComponent {
     return (
       (this.el.nativeElement.classList.contains('ng-invalid') &&
         this.el.nativeElement.classList.contains('ng-dirty') &&
-        this.inputEl.nativeElement.value !== '') ||
+        (this.inputEl.nativeElement.value !== '' ||
+          (this.showErrorMessageRequired && (this.required || this.hasValidatorRequired)))) ||
       this.invalidInputValueOnBlur
     );
   }

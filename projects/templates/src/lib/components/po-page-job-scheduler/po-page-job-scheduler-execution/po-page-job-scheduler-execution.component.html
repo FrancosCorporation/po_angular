@@ -1,6 +1,35 @@
 <form #formExecution="ngForm">
   <div class="po-row">
-    <ng-container *ngIf="existProcessAPI; then lookupProcessesID; else inputProcessesID"></ng-container>
+    @if (existProcessAPI) {
+      @if (noParameters && noCustomParamsComponent) {
+        <po-lookup
+          class="po-md-12"
+          name="processID"
+          [(ngModel)]="value.processID"
+          p-field-label="description"
+          p-field-value="processID"
+          p-required
+          [p-disabled]="isEdit"
+          [p-filter-service]="poPageJobSchedulerLookup"
+          [p-label]="literals.process"
+          [p-placeholder]="literals.enterProcess"
+          [p-size]="componentsSize"
+        >
+        </po-lookup>
+      }
+    } @else {
+      <po-input
+        class="po-md-12"
+        name="processID"
+        [(ngModel)]="value.processID"
+        p-required
+        [p-disabled]="isEdit"
+        [p-label]="literals.process"
+        [p-placeholder]="literals.enterProcess"
+        [p-size]="componentsSize"
+      >
+      </po-input>
+    }
   </div>
 
   <div class="po-row">
@@ -15,6 +44,7 @@
       [p-disabled]="isEdit"
       [p-label]="literals.day"
       [p-min-date]="startDateFirstExecution"
+      [p-size]="componentsSize"
     >
     </po-datepicker>
 
@@ -27,8 +57,9 @@
       p-placeholder="HH:mm"
       p-required
       [p-disabled]="isEdit"
-      [p-label]="literals.hour"
+      [p-label]="literals.time"
       [p-pattern]="timePattern"
+      [p-size]="componentsSize"
     >
     </po-input>
   </div>
@@ -44,16 +75,50 @@
       p-required
       [p-label]="literals.periodicity"
       [p-options]="periodicityOptions"
+      [p-size]="componentsSize"
+      (p-change)="onChangePeriodicityOptions($event)"
     >
     </po-radio-group>
 
-    <ng-container *ngIf="value.periodicity !== 'single'">
-      <po-divider class="po-md-12" [p-label]="literals.periodicityData"> </po-divider>
-
+    @if (value.periodicity !== 'single') {
       <div class="po-row">
+        <po-switch
+          class="po-md-12"
+          name="containsFrequency"
+          [(ngModel)]="containsFrequency"
+          [p-label]="literals.frequency"
+          [p-label-off]="literals.no"
+          [p-label-on]="literals.yes"
+          [p-size]="componentsSize"
+          (p-change)="onChangeContainsFrequency($event)"
+        >
+        </po-switch>
+        @if (containsFrequency) {
+          <po-radio-group
+            class="po-md-10"
+            name="frequencyType"
+            p-required
+            [(ngModel)]="value.frequency.type"
+            [p-columns]="3"
+            [p-options]="frequencyOptions"
+            [p-size]="componentsSize"
+            (p-change)="onChangeFrequencyOptions()"
+          >
+          </po-radio-group>
+          <po-number
+            class="po-md-2"
+            name="frequencyValue"
+            p-required
+            [p-size]="componentsSize"
+            [(ngModel)]="value.frequency.value"
+          >
+          </po-number>
+        }
+      </div>
+      <div class="po-row">
+        <po-divider class="po-md-12" [p-label]="literals.periodicityData"> </po-divider>
         <ng-container *ngTemplateOutlet="periodicityTemplates[value.periodicity]"> </ng-container>
       </div>
-
       <div class="po-row">
         <po-switch
           class="po-md-3"
@@ -62,40 +127,12 @@
           [p-label]="literals.recurrent"
           [p-label-off]="literals.no"
           [p-label-on]="literals.yes"
+          [p-size]="componentsSize"
         >
         </po-switch>
       </div>
-    </ng-container>
+    }
   </div>
-
-  <ng-template #lookupProcessesID>
-    <po-lookup
-      class="po-md-12"
-      name="processID"
-      [(ngModel)]="value.processID"
-      p-field-label="description"
-      p-field-value="processID"
-      p-required
-      [p-disabled]="isEdit"
-      [p-filter-service]="poPageJobSchedulerLookup"
-      [p-label]="literals.process"
-      [p-placeholder]="literals.enterProcess"
-    >
-    </po-lookup>
-  </ng-template>
-
-  <ng-template #inputProcessesID>
-    <po-input
-      class="po-md-12"
-      name="processID"
-      [(ngModel)]="value.processID"
-      p-required
-      [p-disabled]="isEdit"
-      [p-label]="literals.process"
-      [p-placeholder]="literals.enterProcess"
-    >
-    </po-input>
-  </ng-template>
 
   <ng-template #dailyTemplate>
     <ng-container *ngTemplateOutlet="inputHourTemplate"> </ng-container>
@@ -114,6 +151,7 @@
       p-required
       [p-label]="literals.weekDays"
       [p-options]="weekDays"
+      [p-size]="componentsSize"
     >
     </po-checkbox-group>
   </ng-template>
@@ -125,11 +163,27 @@
       [(ngModel)]="value.dayOfMonth"
       p-required
       [p-error-pattern]="'Dia inválido'"
-      [p-label]="literals.day"
+      [p-label]="dayLabel"
       [p-max]="31"
       [p-pattern]="dayPattern"
+      [p-size]="componentsSize"
     >
     </po-number>
+
+    @if (containsFrequency) {
+      <po-number
+        class="po-md-3"
+        name="rangeLimitDay"
+        [(ngModel)]="value.rangeLimitDay"
+        p-required
+        [p-error-pattern]="'Dia inválido'"
+        [p-label]="literals.endDay"
+        [p-max]="31"
+        [p-pattern]="dayPattern"
+        [p-size]="componentsSize"
+      >
+      </po-number>
+    }
 
     <ng-container *ngTemplateOutlet="inputHourTemplate"> </ng-container>
   </ng-template>
@@ -143,9 +197,26 @@
       p-mask-format-model
       p-placeholder="HH:mm"
       p-required
-      [p-label]="literals.hour"
+      [p-label]="hourLabel"
       [p-pattern]="timePattern"
+      [p-size]="componentsSize"
     >
     </po-input>
+
+    @if (containsFrequency && value.frequency.type !== 'day') {
+      <po-input
+        class="po-md-2"
+        name="rangeLimitHour"
+        [(ngModel)]="value.rangeLimitHour"
+        p-mask="99:99"
+        p-mask-format-model
+        p-placeholder="HH:mm"
+        p-required
+        [p-label]="literals.endTime"
+        [p-pattern]="timePattern"
+        [p-size]="componentsSize"
+      >
+      </po-input>
+    }
   </ng-template>
 </form>

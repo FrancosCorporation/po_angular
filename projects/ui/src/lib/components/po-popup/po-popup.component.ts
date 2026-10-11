@@ -1,9 +1,10 @@
-import { ChangeDetectorRef, Component, ElementRef, Renderer2, ViewChild, ViewContainerRef } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, Renderer2, ViewChild, inject } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { callFunction, isExternalLink, isTypeof, openExternalLink } from '../../utils/util';
 import { PoControlPositionService } from '../../services/po-control-position/po-control-position.service';
+import { isExternalLink, uuid, PoUtils } from '../../utils/util';
 
+import { PoListBoxComponent } from '../po-listbox';
 import { PoPopupAction } from './po-popup-action.interface';
 import { PoPopupBaseComponent } from './po-popup-base.component';
 
@@ -21,30 +22,39 @@ import { PoPopupBaseComponent } from './po-popup-base.component';
  * <example name="po-popup-labs" title="PO Popup - Labs">
  *   <file name="sample-po-popup-labs/sample-po-popup-labs.component.html"> </file>
  *   <file name="sample-po-popup-labs/sample-po-popup-labs.component.ts"> </file>
+ *   <file name="sample-po-popup-labs/sample-po-popup-labs.component.css"> </file>
  * </example>
  *
  * <example name="po-popup-email" title="PO Popup Email">
  *   <file name="sample-po-popup-email/sample-po-popup-email.component.html"> </file>
  *   <file name="sample-po-popup-email/sample-po-popup-email.component.ts"> </file>
+ *   <file name="sample-po-popup-email/sample-po-popup-email.component.css"> </file>
  * </example>
  *
  */
 @Component({
   selector: 'po-popup',
   templateUrl: './po-popup.component.html',
-  providers: [PoControlPositionService]
+  providers: [PoControlPositionService],
+  standalone: false
 })
-export class PoPopupComponent extends PoPopupBaseComponent {
-  @ViewChild('popupRef', { read: ElementRef }) popupRef: ElementRef;
+export class PoPopupComponent extends PoPopupBaseComponent implements AfterViewInit {
+  id = `po-popup[${uuid()}]`;
+  private readonly renderer = inject(Renderer2);
+  private readonly router = inject(Router);
+  private readonly poControlPosition = inject(PoControlPositionService);
+  changeDetector = inject(ChangeDetectorRef);
 
-  constructor(
-    viewContainerRef: ViewContainerRef,
-    private renderer: Renderer2,
-    private router: Router,
-    private poControlPosition: PoControlPositionService,
-    public changeDetector: ChangeDetectorRef
-  ) {
-    super();
+  @ViewChild('popupRef', { read: ElementRef }) popupRef: ElementRef;
+  @ViewChild('listbox', { read: ElementRef }) listbox: ElementRef;
+
+  //utilizado apenas no theme builder
+  @ViewChild('poListBoxRef') poListBoxRef: PoListBoxComponent;
+
+  ngAfterViewInit() {
+    if (this.templateIcon && this.target) {
+      this.target = this.target?.iconElement?.nativeElement;
+    }
   }
 
   /**
@@ -56,17 +66,18 @@ export class PoPopupComponent extends PoPopupBaseComponent {
     this.removeListeners();
 
     this.showPopup = false;
+    this.closeEvent.emit();
   }
 
   onActionClick(popupAction: PoPopupAction) {
     const actionNoDisabled = popupAction && !this.returnBooleanValue(popupAction, 'disabled');
 
-    if (popupAction && popupAction.action && actionNoDisabled) {
+    if (popupAction?.action && actionNoDisabled) {
       this.close();
       popupAction.action(this.param || popupAction);
     }
 
-    if (popupAction && popupAction.url && actionNoDisabled) {
+    if (popupAction?.url && actionNoDisabled) {
       this.close();
       return this.openUrl(popupAction.url);
     }
@@ -82,11 +93,13 @@ export class PoPopupComponent extends PoPopupBaseComponent {
     this.param = param;
     this.showPopup = true;
     this.changeDetector.detectChanges();
+
     this.validateInitialContent();
+    this.openEvent.emit();
   }
 
   returnBooleanValue(popupAction: any, property: string) {
-    return isTypeof(popupAction[property], 'function')
+    return PoUtils.isTypeof(popupAction[property], 'function')
       ? popupAction[property](this.param || popupAction)
       : popupAction[property];
   }
@@ -100,6 +113,24 @@ export class PoPopupComponent extends PoPopupBaseComponent {
    */
   toggle(param?) {
     this.showPopup && this.oldTarget === this.target ? this.close() : this.open(param);
+  }
+
+  onClickItem(item: any) {
+    if (!item.goBack) {
+      this.clickItem.emit(item);
+    }
+
+    if (item.subItems || item.$subItemTemplate || item.goBack) {
+      this.changeDetector.detectChanges();
+      this.validateInitialContent();
+    }
+  }
+
+  protected checkAllActionIsInvisible() {
+    if (this.actions.every(item => item.visible === false)) {
+      return true;
+    }
+    return false;
   }
 
   private clickedOutDisabledItem(event) {
@@ -130,7 +161,7 @@ export class PoPopupComponent extends PoPopupBaseComponent {
   }
 
   private hasContentToShow() {
-    return !!(this.popupRef.nativeElement && this.popupRef.nativeElement.clientHeight);
+    return !!(this.popupRef?.nativeElement && this.listbox?.nativeElement);
   }
 
   private initializeListeners() {
@@ -145,15 +176,17 @@ export class PoPopupComponent extends PoPopupBaseComponent {
     window.addEventListener('scroll', this.onScroll, true);
   }
 
-  private onScroll = ({ target }): void => {
-    if (this.showPopup && target.className !== 'po-popup-container') {
+  private readonly onScroll = ({ target }): void => {
+    const { showPopup, popupRef } = this;
+
+    if (showPopup && popupRef?.nativeElement && target instanceof Node && !popupRef.nativeElement.contains(target)) {
       this.close();
     }
   };
 
   private openUrl(url: string) {
     if (isExternalLink(url)) {
-      return openExternalLink(url);
+      return PoUtils.openExternalLink(url);
     }
 
     if (url) {
@@ -174,16 +207,18 @@ export class PoPopupComponent extends PoPopupBaseComponent {
   }
 
   private setPosition() {
-    this.poControlPosition.setElements(
-      this.popupRef.nativeElement,
-      8,
-      this.target,
-      this.customPositions,
-      false,
-      this.isCornerAlign
-    );
-    this.poControlPosition.adjustPosition(this.position);
-    this.arrowDirection = this.poControlPosition.getArrowDirection();
+    if (this.listbox.nativeElement.querySelector('.po-listbox')) {
+      this.poControlPosition.setElements(
+        this.popupRef.nativeElement,
+        8,
+        this.target,
+        this.customPositions,
+        false,
+        this.isCornerAlign
+      );
+      this.poControlPosition.adjustPosition(this.position);
+      this.arrowDirection = this.poControlPosition.getArrowDirection();
+    }
   }
 
   private validateInitialContent() {

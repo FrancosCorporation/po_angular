@@ -1,7 +1,10 @@
-import { Directive, ElementRef, HostListener, OnInit, Renderer2 } from '@angular/core';
+import { Directive, ElementRef, HostListener, OnInit, Renderer2, OnDestroy, SecurityContext } from '@angular/core';
 
 import { PoTooltipBaseDirective } from './po-tooltip-base.directive';
 import { PoTooltipControlPositionService } from './po-tooltip-control-position.service';
+import { DomSanitizer } from '@angular/platform-browser';
+
+const nativeElements = ['input', 'button'];
 
 /**
  * @docsExtends PoTooltipBaseDirective
@@ -26,26 +29,31 @@ import { PoTooltipControlPositionService } from './po-tooltip-control-position.s
  */
 @Directive({
   selector: '[p-tooltip]',
-  providers: [PoTooltipControlPositionService]
+  providers: [PoTooltipControlPositionService],
+  standalone: false
 })
-export class PoTooltipDirective extends PoTooltipBaseDirective implements OnInit {
+export class PoTooltipDirective extends PoTooltipBaseDirective implements OnInit, OnDestroy {
   private arrowDirection: string;
   private divArrow;
   private divContent;
   private isHidden: boolean;
   private lastTooltipText: string;
   private textContent;
-  private tooltipContent;
-  private tooltipOffset: number = 8;
+  private readonly tooltipOffset: number = 8;
 
   private eventListenerFunction: () => void;
 
   constructor(
-    private elementRef: ElementRef,
-    private renderer: Renderer2,
-    private poControlPosition: PoTooltipControlPositionService
+    private readonly elementRef: ElementRef,
+    private readonly renderer: Renderer2,
+    private readonly poControlPosition: PoTooltipControlPositionService,
+    private readonly sanitizer: DomSanitizer
   ) {
     super();
+  }
+
+  ngOnDestroy(): void {
+    this.hideTooltip();
   }
 
   ngOnInit() {
@@ -53,6 +61,49 @@ export class PoTooltipDirective extends PoTooltipBaseDirective implements OnInit
   }
 
   @HostListener('mouseenter') onMouseEnter() {
+    if (!this.displayTooltip) {
+      this.addTooltipAction();
+    }
+  }
+
+  @HostListener('mouseleave') onMouseLeave() {
+    if (!this.displayTooltip) {
+      this.removeTooltipAction();
+    }
+  }
+
+  @HostListener('click') onMouseClick() {
+    if (!this.displayTooltip) {
+      this.removeTooltipAction();
+    }
+  }
+
+  @HostListener('focusout') onFocusOut() {
+    if (!this.displayTooltip) {
+      this.removeTooltipAction();
+    }
+  }
+
+  @HostListener('focusin') onFocusIn() {
+    if (!this.displayTooltip) {
+      this.addTooltipAction();
+    }
+  }
+
+  @HostListener('keydown', ['$event']) onKeyDown(event) {
+    if (!this.displayTooltip && (event.code === 'Escape' || event.keyCode === 27)) {
+      this.removeTooltipAction();
+    }
+  }
+
+  // Controla a visibilidade do tooltip, criado para auxiliar a propriedade `p-additional-help-tooltip`.
+  toggleTooltipVisibility(show: boolean) {
+    if (!this.displayTooltip) {
+      show ? this.addTooltipAction() : this.removeTooltipAction();
+    }
+  }
+
+  protected addTooltipAction() {
     setTimeout(() => {
       if (this.tooltip) {
         this.tooltipContent ? this.showTooltip() : this.createTooltip();
@@ -69,11 +120,11 @@ export class PoTooltipDirective extends PoTooltipBaseDirective implements OnInit
     });
   }
 
-  @HostListener('mouseleave') onMouseLeave() {
+  protected removeTooltipAction() {
     // necessita do timeout para conseguir adicionar ".po-invisible", pois quando tem alguns elementos
     // próximos com tooltips e ficar passando o mouse em cima, os mesmos não estavam ficando invisiveis.
     setTimeout(() => {
-      if (this.appendInBody) {
+      if (this.appendInBody && this.tooltipContent) {
         this.renderer.removeChild(document.body, this.tooltipContent);
         this.tooltipContent = undefined;
       } else {
@@ -95,14 +146,27 @@ export class PoTooltipDirective extends PoTooltipBaseDirective implements OnInit
     this.tooltipContent = this.renderer.createElement('div');
     this.renderer.addClass(this.tooltipContent, 'po-tooltip');
 
+    this.renderer.setStyle(this.tooltipContent, 'transition', 'visibility .3s, opacity .3s linear');
+    this.renderer.setStyle(this.tooltipContent, 'opacity', 0.9);
+
+    this.insertAriaLabelTooltip();
+
     this.divArrow = this.renderer.createElement('div');
     this.renderer.addClass(this.divArrow, 'po-tooltip-arrow');
+    if (this.hideArrow) {
+      this.renderer.setStyle(this.divArrow, 'display', 'none');
+    }
 
     this.divContent = this.renderer.createElement('div');
     this.renderer.addClass(this.divContent, 'po-tooltip-content');
 
     this.textContent = this.renderer.createText(this.tooltip);
 
+    if (this.innerHtml) {
+      this.textContent = this.renderer.createText('');
+      const securityContent = this.sanitizer.sanitize(SecurityContext.HTML, this.tooltip) || '';
+      this.renderer.setProperty(this.divContent, 'innerHTML', securityContent);
+    }
     this.renderer.appendChild(this.divContent, this.textContent);
     this.renderer.appendChild(this.tooltipContent, this.divArrow);
     this.renderer.appendChild(this.tooltipContent, this.divContent);
@@ -127,7 +191,13 @@ export class PoTooltipDirective extends PoTooltipBaseDirective implements OnInit
 
   private hideTooltip() {
     if (this.tooltipContent) {
-      this.renderer.addClass(this.tooltipContent, 'po-invisible');
+      try {
+        this.renderer.setStyle(this.tooltipContent, 'opacity', 0);
+        this.renderer.setStyle(this.tooltipContent, 'visibility', 'hidden');
+      } catch (e) {
+        // Tolerate errors when DOM element is partially destroyed during teardown
+      }
+
       this.isHidden = true;
 
       this.removeScrollEventListener();
@@ -145,7 +215,8 @@ export class PoTooltipDirective extends PoTooltipBaseDirective implements OnInit
   }
 
   private showTooltip() {
-    this.renderer.removeClass(this.tooltipContent, 'po-invisible');
+    this.renderer.setStyle(this.tooltipContent, 'opacity', 0.9);
+    this.renderer.setStyle(this.tooltipContent, 'visibility', 'visible');
     this.updateTextContent();
     this.isHidden = false;
 
@@ -153,10 +224,36 @@ export class PoTooltipDirective extends PoTooltipBaseDirective implements OnInit
   }
 
   private updateTextContent() {
-    if (this.lastTooltipText !== this.tooltip) {
+    const checkRepeatedText = this.tooltip.split('\n');
+
+    if (this.lastTooltipText !== this.tooltip && checkRepeatedText[0] !== this.lastTooltipText) {
       this.renderer.removeChild(this.divContent, this.textContent);
       this.textContent = this.renderer.createText(this.tooltip);
       this.renderer.appendChild(this.divContent, this.textContent);
+      if (this.innerHtml) {
+        this.textContent = this.renderer.createText('');
+        const securityContent = this.sanitizer.sanitize(SecurityContext.HTML, this.tooltip) || '';
+        this.renderer.setProperty(this.divContent, 'innerHTML', securityContent);
+      }
+    }
+  }
+
+  private insertAriaLabelTooltip() {
+    const nativeTextContent = this.elementRef.nativeElement.textContent;
+    let targetElement = '';
+
+    nativeElements.forEach(el => {
+      if (this.elementRef.nativeElement.getElementsByTagName(el)[0] !== undefined) {
+        targetElement = el;
+      }
+    });
+
+    if (this.elementRef.nativeElement.getElementsByTagName(targetElement)[0] && this.tooltip) {
+      this.renderer.setAttribute(
+        this.elementRef.nativeElement.getElementsByTagName(targetElement)[0],
+        'aria-label',
+        nativeTextContent + ' ' + this.tooltip
+      );
     }
   }
 }

@@ -1,28 +1,45 @@
-import { By } from '@angular/platform-browser';
-import { Component, ElementRef, TemplateRef } from '@angular/core';
-import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { DecimalPipe } from '@angular/common';
-import { RouterTestingModule } from '@angular/router/testing';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { Component, ElementRef, TemplateRef, ViewChild } from '@angular/core';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { Routes } from '@angular/router';
+import { RouterTestingModule } from '@angular/router/testing';
 
-import * as utilsFunctions from '../../utils/util';
-import { configureTestSuite } from './../../util-test/util-expect.spec';
-import { PoColorPaletteService } from './../../services/po-color-palette/po-color-palette.service';
+import { of, throwError } from 'rxjs';
 import { PoControlPositionService } from '../../services/po-control-position/po-control-position.service';
 import { PoDateService } from '../../services/po-date/po-date.service';
+import { PoUtils as utilsFunctions } from '../../utils/util';
+import { PoColorPaletteService } from './../../services/po-color-palette/po-color-palette.service';
 
+import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { PoFieldSize } from '../../enums/po-field-size.enum';
+import { PoTableRowTemplateArrowDirection } from './enums/po-table-row-template-arrow-direction.enum';
+import { PoTableColumnSpacing } from './enums/po-table-spacing.enum';
 import { PoTableAction } from './interfaces/po-table-action.interface';
-import { PoTableBaseComponent } from './po-table-base.component';
 import { PoTableColumn } from './interfaces/po-table-column.interface';
+import { PoTableBaseComponent } from './po-table-base.component';
+import { PoTableColumnTemplateDirective } from './po-table-column-template/po-table-column-template.directive';
 import { PoTableComponent } from './po-table.component';
 import { PoTableModule } from './po-table.module';
-import { PoTableColumnTemplateDirective } from './po-table-column-template/po-table-column-template.directive';
-import { PoTableRowTemplateArrowDirection } from './enums/po-table-row-template-arrow-direction.enum';
+import { PoTableService } from './services/po-table.service';
+import { PoThemeA11yEnum } from '../../services';
+import { PoSearchAiResponseType } from '../po-field/po-search-ai/interfaces/po-search-ai.interface';
 
-@Component({ template: 'Search' })
+@Component({
+  selector: 'app-table-search',
+  template: 'Search',
+  standalone: false
+})
 export class SearchComponent {}
 
-@Component({ template: 'Home' })
+@Component({
+  selector: 'app-table-test-menu',
+  template: 'Home',
+  standalone: false
+})
 export class TestMenuComponent {}
 
 export const routes: Routes = [
@@ -31,13 +48,31 @@ export const routes: Routes = [
   { path: 'search', component: SearchComponent }
 ];
 
+class YourComponente {
+  private _columnManagerTargetFixed: ElementRef<any>;
+
+  public get columnManagerTargetFixed(): ElementRef<any> {
+    return this._columnManagerTargetFixed;
+  }
+}
+
+class YourComponent {
+  @ViewChild(CdkVirtualScrollViewport, { static: false }) public viewPort: CdkVirtualScrollViewport;
+  private _columnManagerTargetFixed: ElementRef<any>;
+
+  public get columnManagerTargetFixed(): ElementRef<any> {
+    return this._columnManagerTargetFixed;
+  }
+}
+
 describe('PoTableComponent:', () => {
   let component: PoTableComponent;
   let fixture: ComponentFixture<PoTableComponent>;
   let nativeElement;
+  let tableHeaderElement;
   let tableElement;
   let tableFooterElement;
-
+  const poTableService: jasmine.SpyObj<PoTableService> = jasmine.createSpyObj('PoTableService', ['scrollListener']);
   // mocks
   let actions: Array<PoTableAction>;
   let columns: Array<PoTableColumn>;
@@ -53,6 +88,8 @@ describe('PoTableComponent:', () => {
   let labels: PoTableColumn;
   let mockTableDetailDiretive;
   let singleAction: Array<PoTableAction>;
+  let mockViewPort: jasmine.SpyObj<CdkVirtualScrollViewport>;
+  let changeDetector: any;
 
   function initializeMocks() {
     mockTableDetailDiretive = {
@@ -66,7 +103,7 @@ describe('PoTableComponent:', () => {
       { property: 'id', label: 'Codigo', type: 'number' },
       { property: 'initial', label: 'Sigla' },
       { property: 'name', label: 'Nome' },
-      { property: 'total', label: 'Total', type: 'currency', format: 'BRL' },
+      { property: 'total', label: 'Total', type: 'currency', format: 'BRL', sortable: false },
       { property: 'atualization', label: 'Atualização', type: 'date' }
     ];
 
@@ -183,19 +220,42 @@ describe('PoTableComponent:', () => {
       initialized: true,
       verifyCalculateHeightTableContainer: () => {},
       checkChangesItems: () => {},
-      debounceResize: () => true
+      debounceResize: () => true,
+      checkInfiniteScroll: () => {},
+      applyFixedColumns: () => {},
+      initializeVisibleElement() {
+        if (this.tableWrapperElement?.nativeElement.offsetWidth && !this.visibleElement) {
+          this.debounceResize();
+          this.checkInfiniteScroll();
+          this.visibleElement = true;
+        }
+      }
     };
   }
 
-  configureTestSuite(() => {
-    TestBed.configureTestingModule({
-      imports: [RouterTestingModule.withRoutes(routes), PoTableModule],
-      declarations: [TestMenuComponent, SearchComponent],
-      providers: [PoControlPositionService, PoDateService, DecimalPipe, PoColorPaletteService]
+  beforeEach(async () => {
+    mockViewPort = jasmine.createSpyObj('CdkVirtualScrollViewport', ['elementRef'], {
+      _renderedContentOffset: 100
     });
-  });
 
-  beforeEach(() => {
+    changeDetector = jasmine.createSpyObj('ChangeDetectorRef', ['detectChanges']);
+
+    await TestBed.configureTestingModule({
+      declarations: [TestMenuComponent, SearchComponent],
+      imports: [RouterTestingModule.withRoutes(routes), PoTableModule, NoopAnimationsModule],
+      providers: [
+        PoControlPositionService,
+        PoDateService,
+        DecimalPipe,
+        PoColorPaletteService,
+        { provide: PoTableService, useValue: poTableService },
+        { provide: CdkVirtualScrollViewport, useValue: mockViewPort },
+        { provide: changeDetector, useValue: changeDetector },
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting()
+      ]
+    }).compileComponents();
+
     initializeMocks();
 
     fixture = TestBed.createComponent(PoTableComponent);
@@ -207,8 +267,13 @@ describe('PoTableComponent:', () => {
 
     fixture.detectChanges();
 
+    component.infiniteScroll = false;
+
     nativeElement = fixture.debugElement.nativeElement;
 
+    component.tableVirtualScroll = fixture.debugElement;
+
+    tableHeaderElement = nativeElement.querySelector('.po-table-header');
     tableElement = nativeElement.querySelector('.po-table-wrapper');
     tableFooterElement = nativeElement.querySelector('.po-table-footer');
 
@@ -295,65 +360,6 @@ describe('PoTableComponent:', () => {
     expect(selectableColumn).toBeTruthy();
   });
 
-  it('should allow single row selection', () => {
-    component.selectable = true;
-    component.singleSelect = true;
-    component.hideSelectAll = true;
-    component.selectRow(component.items[0]);
-    component.selectRow(component.items[1]);
-
-    fixture.detectChanges();
-
-    const checkedColumns = tableElement.querySelectorAll('.po-table-radio-checked');
-    expect(checkedColumns.length).toBe(1);
-
-    const selectableHeader = tableElement.querySelector('th.po-table-column-selectable .po-table-checkbox');
-    expect(selectableHeader).toBeFalsy();
-  });
-
-  it('should allow multiple row selection', () => {
-    component.selectable = true;
-    component.singleSelect = false;
-    component.selectRow(component.items[0]);
-    component.selectRow(component.items[1]);
-
-    fixture.detectChanges();
-
-    const checkedColumns = tableElement.querySelectorAll('.po-table-checkbox-checked');
-    expect(checkedColumns.length).toBe(2);
-  });
-
-  it('should show indeterminate selectable', () => {
-    component.selectable = true;
-    fixture.detectChanges();
-
-    let selectableHeader = tableElement.querySelector('th.po-table-column-selectable .po-table-checkbox-indeterminate');
-    expect(selectableHeader).toBeFalsy();
-
-    component.selectRow(component.items[0]);
-    component.selectRow(component.items[1]);
-    fixture.detectChanges();
-
-    selectableHeader = tableElement.querySelector('th.po-table-column-selectable .po-table-checkbox-indeterminate');
-    expect(selectableHeader).toBeTruthy();
-  });
-
-  it('should select one row', () => {
-    const itemSelected = component.items[0];
-    component.selectable = true;
-    component.hideDetail = true;
-    component.columns = columnsWithDetail;
-    component.selectRow(itemSelected);
-
-    fixture.detectChanges();
-
-    const rowSelected = tableElement.querySelectorAll('.po-table-row-active');
-
-    expect(rowSelected).toBeTruthy();
-    expect(rowSelected[0].querySelector('.po-table-checkbox-checked')).toBeTruthy();
-    expect(rowSelected[0].innerHTML).toContain(itemSelected.id);
-  });
-
   it('should select all rows', () => {
     component.selectable = true;
     component.selectAllRows();
@@ -374,16 +380,6 @@ describe('PoTableComponent:', () => {
 
     const selectableColumnHeader = tableElement.querySelector('th.po-table-column-selectable .po-table-checkbox');
     expect(selectableColumnHeader).toBeFalsy();
-  });
-
-  it('should show the option to select all', () => {
-    component.selectable = true;
-    component.hideSelectAll = false;
-
-    fixture.detectChanges();
-
-    const selectableColumnHeader = tableElement.querySelector('th.po-table-column-selectable .po-table-checkbox');
-    expect(selectableColumnHeader).toBeTruthy();
   });
 
   it('shouldn`t show more button', () => {
@@ -477,6 +473,34 @@ describe('PoTableComponent:', () => {
     expect(columnSorted).toBeTruthy();
   });
 
+  it('should toggle column sortable as false', () => {
+    component.sort = true;
+
+    fixture.detectChanges();
+
+    const tableHeaders = fixture.nativeElement.querySelectorAll('th');
+
+    let columnSorted = tableHeaders[3].querySelector('.po-table-header-icon-unselected');
+    expect(columnSorted).toBeNull();
+
+    columnSorted = tableHeaders[3].querySelector('.po-clickable');
+    expect(columnSorted).toBeNull();
+
+    const itemSorted = component.columns[3];
+
+    component.sortColumn(itemSorted);
+    fixture.detectChanges();
+
+    columnSorted = tableElement.querySelector('.po-table-header-icon-descending');
+    expect(columnSorted).toBeNull();
+
+    component.sortColumn(itemSorted);
+    fixture.detectChanges();
+
+    columnSorted = tableElement.querySelector('.po-table-header-icon-ascending');
+    expect(columnSorted).toBeNull();
+  });
+
   it('should not find subtitles columns', () => {
     component.columns = [...columns];
     const subtitleCircle = tableElement.querySelector('.po-table-footer po-table-subtitle-circle');
@@ -530,7 +554,7 @@ describe('PoTableComponent:', () => {
     component.columns.push(labels);
     fixture.detectChanges();
 
-    const labelColumn = tableElement.querySelector('.po-table-column-label');
+    const labelColumn = tableElement.querySelector('.po-tag');
 
     expect(labelColumn).toBeTruthy();
   });
@@ -550,32 +574,10 @@ describe('PoTableComponent:', () => {
     expect(links.length > 0).toBeTruthy();
   });
 
-  it('should contain the attribute ng-reflect-router-link when the item is internal link', () => {
-    component.columns = [{ property: 'name', label: 'País', type: 'link', link: 'link' }];
-    component.items = [{ name: 'França', link: 'home' }];
-    fixture.detectChanges();
-
-    const link = tableElement.querySelector('.po-table-link[ng-reflect-router-link="home"]');
-    expect(link).toBeTruthy();
-  });
-
-  it('should contain the attributes href and target when the item is external link', () => {
-    component.columns = [{ property: 'framework', label: 'Framework', type: 'link', link: 'link' }];
-    component.items = [{ name: 'PO', link: 'http://po.com.br' }];
-    fixture.detectChanges();
-
-    let link = tableElement.querySelector('.po-table-link[ng-reflect-router-link="home"]');
-    expect(link).toBeFalsy();
-
-    link = tableElement.querySelector('.po-table-link[href="http://po.com.br"][target="_blank"]');
-    expect(link).toBeTruthy();
-  });
-
   it('should remain on same page', () => {
     component.columns[2].type = 'link';
     component.items[0].link = undefined;
 
-    spyOn(component['router'], 'navigate');
     spyOn(window, 'open');
 
     fixture.detectChanges();
@@ -583,7 +585,6 @@ describe('PoTableComponent:', () => {
     const link = tableElement.querySelector('.po-table-link');
     link.click();
 
-    expect(component['router'].navigate).not.toHaveBeenCalled();
     expect(window.open).not.toHaveBeenCalled();
   });
 
@@ -617,58 +618,38 @@ describe('PoTableComponent:', () => {
     component.height = 150;
 
     fixture.detectChanges();
-    expect(tableElement.offsetHeight + tableFooterElement.offsetHeight).toBe(150);
+    expect(tableElement.offsetHeight + tableFooterElement.offsetHeight + tableHeaderElement.offsetHeight).toBe(150);
   });
 
-  it('should call calculateWidthHeaders and setTableOpacity in debounceResize', fakeAsync(() => {
-    spyOn(component, <any>'calculateWidthHeaders');
+  it('should call setTableOpacity in debounceResize', fakeAsync(() => {
     spyOn(component, <any>'setTableOpacity');
 
     component['debounceResize']();
     tick(500);
 
-    expect(component['calculateWidthHeaders']).toHaveBeenCalled();
     expect(component['setTableOpacity']).toHaveBeenCalled();
   }));
 
   it('should calculate when height is a number in function calculateHeightTableContainer', () => {
     const fakeThis = {
       getHeightTableFooter: () => 0,
+      getHeightTableHeader: () => 0,
       heightTableContainer: 0,
       setTableOpacity: () => {},
       changeDetector: {
-        detectChanges: () => {}
+        detectChanges: () => {},
+        markForCheck: () => {}
       }
     };
 
-    component['calculateHeightTableContainer'].call(fakeThis, '10');
+    component['calculateHeightTableContainer'].call(fakeThis, 10);
     expect(fakeThis.heightTableContainer).toBe(10);
 
-    component['calculateHeightTableContainer'].call(fakeThis, '100');
+    component['calculateHeightTableContainer'].call(fakeThis, 100);
     expect(fakeThis.heightTableContainer).toBe(100);
 
     component['calculateHeightTableContainer'].call(fakeThis, 50);
     expect(fakeThis.heightTableContainer).toBe(50);
-  });
-
-  it('should return undefined when height is not a number in function calculateHeightTableContainer', () => {
-    const fakeThis = {
-      getHeightTableFooter: () => 0,
-      heightTableContainer: 0,
-      setTableOpacity: () => {},
-      changeDetector: {
-        detectChanges: () => {}
-      }
-    };
-
-    component['calculateHeightTableContainer'].call(fakeThis, 'a10');
-    expect(fakeThis.heightTableContainer).toBeUndefined();
-
-    component['calculateHeightTableContainer'].call(fakeThis, undefined);
-    expect(fakeThis.heightTableContainer).toBeUndefined();
-
-    component['calculateHeightTableContainer'].call(fakeThis, null);
-    expect(fakeThis.heightTableContainer).toBeUndefined();
   });
 
   it('should return true in verifyChangeHeightInFooter', () => {
@@ -717,6 +698,7 @@ describe('PoTableComponent:', () => {
     component.actions = actions;
     component.hideDetail = false;
     component.columns = columnsWithDetail;
+    component.actionRight = true;
 
     fixture.detectChanges();
 
@@ -736,6 +718,22 @@ describe('PoTableComponent:', () => {
 
     const singleActionColumn = nativeElement.querySelector('.po-table-header-single-action');
     expect(singleActionColumn).toBeNull();
+  });
+
+  it('should contain more than 1 "header-master-detail" if actionRight is false and "isSingleAction" is false', () => {
+    component.selectable = true;
+    component.actions = [
+      { label: 'PO1', visible: true },
+      { label: 'PO2', visible: true }
+    ];
+    component.hideDetail = false;
+    component.columns = columnsWithDetail;
+
+    fixture.detectChanges();
+
+    const masterDetails = nativeElement.querySelectorAll('.po-table-header-master-detail');
+
+    expect(masterDetails.length).toBe(2);
   });
 
   it('should not call debounceResize in ngDoCheck when visibleElement is true', () => {
@@ -845,36 +843,6 @@ describe('PoTableComponent:', () => {
     expect(component.selectAll).toBeFalsy();
   });
 
-  it(`should contains po-table-wrapper-ellipsis, po-table-layout-fixed and po-table-body-ellipsis classes in
-    td when ´p-hide-text-overflow´ is true.`, () => {
-    component.hideTextOverflow = true;
-
-    fixture.detectChanges();
-
-    const hasWrapperEllipsis = nativeElement.querySelector('.po-table-body-ellipsis');
-    const hasLayoutEllipsis = nativeElement.querySelector('.po-table-body-ellipsis');
-    const hasBodyEllipsis = nativeElement.querySelector('.po-table-body-ellipsis');
-
-    expect(hasWrapperEllipsis).toBeTruthy();
-    expect(hasLayoutEllipsis).toBeTruthy();
-    expect(hasBodyEllipsis).toBeTruthy();
-  });
-
-  it(`shouldn´t contains po-table-wrapper-ellipsis, po-table-layout-fixed and po-table-body-ellipsis class in
-    td when ´p-hide-text-overflow´ is false`, () => {
-    component.hideTextOverflow = false;
-
-    fixture.detectChanges();
-
-    const hasWrapperEllipsis = nativeElement.querySelector('.po-table-body-ellipsis');
-    const hasLayoutEllipsis = nativeElement.querySelector('.po-table-body-ellipsis');
-    const hasBodyEllipsis = nativeElement.querySelector('.po-table-body-ellipsis');
-
-    expect(hasWrapperEllipsis).toBeFalsy();
-    expect(hasLayoutEllipsis).toBeFalsy();
-    expect(hasBodyEllipsis).toBeFalsy();
-  });
-
   describe('Methods:', () => {
     describe('checkDisabled:', () => {
       it('should call `disabled` function.', () => {
@@ -905,6 +873,46 @@ describe('PoTableComponent:', () => {
         const result = component.checkDisabled(tableRow, linkColumn);
         expect(result).toBe(false);
       });
+    });
+
+    it('drop: should update columns and call onVisibleColumnsChange when `hideColumnsManager` is false', () => {
+      const previousIndex = 0;
+      const currentIndex = 1;
+      const event = {
+        previousIndex: previousIndex,
+        currentIndex: currentIndex
+      };
+
+      const mockColumns = [{ property: 'column1' }, { property: 'column2' }, { property: 'detail' }];
+
+      component.columns = mockColumns;
+      component.mainColumns = mockColumns;
+      spyOn(component, 'onVisibleColumnsChange');
+
+      component.drop(event as any);
+
+      expect(component.newOrderColumns[previousIndex]).toEqual(mockColumns[currentIndex]);
+      expect(component.newOrderColumns[currentIndex]).toEqual(mockColumns[previousIndex]);
+      expect(component.newOrderColumns[2]).toEqual(mockColumns[2]);
+      expect(component.onVisibleColumnsChange).toHaveBeenCalledWith(component.newOrderColumns);
+    });
+
+    it('drop: should update mainColumns when `hideColumnsManager` is true', () => {
+      const previousIndex = 0;
+      const currentIndex = 1;
+      const event = {
+        previousIndex: previousIndex,
+        currentIndex: currentIndex
+      };
+      const mockColumns = [{ property: 'column1' }, { property: 'column2' }, { property: 'detail' }];
+
+      component.hideColumnsManager = true;
+      component.mainColumns = [{ property: 'column1' }, { property: 'column2' }, { property: 'detail' }];
+      component.drop(event as any);
+
+      expect(component.mainColumns[currentIndex]).toEqual(mockColumns[previousIndex]);
+      expect(component.mainColumns[previousIndex]).toEqual(mockColumns[currentIndex]);
+      expect(component.mainColumns[2]).toEqual(mockColumns[2]);
     });
 
     describe('getBooleanLabel:', () => {
@@ -1026,6 +1034,64 @@ describe('PoTableComponent:', () => {
       });
     });
 
+    describe('getCellData:', () => {
+      it('should return the last string in arrayProperty', () => {
+        const column: any = {
+          property: 'address.street',
+          label: 'Rua'
+        };
+        const row: any = {
+          name: 'teste',
+          address: {
+            street: 'Rua dos Alfeneiros, nº 4'
+          }
+        };
+        const result = component.getCellData(row, column);
+        expect(result).toEqual(row.address.street);
+      });
+
+      it('should return property if property is only item in array', () => {
+        const column: any = {
+          property: 'address',
+          label: 'Rua'
+        };
+        const row: any = {
+          name: 'teste',
+          address: 'Rua dos Alfeneiros, nº 4'
+        };
+        const result = component.getCellData(row, column);
+        expect(result).toEqual(row.address);
+      });
+
+      it('should return a empty string when property is `undefined`', () => {
+        const column: any = {
+          property: 'address.street',
+          label: 'Rua'
+        };
+        const row: any = {
+          name: 'teste',
+          address: {}
+        };
+        const expectedResult = '';
+        const result = component.getCellData(row, column);
+        expect(result).toEqual(expectedResult);
+      });
+
+      it('should return property if property value is equal 0', () => {
+        const column: any = {
+          property: 'status',
+          label: 'Status'
+        };
+        const row: any = {
+          name: 'teste',
+          status: 0
+        };
+        const expectedResult = 0;
+        const result = component.getCellData(row, column);
+        expect(result).toEqual(expectedResult);
+      });
+    });
+
     describe('formatNumber:', () => {
       it('should return formatted value.', () => {
         const format = '1.2-5';
@@ -1045,6 +1111,80 @@ describe('PoTableComponent:', () => {
         const returnValue = component.formatNumber(value, format);
 
         expect(returnValue).toEqual(expectedReturn);
+      });
+    });
+
+    describe('formatWithMask:', () => {
+      it('should return empty string when value is null', () => {
+        expect(component['formatWithMask'](null, '999.999')).toEqual('');
+      });
+
+      it('should return empty string when value is undefined', () => {
+        expect(component['formatWithMask'](undefined, '999.999')).toEqual('');
+      });
+
+      it('should return empty string when value is empty string', () => {
+        expect(component['formatWithMask']('', '999.999')).toEqual('');
+      });
+
+      it('should return original value when mask is undefined', () => {
+        expect(component['formatWithMask']('12345', undefined)).toEqual('12345');
+      });
+
+      it('should return original value when mask is empty string', () => {
+        expect(component['formatWithMask']('12345', '')).toEqual('12345');
+      });
+
+      it('should format CPF with mask 999.999.999-99', () => {
+        expect(component['formatWithMask']('12345678901', '999.999.999-99')).toEqual('123.456.789-01');
+      });
+
+      it('should format CNPJ with mask 99.999.999/9999-99', () => {
+        expect(component['formatWithMask']('53113791000122', '99.999.999/9999-99')).toEqual('53.113.791/0001-22');
+      });
+
+      it('should format phone with mask (99) 99999-9999', () => {
+        expect(component['formatWithMask']('11999887766', '(99) 99999-9999')).toEqual('(11) 99988-7766');
+      });
+
+      it('should format CEP with mask 99999-999', () => {
+        expect(component['formatWithMask']('89201000', '99999-999')).toEqual('89201-000');
+      });
+
+      it('should format alphabetic value with mask @@-@@@@', () => {
+        expect(component['formatWithMask']('NBPROM', '@@-@@@@')).toEqual('NB-PROM');
+      });
+
+      it('should format alphanumeric value with mask @@@ 9w99', () => {
+        expect(component['formatWithMask']('ABC1D23', '@@@ 9w99')).toEqual('ABC 1D23');
+      });
+
+      it('should stop formatting when numeric mask 9 receives a letter', () => {
+        expect(component['formatWithMask']('12A45', '99999')).toEqual('12');
+      });
+
+      it('should stop formatting when alpha mask @ receives a digit', () => {
+        expect(component['formatWithMask']('AB3CD', '@@@@@')).toEqual('AB');
+      });
+
+      it('should format alphanumeric mask w accepting both letters and digits', () => {
+        expect(component['formatWithMask']('A1B2C3', 'wwwwww')).toEqual('A1B2C3');
+      });
+
+      it('should handle value shorter than mask', () => {
+        expect(component['formatWithMask']('123', '999.999.999-99')).toEqual('123');
+      });
+
+      it('should strip existing formatting from value before applying mask', () => {
+        expect(component['formatWithMask']('123.456.789-01', '999.999.999-99')).toEqual('123.456.789-01');
+      });
+
+      it('should handle numeric value as number type', () => {
+        expect(component['formatWithMask'](12345678901, '999.999.999-99')).toEqual('123.456.789-01');
+      });
+
+      it('should return value 0 formatted correctly', () => {
+        expect(component['formatWithMask'](0, '999')).toEqual('0');
       });
     });
 
@@ -1114,7 +1254,7 @@ describe('PoTableComponent:', () => {
 
       it(`shouldn't call 'mergeCustomIcons' or 'findCustomIcon' if doesn't have column.icons and return undefined.`, () => {
         const row: any = { po: 'favorite' };
-        const column: any = { type: 'icon' };
+        const column: any = { property: 'po', type: 'icon' };
 
         const spyOnMergeCustomIcons = spyOn(component, <any>'mergeCustomIcons');
         const spyOFindCustomIcon = spyOn(component, <any>'findCustomIcon');
@@ -1180,7 +1320,6 @@ describe('PoTableComponent:', () => {
 
     it(`tooltipMouseEnter: should set tooltipText with event.target.innerText if hideTextOverflow is true,
     offsetWidth is lower than scrollWidth and innerText isn't empty,`, () => {
-      component.hideTextOverflow = true;
       const fakeEvent = {
         target: {
           offsetWidth: 30,
@@ -1194,43 +1333,8 @@ describe('PoTableComponent:', () => {
       expect(component.tooltipText).toBe('teste');
     });
 
-    it('tooltipMouseEnter: should call checkingIfColumnHasTooltip if contains columns', () => {
-      const column = { type: 'link', tooltip: 'Link Tooltip Value' };
-      const row = {};
-      const fakeEvent = {
-        target: {
-          offsetWidth: 30,
-          scrollWidth: 43,
-          innerText: 'teste'
-        }
-      };
-
-      spyOn(component, <any>'checkingIfColumnHasTooltip');
-
-      component.tooltipMouseEnter(fakeEvent, column, row);
-
-      expect(component['checkingIfColumnHasTooltip']).toHaveBeenCalledWith(column, row);
-    });
-
-    it(`tooltipMouseEnter: should set tooltipText with undefined if hideTextOverflow is false
-    and doesn't have 'column' as parameter`, () => {
-      component.hideTextOverflow = false;
-      const fakeEvent = {
-        target: {
-          offsetWidth: 30,
-          scrollWidth: 43,
-          innerText: 'teste'
-        }
-      };
-
-      component.tooltipMouseEnter(fakeEvent);
-
-      expect(component.tooltipText).toBeUndefined();
-    });
-
     it(`tooltipMouseEnter: should set tooltipText to undefined when offsetWidht is equal to scroolWidth
     and doesn't have 'column' as parameter`, () => {
-      component.hideTextOverflow = true;
       const fakeEvent = {
         target: {
           offsetWidth: 43,
@@ -1279,6 +1383,14 @@ describe('PoTableComponent:', () => {
       expect(component.tooltipText).toBeUndefined();
     });
 
+    it(`onOpenColumnManager: should update 'lastVisibleColumnsSelected' 'this.columns`, () => {
+      component.columns = columns;
+
+      component.onOpenColumnManager();
+
+      expect(component['lastVisibleColumnsSelected']).toEqual(columns);
+    });
+
     it(`calculateHeightTableContainer: should call 'setTableOpacity' with 1`, () => {
       spyOn(component, <any>'setTableOpacity');
 
@@ -1292,16 +1404,57 @@ describe('PoTableComponent:', () => {
         heightTableContainer: 400,
         setTableOpacity: () => {},
         changeDetector: {
-          detectChanges: () => {}
+          detectChanges: () => {},
+          markForCheck: () => {}
         },
-        getHeightTableFooter: () => {}
+        getHeightTableFooter: () => {},
+        getHeightTableHeader: () => {}
       };
 
-      spyOn(fakeThis.changeDetector, 'detectChanges');
+      spyOn(fakeThis.changeDetector, 'markForCheck');
 
       component['calculateHeightTableContainer'].call(fakeThis, 400);
 
-      expect(fakeThis.changeDetector.detectChanges).toHaveBeenCalled();
+      expect(fakeThis.changeDetector.markForCheck).toHaveBeenCalled();
+    });
+
+    describe('calculateHeightTableContainer - itemSize: ', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+      });
+
+      it('should set itemSize with spacing extraSmall', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        component.spacing = PoTableColumnSpacing.ExtraSmall;
+        component['calculateHeightTableContainer'](400);
+
+        expect(component.itemSize).toBe(32);
+      });
+
+      it('should set itemSize with spacing small', () => {
+        component.spacing = PoTableColumnSpacing.Small;
+        component['calculateHeightTableContainer'](400);
+
+        expect(component.itemSize).toBe(40);
+      });
+
+      it('should set itemSize with spacing medium', () => {
+        component.spacing = PoTableColumnSpacing.Medium;
+        component['calculateHeightTableContainer'](400);
+
+        expect(component.itemSize).toBe(48);
+      });
+
+      it('should set itemSize with spacing large', () => {
+        component.spacing = PoTableColumnSpacing.Large;
+        component['calculateHeightTableContainer'](400);
+
+        expect(component.itemSize).toBe(56);
+      });
     });
 
     describe('isShowRowTemplate:', () => {
@@ -1341,33 +1494,6 @@ describe('PoTableComponent:', () => {
       component.tableRowTemplate = mockTableDetailDiretive;
 
       expect(component.hasRowTemplate).toBeTruthy();
-    });
-
-    it('visibleActions: should be `false` if doesn`t have action.', () => {
-      component.actions = undefined;
-
-      expect(component.visibleActions).toBeFalsy();
-    });
-
-    it('visibleActions: shouldn`t return action if visible is `false`.', () => {
-      component.actions = [
-        { label: 'PO1', visible: false },
-        { label: 'PO2', visible: true }
-      ];
-
-      expect(component.visibleActions).toEqual([{ label: 'PO2', visible: true }]);
-    });
-
-    it('visibleActions: should return only valid values', () => {
-      component.actions = [{ label: 'PO1' }, undefined, null];
-
-      expect(component.visibleActions).toEqual([{ label: 'PO1' }]);
-    });
-
-    it('visibleActions: should be `true` if has action.', () => {
-      component.actions = actions;
-
-      expect(component.visibleActions).toBeTruthy();
     });
 
     it('detailHideSelect: should return `false` if doesn`t have MasterDetail', () => {
@@ -1419,8 +1545,8 @@ describe('PoTableComponent:', () => {
     });
 
     it('removeListeners: shouldn`t call `resizeListener` and `clickListener`', () => {
-      component['resizeListener'] = undefined;
-      component['clickListener'] = undefined;
+      Object.defineProperty(component, 'resizeListener', { value: undefined, configurable: true });
+      Object.defineProperty(component, 'clickListener', { value: undefined, configurable: true });
 
       component['removeListeners']();
 
@@ -1536,31 +1662,858 @@ describe('PoTableComponent:', () => {
 
       expect(component.changeVisibleColumns.emit).toHaveBeenCalledWith(fakeColumns);
     });
+
+    it('onChangeFixedColumns: should call `changeFixedColumns.emit`', () => {
+      spyOn(component.changeFixedColumns, 'emit');
+      const fakeColumns = ['name', 'age'];
+
+      component.onChangeFixedColumns(fakeColumns);
+
+      expect(component.changeFixedColumns.emit).toHaveBeenCalledWith(fakeColumns);
+    });
+
+    it('onChangeFixedColumns: should not call `changeFixedColumns.emit` when hideActionFixedColumns is true', () => {
+      spyOn(component.changeFixedColumns, 'emit');
+      component.hideActionFixedColumns = true;
+      const fakeColumns = ['name', 'age'];
+
+      component.onChangeFixedColumns(fakeColumns);
+
+      expect(component.changeFixedColumns.emit).not.toHaveBeenCalled();
+    });
+
+    it('onColumnRestoreManager: should call `columnRestoreManager.emit`', () => {
+      spyOn(component.columnRestoreManager, 'emit');
+      const fakeColumns = ['name', 'age'];
+
+      component.onColumnRestoreManager(fakeColumns);
+
+      expect(component.columnRestoreManager.emit).toHaveBeenCalledWith(fakeColumns);
+    });
+
+    describe('applyFilters', () => {
+      it('should be called when `p-service-api` is used', () => {
+        spyOn(component, 'getFilteredItems').and.returnValue(of({ items: [], hasNext: false }));
+        component.hasService = true;
+        component.applyFilters({});
+        expect(component.getFilteredItems).toHaveBeenCalled();
+      });
+    });
+
+    it('getSelectedRows: should return selected rows', () => {
+      const rows = [
+        { id: 1, $selected: true },
+        { id: 2, $selected: false },
+        { id: 3, $selected: false },
+        { id: 4, $selected: true },
+        { id: 5, $selected: false }
+      ];
+      component.items = rows;
+      expect(component.getSelectedRows().length).toBe(2);
+    });
+
+    it('getUnselectedRows: should return unselected rows', () => {
+      const rows = [
+        { id: 1, $selected: false },
+        { id: 2, $selected: true },
+        { id: 3, $selected: false },
+        { id: 4, $selected: true },
+        { id: 5, $selected: true }
+      ];
+      component.items = rows;
+      expect(component.getUnselectedRows().length).toBe(2);
+    });
+
+    it('collapse: should set showDetail to false', () => {
+      const currentRow = {
+        id: 1,
+        $selected: true,
+        details: [{ id: 4 }],
+        $showDetail: true
+      };
+
+      component.items = [currentRow];
+
+      component.collapse(0);
+
+      expect(component.items[0].$showDetail).toBe(false);
+    });
+
+    it('collapse: should keep showDetail to false', () => {
+      const currentRow = {
+        id: 1,
+        $selected: true,
+        details: [{ id: 4 }],
+        $showDetail: false
+      };
+
+      component.items = [currentRow];
+
+      component.collapse(0);
+
+      expect(component.items[0].$showDetail).toBe(false);
+    });
+
+    it('collapse: shouldn`t emit collapsed', () => {
+      const currentRow = {
+        id: 1,
+        $selected: true,
+        details: [{ id: 4 }],
+        $showDetail: true
+      };
+
+      component.items = [currentRow];
+
+      spyOn(component.collapsed, 'emit');
+
+      component.collapse(0);
+
+      expect(component.collapsed.emit).not.toHaveBeenCalled();
+    });
+
+    it('expand: should set showDetail to true', () => {
+      const currentRow = {
+        id: 1,
+        $selected: true,
+        details: [{ id: 4 }],
+        $showDetail: false
+      };
+
+      component.items = [currentRow];
+
+      component.expand(0);
+
+      expect(component.items[0].$showDetail).toBe(true);
+    });
+
+    it('expand: should keep showDetail to true', () => {
+      const currentRow = {
+        id: 1,
+        $selected: true,
+        details: [{ id: 4 }],
+        $showDetail: true
+      };
+
+      component.items = [currentRow];
+
+      component.expand(0);
+
+      expect(component.items[0].$showDetail).toBe(true);
+    });
+
+    it('expand: shouldn`t emit expanded', () => {
+      const currentRow = {
+        id: 1,
+        $selected: true,
+        details: [{ id: 4 }],
+        $showDetail: false
+      };
+
+      component.items = [currentRow];
+
+      spyOn(component.expanded, 'emit');
+
+      component.expand(0);
+
+      expect(component.expanded.emit).not.toHaveBeenCalled();
+    });
+
+    it('unselectRows: should set item.$select and selectAll with false', () => {
+      const rows = [
+        { id: 1, $selected: true },
+        { id: 2, $selected: false },
+        { id: 3, $selected: false },
+        { id: 4, $selected: true },
+        { id: 5, detail: [{ package: 'base', $selected: true }], $selected: false }
+      ];
+
+      const newColumns = [
+        { property: 'id', label: 'Identificador' },
+        {
+          property: 'detail',
+          label: 'Identificador',
+          type: 'detail',
+          detail: { columns: [{ property: 'package' }], typeHeader: 'top' }
+        }
+      ];
+
+      component.selectAll = null;
+      component.items = rows;
+      component.columns = newColumns;
+
+      component.unselectRows();
+
+      expect(component.items.every(item => item.$selected === false)).toBe(true);
+      expect(component.items[4].detail.every(item => item.$selected === false)).toBe(true);
+
+      expect(component.selectAll).toBe(false);
+    });
+
+    it('unselectRows: should set item.$select and selectAll with false when `columnMasterDetail` is null', () => {
+      component.selectAll = null;
+      const rows = [
+        { id: 1, $selected: true },
+        { id: 2, $selected: false },
+        { id: 3, $selected: false },
+        { id: 4, $selected: true },
+        { id: 5, detail: [{ package: 'base', $selected: true }], $selected: false }
+      ];
+
+      const newColumns = [
+        { property: 'id', label: 'Identificador' },
+        {
+          property: 'detail',
+          label: 'Identificador',
+          type: 'detail',
+          detail: { columns: [{ property: 'package' }], typeHeader: 'top' }
+        }
+      ];
+
+      component.selectAll = null;
+      component.items = rows;
+      component.columns = newColumns;
+
+      component.columnMasterDetail = null;
+
+      component.unselectRows();
+
+      expect(component.items.every(item => item.$selected === false)).toBeTruthy();
+      expect(component.items[4].detail.every(item => item.$selected === false)).toBeFalsy();
+
+      expect(component.selectAll).toBeFalsy();
+    });
+
+    describe('removeItem:', () => {
+      it('remove: should remove the item by index', () => {
+        component.items = items;
+        const firstItem = component.items[0];
+        const numberItems = component.items.length;
+        component.removeItem(0);
+        expect(component.items.length).toEqual(numberItems - 1);
+        expect(component.items).not.toContain(firstItem);
+      });
+
+      it('remove: should remove item if received an object', () => {
+        component.items = items;
+        const numberItems = component.items.length;
+        const elementRemove = component.items[0];
+        component.removeItem(elementRemove);
+        expect(component.items.length).toEqual(numberItems - 1);
+        expect(component.items).not.toContain(elementRemove);
+      });
+
+      it('remove: should not remove item if received a value different from an object or a number', () => {
+        component.items = items;
+        const numberItems = component.items.length;
+        component.removeItem(<any>'item');
+        expect(component.items.length).toEqual(numberItems);
+      });
+    });
+
+    describe('updateItem:', () => {
+      it('updateItem: should update item if pass index and updated item', () => {
+        component.items = items;
+        const updatedItem = {
+          id: 1,
+          initial: 'BR',
+          name: 'Brasil',
+          total: 90.0,
+          atualization: '2017-10-09',
+          detail: [{ property: 'teste', label: 'Label teste' }]
+        };
+        component.updateItem(0, updatedItem);
+        const itemValue = component.items[0].total;
+        expect(itemValue).toBe(updatedItem.total);
+      });
+
+      it('updateItem: should update item if pass object and updated item', () => {
+        component.items = items;
+        const updatedItem = {
+          id: 1,
+          initial: 'BR',
+          name: 'Brasil',
+          total: 90.0,
+          atualization: '2017-10-09',
+          detail: [{ property: 'teste', label: 'Label teste' }]
+        };
+        const itemChanged = component.items[0];
+        component.updateItem(itemChanged, updatedItem);
+        const newValue = component.items[0].total;
+        expect(newValue).toBe(updatedItem.total);
+      });
+
+      it('updateItem: should update item if pass object and specific value for update', () => {
+        component.items = items;
+        const updatedItem = {
+          ...items[0],
+          total: 77.0
+        };
+        const changedItem = component.items[0];
+        component.updateItem(changedItem, updatedItem);
+        const newValue = component.items[0].total;
+        expect(newValue).toBe(updatedItem.total);
+      });
+
+      it('unselectRowItem: should set false in "selectAll" if all items are unselected', () => {
+        const newItem = {
+          value: 1,
+          label: 'teste'
+        };
+
+        component.items = [
+          {
+            newItem
+          }
+        ];
+
+        component['toggleSelect'](newItem, true);
+
+        component.unselectRowItem(itemSelect => false);
+
+        expect(component.selectAll).toBeFalsy();
+      });
+
+      it(`unselectRowItem: should set null in selectAll if it doesn't contain all selected items`, () => {
+        const newItem = {
+          value: 1,
+          label: 'teste'
+        };
+        const newItem2 = {
+          value: 2,
+          label: 'teste2'
+        };
+
+        component.items = [newItem, newItem2];
+
+        component['toggleSelect'](newItem, false);
+        component['toggleSelect'](newItem2, true);
+
+        component.unselectRowItem(newItem);
+
+        expect(component.selectAll).toBeNull();
+      });
+
+      it('selectRowItem: should set true in "selectAll" if all items are selected', () => {
+        const newItem = {
+          value: 1,
+          label: 'teste'
+        };
+
+        component.items = [
+          {
+            newItem
+          }
+        ];
+
+        component['toggleSelect'](newItem, true);
+
+        component.selectRowItem(itemSelect => true);
+
+        expect(component.selectAll).toBeTruthy();
+      });
+
+      it('selectRowItem: should set null in "selectAll" if it contains items that are not selected', () => {
+        component.items = [
+          {
+            id: 1,
+            name: 'teste'
+          },
+          {
+            id: 2,
+            name: 'teste2'
+          }
+        ];
+
+        component.selectRowItem({
+          id: 1,
+          name: 'teste'
+        });
+
+        expect(component.selectAll).toBeNull();
+      });
+
+      it("deleteItems: should set false in 'selectAll' and remove item if selected is true and 'serviceDeleteApi' is undefined and height is defined", () => {
+        component.serviceDeleteApi = undefined;
+        component.height = 400;
+        component.items = [
+          { id: 1, name: 'teste', $selected: true },
+          { id: 2, name: 'teste2' }
+        ];
+        spyOn(component['eventDelete'], 'emit');
+        spyOn(component['poNotification'], 'success');
+        spyOn(component['modalDelete'], 'close');
+
+        component.deleteItems();
+
+        expect(component.selectAll).toBeFalsy();
+        expect(component.items).toEqual([{ id: 2, name: 'teste2' }]);
+        expect(component.eventDelete.emit).toHaveBeenCalled();
+      });
+
+      it("deleteItems: should call function removeItem and remove item if selected is true and 'serviceDeleteApi' is undefined", () => {
+        component.serviceDeleteApi = undefined;
+        component.height = undefined;
+        component.items = [
+          { id: 1, name: 'teste', $selected: true },
+          { id: 2, name: 'teste2' }
+        ];
+        spyOn(component, 'removeItem');
+        spyOn(component['poNotification'], 'success');
+        spyOn(component['modalDelete'], 'close');
+
+        component.deleteItems();
+
+        expect(component.selectAll).toBeFalsy();
+        expect(component.removeItem).toHaveBeenCalledWith(0);
+      });
+
+      it("deleteItems: should set false in 'selectAll' and should call 'setTableResponseProperties' if serviceDeleteApi is valid", () => {
+        component.serviceDeleteApi = 'https://po-sample-api.onrender.com/v1/heroes';
+        component.serviceApi = 'https://po-sample-api.onrender.com/v1/heroes';
+        component.paramDeleteApi = 'id';
+        component.items = [
+          { id: 1, name: 'teste', $selected: true },
+          { id: 2, name: 'teste2' }
+        ];
+        component.itemsSelected = [{ id: 1, name: 'teste', $selected: true }];
+
+        spyOn(component, 'setTableResponseProperties');
+        spyOn(component['defaultService'], <any>'deleteItem').and.returnValue(of({}));
+        spyOn(component['defaultService'], <any>'getFilteredItems').and.returnValue(
+          of({ items: [component.items[1]], hasNext: false })
+        );
+        spyOn(component['poNotification'], 'success');
+        spyOn(component['modalDelete'], 'close');
+        component.deleteItems();
+
+        expect(component.selectAll).toBeFalsy();
+        expect(component.setTableResponseProperties).toHaveBeenCalled();
+      });
+
+      it('deleteItems: should set serviceDeleteApi but serviceApi is undefined', () => {
+        component.serviceDeleteApi = 'https://po-sample-api.onrender.com/v1/heroes';
+        component.serviceApi = undefined;
+        component.paramDeleteApi = 'id';
+        component.items = [
+          { id: 1, name: 'teste', $selected: true },
+          { id: 2, name: 'teste2' }
+        ];
+        component.itemsSelected = [{ id: 1, name: 'teste', $selected: true }];
+        spyOn(component['defaultService'], <any>'deleteItem').and.returnValue(of({}));
+        spyOn(component['poNotification'], 'success');
+        spyOn(component['modalDelete'], 'close');
+
+        spyOn(component['eventDelete'], 'emit');
+        component.deleteItems();
+
+        expect(component.eventDelete.emit).toHaveBeenCalled();
+      });
+
+      it('deleteItemsService: should call error in service delete api', () => {
+        component.serviceDeleteApi = 'https://po-sample-api.onrender.com/v1/heroes';
+        component.serviceApi = undefined;
+        component.paramDeleteApi = 'id';
+        component.itemsSelected = [{ id: 1, name: 'teste', $selected: true }];
+        component.items = [
+          { id: 1, name: 'teste', $selected: true },
+          { id: 2, name: 'teste2' }
+        ];
+        spyOn(component['defaultService'], <any>'deleteItem').and.returnValue(
+          throwError(() => 'Internal Server Error')
+        );
+
+        spyOn(component['poNotification'], 'success');
+        spyOn(component['poNotification'], 'error');
+        component.deleteItems();
+
+        expect(component.poNotification.success).not.toHaveBeenCalled();
+        expect(component.poNotification.error).toHaveBeenCalled();
+      });
+
+      it('changesAfterDelete: should set false in "selectAll"', () => {
+        component.selectAll = true;
+        const newItems = [
+          { id: 1, name: 'teste', $selected: true },
+          { id: 2, name: 'teste2' }
+        ];
+        spyOn(component['poNotification'], 'success');
+        spyOn(component['modalDelete'], 'close');
+        component['changesAfterDelete'](newItems);
+        expect(component.selectAll).toBeFalsy();
+      });
+
+      it('toggleSelect: should add item as "selected"', () => {
+        const newItem = {
+          value: 1,
+          label: 'teste'
+        };
+        const newItem2 = {
+          value: 2,
+          label: 'teste2'
+        };
+
+        component.items = [newItem, newItem2];
+
+        component['toggleSelect'](newItem, true);
+
+        const listSelected: Array<any> = component.getSelectedRows();
+
+        expect(listSelected.length).toEqual(1);
+      });
+
+      it('getWidthColumnManager: should return the value of _columnManagerTargetFixed', () => {
+        const expectedValue = jasmine.createSpyObj('ElementRef', ['nativeElement']);
+        component['_columnManagerTargetFixed'] = expectedValue;
+
+        const result = component.columnManagerTargetFixed;
+
+        expect(result).toBe(expectedValue);
+      });
+
+      it('inverseOfTranslation: should return the correct value of inverseOfTranslation', () => {
+        const mockRenderedContentOffset = 10;
+
+        component.viewPort = { _renderedContentOffset: mockRenderedContentOffset } as any;
+
+        const resultado = component.inverseOfTranslation;
+        expect(resultado).toEqual('-10px');
+      });
+
+      it('inverseOfTranslation: should return "-0px" if viewPort or _renderedContentOffset are not set', () => {
+        component.viewPort = null;
+
+        const resultado1 = component.inverseOfTranslation;
+        expect(resultado1).toEqual('-0px');
+
+        component.viewPort = { _renderedContentOffset: null } as any;
+
+        const resultado2 = component.inverseOfTranslation;
+        expect(resultado2).toEqual('-0px');
+      });
+
+      it('should update filteredItems on onFilteredItemsChange call', () => {
+        component.items = [
+          { id: 1, name: 'item1' },
+          { id: 2, name: 'item2' }
+        ];
+
+        component.onFilteredItemsChange(items);
+
+        expect(component.filteredItems).toBe(items);
+      });
+
+      it('onFilteredItemsChange should call `sortArray` if exist sortedColumn', () => {
+        component.sortedColumn = {
+          property: { property: 'name' },
+          ascending: true
+        };
+        component.items = [
+          { id: 2, name: 'item2' },
+          { id: 1, name: 'item1' }
+        ];
+
+        spyOn(component, 'sortArray');
+        component.onFilteredItemsChange(items);
+
+        expect(component.sortArray).toHaveBeenCalled();
+      });
+    });
+
+    describe('searchAiColumns:', () => {
+      it('should return searchAiField.columns when explicitly provided', () => {
+        const aiCols = [{ property: 'name', label: 'Nome', type: 'string' }];
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', columns: aiCols });
+
+        expect(component.searchAiColumns).toBe(aiCols);
+      });
+
+      it('should derive columns from p-columns when searchAiField.columns is not set', () => {
+        component.columns = [
+          { property: 'name', label: 'Nome' },
+          { property: 'age', label: 'Idade', type: 'number' }
+        ];
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+
+        const result = component.searchAiColumns;
+
+        expect(result.length).toBe(2);
+        expect(result[0]).toEqual({ property: 'name', label: 'Nome', type: 'string' });
+        expect(result[1]).toEqual({ property: 'age', label: 'Idade', type: 'number' });
+      });
+
+      it('should exclude columns with visible set to false', () => {
+        component.columns = [
+          { property: 'name', label: 'Nome' },
+          { property: 'secret', label: 'Secret', visible: false }
+        ];
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+
+        const result = component.searchAiColumns;
+
+        expect(result.length).toBe(1);
+        expect(result[0].property).toBe('name');
+      });
+
+      it('should exclude columns with searchAiIgnore set to true', () => {
+        component.columns = [
+          { property: 'name', label: 'Nome' },
+          { property: 'id', label: 'ID', searchAiIgnore: true }
+        ];
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+
+        const result = component.searchAiColumns;
+
+        expect(result.length).toBe(1);
+        expect(result[0].property).toBe('name');
+      });
+
+      it('should use column property as label when label is not set', () => {
+        component.columns = [{ property: 'code' }];
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+
+        expect(component.searchAiColumns[0].label).toBe('code');
+      });
+    });
+
+    describe('searchAiPlaceholder:', () => {
+      it('should return searchAiField.placeholder when explicitly provided', () => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', placeholder: 'Busque algo' });
+
+        expect(component.searchAiPlaceholder).toBe('Busque algo');
+      });
+
+      it('should return the default literal when placeholder is not provided', () => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+
+        expect(component.searchAiPlaceholder).toBe(component.literals.searchAiPlaceholder);
+      });
+
+      it('should return the default literal when searchAiField is undefined', () => {
+        fixture.componentRef.setInput('p-search-ai-field', undefined);
+
+        expect(component.searchAiPlaceholder).toBe(component.literals.searchAiPlaceholder);
+      });
+    });
+
+    describe('onAiResult:', () => {
+      const mockResult = {
+        query: 'test',
+        filter: "name eq 'Brasil'",
+        description: 'nome Brasil',
+        confidence: 0.9,
+        type: PoSearchAiResponseType.filter
+      };
+
+      beforeEach(() => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+      });
+
+      it('should emit searchAiResult for any apply strategy', () => {
+        spyOn(component.searchAiResult, 'emit');
+        spyOn(component, 'initializeData');
+
+        component.onAiResult(mockResult);
+
+        expect(component.searchAiResult.emit).toHaveBeenCalledWith(mockResult);
+      });
+
+      it('should call apply function and return when apply is a callback', () => {
+        const applyFn = jasmine.createSpy('applyFn');
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', apply: applyFn });
+
+        component.onAiResult(mockResult);
+
+        expect(applyFn).toHaveBeenCalledWith(mockResult);
+      });
+
+      it('should not modify filteredItems when apply is "none"', () => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', apply: 'none' });
+        component.items = [{ id: 1 }];
+        component.filteredItems = [{ id: 1 }];
+        spyOn(component, 'initializeData');
+
+        component.onAiResult(mockResult);
+
+        expect(component.initializeData).not.toHaveBeenCalled();
+      });
+
+      it('should call initializeData with $filter when apply is "server"', () => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', apply: 'server' });
+        spyOn(component, 'initializeData');
+
+        component.onAiResult(mockResult);
+
+        expect(component.page).toBe(1);
+        expect(component.initializeData).toHaveBeenCalledWith({ $filter: mockResult.filter });
+      });
+
+      it('should call initializeData with $filter when apply is "auto" and hasService is true', () => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', apply: 'auto' });
+        component.hasService = true;
+        spyOn(component, 'initializeData');
+
+        component.onAiResult(mockResult);
+
+        expect(component.initializeData).toHaveBeenCalledWith({ $filter: mockResult.filter });
+      });
+
+      it('should fetch items and filter locally when apply is "parser" and hasService is true', () => {
+        const serviceItems = [
+          { id: 1, name: 'Brasil' },
+          { id: 2, name: 'França' }
+        ];
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', apply: 'parser' });
+        component.hasService = true;
+        spyOn(component, 'getFilteredItems').and.returnValue(of({ items: serviceItems, hasNext: false }));
+
+        component.onAiResult({ ...mockResult, filter: "name eq 'Brasil'" });
+
+        expect(component.getFilteredItems).toHaveBeenCalledWith({ pageSize: 9999, page: 1 });
+        expect(component.filteredItems).toEqual([{ id: 1, name: 'Brasil' }]);
+        expect(component.loading).toBeFalse();
+      });
+
+      it('should set loading to false when apply is "parser", hasService is true and request fails', () => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', apply: 'parser' });
+        component.hasService = true;
+        component.loading = false;
+        spyOn(component, 'getFilteredItems').and.returnValue(throwError(() => 'Internal Server Error'));
+
+        component.onAiResult({ ...mockResult, filter: "name eq 'Brasil'" });
+
+        expect(component.getFilteredItems).toHaveBeenCalledWith({ pageSize: 9999, page: 1 });
+        expect(component.loading).toBeFalse();
+      });
+
+      it('should filter local items when apply is "auto" and hasService is false', () => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', apply: 'auto' });
+        component.hasService = false;
+        component.items = [
+          { id: 1, name: 'Brasil' },
+          { id: 2, name: 'França' }
+        ];
+        component.filteredItems = [...component.items];
+
+        component.onAiResult({ ...mockResult, filter: "name eq 'Brasil'" });
+
+        expect(component.filteredItems).toEqual([{ id: 1, name: 'Brasil' }]);
+      });
+
+      it('should filter local items when apply is "parser" and hasService is false', () => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai', apply: 'parser' });
+        component.hasService = false;
+        component.items = [
+          { id: 1, name: 'Brasil' },
+          { id: 2, name: 'França' }
+        ];
+        component.filteredItems = [...component.items];
+
+        component.onAiResult({ ...mockResult, filter: "name eq 'Brasil'" });
+
+        expect(component.filteredItems).toEqual([{ id: 1, name: 'Brasil' }]);
+      });
+
+      it('should filter local items when apply defaults to "auto" and hasService is false', () => {
+        fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+        component.hasService = false;
+        component.items = [
+          { id: 1, name: 'Brasil' },
+          { id: 2, name: 'França' }
+        ];
+        component.filteredItems = [...component.items];
+
+        component.onAiResult({ ...mockResult, filter: "name eq 'Brasil'" });
+
+        expect(component.filteredItems.length).toBe(1);
+        expect(component.filteredItems[0]).toEqual({ id: 1, name: 'Brasil' });
+      });
+    });
+
+    describe('onAiLowConfidence:', () => {
+      it('should emit searchAiLowConfidence', () => {
+        const result = {
+          query: 'test',
+          filter: '',
+          description: '',
+          confidence: 0.3,
+          type: PoSearchAiResponseType.filter
+        };
+        spyOn(component.searchAiLowConfidence, 'emit');
+
+        component.onAiLowConfidence(result);
+
+        expect(component.searchAiLowConfidence.emit).toHaveBeenCalledWith(result);
+      });
+    });
+
+    describe('onAiError:', () => {
+      it('should emit searchAiError', () => {
+        const error = { query: 'test', statusCode: 500, message: 'Server error' };
+        spyOn(component.searchAiError, 'emit');
+
+        component.onAiError(error);
+
+        expect(component.searchAiError.emit).toHaveBeenCalledWith(error);
+      });
+    });
+
+    describe('onAiClear:', () => {
+      it('should reload from service and reset page when hasService is true', () => {
+        component.hasService = true;
+        component.page = 5;
+        spyOn(component, 'initializeData');
+
+        component.onAiClear();
+
+        expect(component.page).toBe(1);
+        expect(component.initializeData).toHaveBeenCalled();
+      });
+
+      it('should restore filteredItems from items reference when hasService is false and no height', () => {
+        component.hasService = false;
+        component['_height'] = undefined;
+        const localItems = [{ id: 1 }, { id: 2 }];
+        component.items = localItems;
+        component.filteredItems = [{ id: 1 }];
+
+        component.onAiClear();
+
+        expect(component.filteredItems).toBe(localItems);
+      });
+
+      it('should restore filteredItems as a shallow copy when hasService is false and height is set', () => {
+        component.hasService = false;
+        component['_height'] = 300;
+        const localItems = [{ id: 1 }, { id: 2 }];
+        component.items = localItems;
+        component.filteredItems = [{ id: 1 }];
+
+        component.onAiClear();
+
+        expect(component.filteredItems).toEqual(localItems);
+        expect(component.filteredItems).not.toBe(localItems);
+      });
+    });
   });
 
   describe('Templates:', () => {
-    it('should contain `po-tooltip` class if `poTableColumn.tooltip`', fakeAsync(() => {
-      component.columns = [{ property: 'link', label: 'linkTest', type: 'link', tooltip: 'tooltipTest' }];
-      component.items = [{ link: 'tooltipTest' }];
+    it('should display formatted value when column has mask property', () => {
+      component.columns = [{ property: 'cpf', label: 'CPF', mask: '999.999.999-99' }];
+      component.items = [{ cpf: '12345678901' }];
       fixture.detectChanges();
 
-      const columnLink = fixture.debugElement.query(By.css('.po-table-column-cell'));
+      const cellContent = tableElement.querySelector('.po-table-body-ellipsis span');
+      expect(cellContent.textContent.trim()).toEqual('123.456.789-01');
+    });
 
-      columnLink.triggerEventHandler('mouseenter', null);
+    it('should display raw value when column has no mask property', () => {
+      component.columns = [{ property: 'name', label: 'Nome' }];
+      component.items = [{ name: 'Test Value' }];
       fixture.detectChanges();
 
-      tick(100);
-
-      const poTooltip = nativeElement.querySelector('.po-tooltip');
-      expect(poTooltip).toBeTruthy();
-
-      columnLink.triggerEventHandler('mouseleave', null);
-      fixture.detectChanges();
-
-      tick(100);
-
-      expect(nativeElement.querySelector('.po-tooltip.po-invisible')).toBeTruthy();
-    }));
+      const cellContent = tableElement.querySelector('.po-table-body-ellipsis span');
+      expect(cellContent.textContent.trim()).toEqual('Test Value');
+    });
 
     it('shouldn`t contain `po-tooltip` class if link is disabled', fakeAsync(() => {
       const mouseEnterEvent = new Event('mouseenter', { bubbles: true });
@@ -1608,9 +2561,8 @@ describe('PoTableComponent:', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('div.po-table-container-relative')).toBeTruthy();
-      expect(nativeElement.querySelector('div.po-table-overlay')).toBeTruthy();
-      expect(nativeElement.querySelector('po-loading.po-table-overlay-content')).toBeTruthy();
+      expect(nativeElement.querySelector('div.po-table-container-sticky')).toBeTruthy();
+      expect(nativeElement.querySelector('po-loading-overlay')).toBeTruthy();
     });
 
     it('shouldn`t show loading on table', () => {
@@ -1618,9 +2570,8 @@ describe('PoTableComponent:', () => {
 
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector('div.po-table-container-relative')).toBeFalsy();
-      expect(nativeElement.querySelector('div.po-table-overlay')).toBeFalsy();
-      expect(nativeElement.querySelector('po-loading.po-table-overlay-content')).toBeFalsy();
+      expect(nativeElement.querySelector('div.po-table-container-sticky')).toBeFalsy();
+      expect(nativeElement.querySelector('po-loading-overlay')).toBeFalsy();
     });
 
     it('should show td with `po-table-column-actions` class if has more than 1 action', () => {
@@ -1690,7 +2641,7 @@ describe('PoTableComponent:', () => {
 
       const actionColumn = tableElement.querySelector('.po-table-column-single-action');
       const actionItem = actionColumn.querySelectorAll('.po-table-single-action');
-      const iconActionItem = actionColumn.querySelector('.po-icon');
+      const iconActionItem = actionColumn.querySelector('po-icon');
 
       expect(actionItem.length).toBe(1);
       expect(iconActionItem).toBeNull();
@@ -1707,7 +2658,7 @@ describe('PoTableComponent:', () => {
 
       const actionColumn = tableElement.querySelector('.po-table-column-single-action');
       const actionItem = actionColumn.querySelectorAll('.po-table-single-action');
-      const iconActionItem = actionColumn.querySelector('.po-icon');
+      const iconActionItem = actionColumn.querySelector('po-icon');
 
       expect(actionItem.length).toBe(1);
       expect(iconActionItem).toBeTruthy();
@@ -1740,37 +2691,19 @@ describe('PoTableComponent:', () => {
       component.container = 'border';
       fixture.detectChanges();
 
-      tick();
+      tick(1200);
 
       expect(nativeElement.querySelector('.po-container')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-container-no-shadow')).toBeTruthy();
     }));
 
     it('should display `po-container` and `po-container-no-shadow` class if container is `shadow`.', fakeAsync(() => {
       component.container = 'shadow';
       fixture.detectChanges();
 
-      tick();
+      tick(1200);
+
       expect(nativeElement.querySelector('.po-container')).toBeTruthy();
-      expect(nativeElement.querySelector('.po-container-no-shadow')).toBeFalsy();
     }));
-
-    it('should find .po-table-header-column-manager if has columns and actions is undefined', () => {
-      component.columns = [...columns];
-      component.actions = [];
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-table-header-column-manager')).toBeTruthy();
-    });
-
-    it('should find .po-table-header-column-manager-button if has columns and actions', () => {
-      component.columns = [...columns];
-
-      fixture.detectChanges();
-
-      expect(nativeElement.querySelector('.po-table-header-column-manager-button')).toBeTruthy();
-    });
 
     it('shouldn`t find .po-table-header-column-manager-button if hasn`t columns and items', () => {
       component.items = undefined;
@@ -1814,11 +2747,23 @@ describe('PoTableComponent:', () => {
       expect(nativeElement.querySelector(`po-table-column-manager`)).toBe(null);
     });
 
-    it('should display po-table-column-manager', () => {
-      component.hideColumnsManager = false;
+    it('should call attr-p-spacing `medium` if p-spacing not set', () => {
+      localStorage.removeItem('po-default-size');
+      component.componentsSize = undefined;
+      component.spacing = undefined;
+      component.columns = [...columnsWithDetail];
+
       fixture.detectChanges();
 
-      expect(nativeElement.querySelector(`po-table-column-manager`)).toBeTruthy();
+      expect(nativeElement.querySelector('[p-spacing="medium"]')).toBeTruthy();
+    });
+
+    it('should call attr-p-spacing `small` if p-spacing is `small` and row is not interactive', () => {
+      component.columns = [{ property: 'name' }, { property: 'age' }];
+      component.spacing = PoTableColumnSpacing.Small;
+      fixture.detectChanges();
+
+      expect(nativeElement.querySelector('[p-spacing="small"]')).toBeTruthy();
     });
 
     it('should display .po-table-header-master-detail if columns contains detail and rowTemplate is undefined', () => {
@@ -1873,6 +2818,7 @@ describe('PoTableComponent:', () => {
       component.columns = [{ property: 'name' }, { property: 'age' }];
       component.actions = [{ label: 'First Action', action: () => {} }];
       component.hideColumnsManager = false;
+      component.actionRight = true;
 
       component.tableRowTemplate = {
         ...mockTableDetailDiretive,
@@ -1951,6 +2897,20 @@ describe('PoTableComponent:', () => {
   });
 
   describe('Properties:', () => {
+    it('cancel: should call modal.close ', () => {
+      spyOn(component.modalDelete, <any>'close');
+      component.close.action();
+
+      expect(component.modalDelete.close).toHaveBeenCalled();
+    });
+
+    it('confirm: should call modal.confirm', () => {
+      spyOn(component, <any>'deleteItems');
+      component.confirm.action();
+
+      expect(component.deleteItems).toHaveBeenCalled();
+    });
+
     it('firstAction: should be `false` if not contains actions', () => {
       component.actions = undefined;
 
@@ -2238,18 +3198,18 @@ describe('PoTableComponent:', () => {
       expect(component.columnCountForMasterDetail).toBe(countColumns);
     });
 
-    it('columnCountForMasterDetail: should return 7 columnCount if actions is empty and has 5 columns', () => {
+    it('columnCountForMasterDetail: should return 6 columnCount if actions is empty and has 5 columns', () => {
       component.actions = [];
       component.columns = [...columns];
 
       const columnCountColumnManager = 1;
 
-      const countColumns = columns.length + 1 + columnCountColumnManager;
+      const countColumns = columns.length + columnCountColumnManager;
 
       expect(component.columnCountForMasterDetail).toBe(countColumns);
     });
 
-    it('columnCountForMasterDetail: should return 8 columnCount if actions is empty, has 5 columns and is selectable', () => {
+    it('columnCountForMasterDetail: should return 7 columnCount if actions is empty, has 5 columns and is selectable', () => {
       component.actions = [];
       component.columns = [...columns];
       component.selectable = true;
@@ -2257,7 +3217,7 @@ describe('PoTableComponent:', () => {
       const columnCountColumnManager = 1;
       const columnCountCheckbox = 1;
 
-      const countColumns = columns.length + 1 + columnCountColumnManager + columnCountCheckbox;
+      const countColumns = columns.length + columnCountColumnManager + columnCountCheckbox;
 
       expect(component.columnCountForMasterDetail).toBe(countColumns);
     });
@@ -2312,6 +3272,33 @@ describe('PoTableComponent:', () => {
       expect(component.columnCount).toBe(7);
     });
 
+    it('columnCount: should not count selectable column when there are no items', () => {
+      component.columns = [...columns];
+      component.items = [];
+      component.selectable = true;
+      component.actions = [];
+
+      expect(component.columnCount).toBe(columns.length);
+    });
+
+    it('columnCount: should not count actions column when there are no items', () => {
+      component.columns = [...columns];
+      component.items = [];
+      component.selectable = false;
+      component.actions = actions;
+
+      expect(component.columnCount).toBe(columns.length);
+    });
+
+    it('columnCount: should not count actions or selectable columns when there are no items', () => {
+      component.columns = [...columns];
+      component.items = [];
+      component.selectable = true;
+      component.actions = actions;
+
+      expect(component.columnCount).toBe(columns.length);
+    });
+
     it('getTemplate: should be return null by column property', () => {
       const column: PoTableColumn = {};
       column.property = 'status3';
@@ -2330,6 +3317,7 @@ describe('PoTableComponent:', () => {
         } as TemplateRef<any>
       };
 
+      spyOn(console, 'warn');
       component.tableColumnTemplates.reset([tableColumnTemplate, tableColumnTemplate2]);
       const res = component.getTemplate(column);
       expect(res).toBeNull();
@@ -2358,6 +3346,16 @@ describe('PoTableComponent:', () => {
 
       expect(res).toEqual(tableColumnTemplate.templateRef);
     });
+
+    it('getTemplate: should return null if component is not initialized', () => {
+      component.initialized = false;
+
+      const column: PoTableColumn = { property: 'status' };
+
+      const res = component.getTemplate(column);
+
+      expect(res).toBeNull();
+    });
   });
 
   it('hasRowTemplateWithArrowDirectionRight: should be false if tableRowTemplateArrowDirection is left', () => {
@@ -2372,5 +3370,612 @@ describe('PoTableComponent:', () => {
     };
 
     expect(component.hasRowTemplateWithArrowDirectionRight).toBe(true);
+  });
+
+  it('ngOnDestroy: should call `removeListeners` on destroy using infiniteScroll', () => {
+    const dummyElement = document.createElement('div');
+
+    component.height = 100;
+    component.infiniteScroll = true;
+
+    component['subscriptionScrollEvent'] = component['defaultService'].scrollListener(dummyElement).subscribe();
+
+    component['removeListeners']();
+
+    expect(component.infiniteScroll).toBeTrue();
+  });
+
+  it(`ngOnDestroy: should unsubscribe 'subscriptionService'`, () => {
+    const fakeSubscription = <any>{ unsubscribe: () => {} };
+    spyOn(fakeSubscription, <any>'unsubscribe');
+    Object.defineProperty(component, 'subscriptionService', { value: fakeSubscription, configurable: true });
+
+    component.ngOnDestroy();
+
+    expect(fakeSubscription.unsubscribe).toHaveBeenCalled();
+  });
+
+  it(`ngOnDestroy: should not unsubscribe if 'subscriptionService' is falsy.`, () => {
+    const fakeSubscription = <any>{ unsubscribe: () => {} };
+    Object.defineProperty(component, 'subscriptionService', { value: fakeSubscription, configurable: true });
+
+    spyOn(fakeSubscription, <any>'unsubscribe');
+
+    Object.defineProperty(component, 'subscriptionService', { value: undefined, configurable: true });
+    component.ngOnDestroy();
+
+    expect(fakeSubscription.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it('showMoreInfiniteScroll: should call `onShowMore` if showMoreDisabled is false ', () => {
+    const event = { target: { offsetHeight: 100, scrollTop: 100, scrollHeight: 1 } };
+    const spyOnShowMore = spyOn(component, 'onShowMore');
+
+    component.infiniteScrollDistance = 10;
+    component['showMoreDisabled'] = false;
+
+    component.showMoreInfiniteScroll(event);
+
+    expect(spyOnShowMore).toHaveBeenCalled();
+  });
+
+  it('showMoreInfiniteScroll: should call `onShowMore` if scrollPosition is close to the scrollHeight', () => {
+    const event = { target: { offsetHeight: 100, scrollTop: 199, scrollHeight: 300 } };
+    const spyOnShowMore = spyOn(component, 'onShowMore');
+
+    component.infiniteScrollDistance = 100;
+
+    component.showMoreInfiniteScroll(event);
+
+    expect(spyOnShowMore).toHaveBeenCalled();
+  });
+
+  it('showMoreInfiniteScroll: should not call `onShowMore` if showMoreDisabled is false but scrollPosition smaller then scrollHeight', () => {
+    const event = { target: { offsetHeight: 100, scrollTop: 100, scrollHeight: 1000 } };
+    const spyOnShowMore = spyOn(component, 'onShowMore');
+
+    component.infiniteScrollDistance = 100;
+
+    component.showMoreInfiniteScroll(event);
+
+    expect(spyOnShowMore).not.toHaveBeenCalled();
+  });
+
+  it('showMoreInfiniteScroll: should call `onShowMore` when showMoreDisabled Disabled ', () => {
+    const event = { target: { offsetHeight: 100, scrollTop: 100, scrollHeight: 1 } };
+    const spy = spyOn(component, 'onShowMore');
+
+    component.infiniteScrollDistance = 10;
+    component['showMoreDisabled'] = true;
+
+    component.showMoreInfiniteScroll(event);
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('includeInfiniteScroll: should call `scrollListener` when `infiniteScroll` is used (virtualScroll is false)', () => {
+    component.height = 100;
+    component.infiniteScroll = true;
+    component.virtualScroll = false;
+
+    const mockScrollableElement = {
+      scrollHeight: 200,
+      closest: jasmine.createSpy('closest').and.returnValue({}),
+      addEventListener: jasmine.createSpy('addEventListener'),
+      removeEventListener: jasmine.createSpy('removeEventListener')
+    };
+
+    component.tableScrollable = new ElementRef(mockScrollableElement);
+
+    const spyScrollListener = spyOn(component['defaultService'], 'scrollListener').and.returnValue(
+      of({ target: { offsetHeight: 100, scrollTop: 100, scrollHeight: 1 } })
+    );
+
+    component['includeInfiniteScroll']();
+
+    expect(spyScrollListener).toHaveBeenCalledWith(mockScrollableElement.closest());
+    expect(mockScrollableElement.closest).toHaveBeenCalledWith('.po-table-container-overflow');
+  });
+
+  it('includeInfiniteScroll: should call `scrollListener` when `infiniteScroll` is used (virtualScroll is true)', () => {
+    component.height = 100;
+    component.infiniteScroll = true;
+    component.virtualScroll = true;
+
+    const mockTableVirtualScroll = new ElementRef({
+      nativeElement: {
+        scrollHeight: 200
+      }
+    });
+
+    component.tableVirtualScroll = mockTableVirtualScroll;
+
+    const spyScrollListener = spyOn(component['defaultService'], 'scrollListener').and.returnValue(
+      of({ target: { offsetHeight: 100, scrollTop: 100, scrollHeight: 1 } })
+    );
+
+    component['includeInfiniteScroll']();
+
+    expect(spyScrollListener).toHaveBeenCalled();
+  });
+
+  it('checkInfiniteScroll: should use tableScrollable scrollHeight when virtualScroll is false', () => {
+    const spyDetectChanges = spyOn(component['changeDetector'], 'detectChanges');
+    const spyIncludeInfiniteScroll = spyOn(component, <any>'includeInfiniteScroll');
+
+    component.height = 100;
+    component.virtualScroll = false;
+    spyOnProperty(component, 'hasItems').and.returnValue(true);
+    component.infiniteScroll = true;
+
+    const mockTableScrollable = new ElementRef({
+      scrollHeight: 120,
+      closest: () => null
+    });
+    component.tableScrollable = mockTableScrollable;
+
+    component['checkInfiniteScroll']();
+
+    expect(spyIncludeInfiniteScroll).toHaveBeenCalled();
+    expect(spyDetectChanges).toHaveBeenCalled();
+  });
+
+  it('checkInfiniteScroll: should call includeInfiniteScroll if height is smaller than scrollHeight', () => {
+    const spyDetectChanges = spyOn(component['changeDetector'], 'detectChanges');
+    const spyIncludeInfiniteScroll = spyOn(component, <any>'includeInfiniteScroll');
+
+    component.height = 10;
+    spyOnProperty(component, 'hasItems').and.returnValue(true);
+    component.infiniteScroll = true;
+
+    component['checkInfiniteScroll']();
+
+    expect(spyIncludeInfiniteScroll).toHaveBeenCalled();
+    expect(spyDetectChanges).toHaveBeenCalled();
+  });
+
+  it('checkInfiniteScroll: should not call `includeInfiniteScroll` if height is bigger than scrollHeight', () => {
+    const spyDetectChanges = spyOn(component['changeDetector'], 'detectChanges');
+    const spyIncludeInfiniteScroll = spyOn(component, <any>'includeInfiniteScroll');
+
+    component.height = 1000;
+    spyOnProperty(component, 'hasItems').and.returnValue(true);
+    component.infiniteScroll = true;
+
+    component['checkInfiniteScroll']();
+
+    expect(spyDetectChanges).toHaveBeenCalled();
+    expect(spyIncludeInfiniteScroll).not.toHaveBeenCalled();
+  });
+
+  it('getWidthColumnManager, should return width of column manager', () => {
+    const fakeThis = {
+      columnManager: {
+        nativeElement: {
+          offsetWidth: 120
+        }
+      }
+    };
+
+    fixture.detectChanges();
+
+    component['getWidthColumnManager'].call(fakeThis);
+
+    expect(fakeThis.columnManager.nativeElement.offsetWidth).toEqual(120);
+  });
+
+  it('getWidthColumnManager, should return undefined if not contain column manager', () => {
+    const fakeThis = {
+      columnManager: undefined
+    };
+
+    fixture.detectChanges();
+
+    const valueWidth = component['getWidthColumnManager'].call(fakeThis);
+
+    expect(valueWidth).toEqual(undefined);
+  });
+
+  it('getWidthColumnManager, should return undefined if not contain column manager fixed', () => {
+    const fakeThis = {
+      height: 100,
+      columnManagerFixed: undefined
+    };
+
+    fixture.detectChanges();
+
+    const valueWidth = component['getWidthColumnManager'].call(fakeThis);
+
+    expect(valueWidth).toEqual(undefined);
+  });
+
+  it('getWidthColumnManagerFixed, should return width of column manager', () => {
+    const fakeThis = {
+      height: 300,
+      columnManagerFixed: {
+        nativeElement: {
+          offsetWidth: 120
+        }
+      }
+    };
+
+    fixture.detectChanges();
+
+    component['getWidthColumnManager'].call(fakeThis);
+
+    expect(fakeThis.columnManagerFixed.nativeElement.offsetWidth).toEqual(120);
+  });
+
+  it('columnActionLeft, should return width of column when action is on the left', () => {
+    const fakeThis = {
+      columnActionLeft: {
+        nativeElement: {
+          offsetWidth: 120
+        }
+      }
+    };
+
+    fixture.detectChanges();
+
+    component['getColumnWidthActionsLeft'].call(fakeThis);
+
+    expect(fakeThis.columnActionLeft.nativeElement.offsetWidth).toEqual(120);
+  });
+
+  it('columnActionLeft, should return undefined if not contain `columnActionLeftFixed`', () => {
+    const fakeThis = {
+      height: 120,
+      columnActionLeftFixed: undefined
+    };
+
+    fixture.detectChanges();
+
+    const valueExpect = component['getColumnWidthActionsLeft'].call(fakeThis);
+
+    expect(valueExpect).toEqual(undefined);
+  });
+
+  it('columnActionLeft, should return undefined if not contain actions on the left', () => {
+    const fakeThis = {
+      columnActionLeft: undefined
+    };
+
+    fixture.detectChanges();
+
+    const valueWidth = component['getColumnWidthActionsLeft'].call(fakeThis);
+
+    expect(valueWidth).toEqual(undefined);
+  });
+
+  it('columnActionLeftFixed, should return width of column when action is on the left', () => {
+    const fakeThis = {
+      height: 300,
+      columnActionLeftFixed: {
+        nativeElement: {
+          offsetWidth: 120
+        }
+      }
+    };
+
+    fixture.detectChanges();
+
+    component['getColumnWidthActionsLeft'].call(fakeThis);
+
+    expect(fakeThis.columnActionLeftFixed.nativeElement.offsetWidth).toEqual(120);
+  });
+
+  it('hasInfiniteScroll: should return false if infiniteScroll is false', () => {
+    component.infiniteScroll = false;
+    component.tableVirtualScroll = {
+      nativeElement: { offsetHeight: 100, scrollTop: 100, scrollHeight: 100 }
+    };
+
+    spyOnProperty(component, 'hasItems').and.returnValue(false);
+
+    component.height = 200;
+
+    expect(component['hasInfiniteScroll']()).toBeFalse();
+  });
+
+  it('draggable: should return false if draggable is false', () => {
+    component.draggable = false;
+
+    expect(component['isDraggable']).toBeFalse();
+  });
+
+  it('changeSizeLoading: should set sm  if height of parent element is smaller or equal 150px', () => {
+    const fakeTable = {
+      sizeLoading: 'sm',
+      tableWrapperElement: {
+        nativeElement: {
+          offsetHeight: 150
+        }
+      },
+      changeDetector: {
+        detectChanges: () => {}
+      }
+    };
+
+    component['changeSizeLoading'].call(fakeTable);
+
+    expect(fakeTable.sizeLoading).toBe('sm');
+  });
+
+  it('changeSizeLoading: should set lg if height of parent element is higher or equal 260px', () => {
+    const fakeTable = {
+      sizeLoading: 'sm',
+      tableWrapperElement: {
+        nativeElement: {
+          offsetHeight: 260
+        }
+      },
+      changeDetector: {
+        detectChanges: () => {}
+      }
+    };
+
+    component['changeSizeLoading'].call(fakeTable);
+
+    expect(fakeTable.sizeLoading).toBe('lg');
+  });
+
+  it('changeSizeLoading: should set md  if height of parent element is between 150px and 260px', () => {
+    const fakeTable = {
+      sizeLoading: 'sm',
+      tableWrapperElement: {
+        nativeElement: {
+          offsetHeight: 200
+        }
+      },
+      changeDetector: {
+        detectChanges: () => {}
+      }
+    };
+
+    component['changeSizeLoading'].call(fakeTable);
+
+    expect(fakeTable.sizeLoading).toBe('md');
+  });
+
+  it('changeSizeLoading: should set lg if there is no height in parentElement', () => {
+    const fakeTable = {
+      sizeLoading: 'sm',
+      tableTemplate: {
+        nativeElement: {
+          parentElement: {
+            anotherProperty: null
+          }
+        }
+      },
+      changeDetector: {
+        detectChanges: () => {}
+      }
+    };
+
+    component['changeSizeLoading'].call(fakeTable);
+
+    expect(fakeTable.sizeLoading).toBe('lg');
+  });
+
+  describe('getDefaultSpacing:', () => {
+    beforeEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    afterEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    it('should return ExtraSmall when componentSize is Small', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+      localStorage.setItem('po-default-size', 'small');
+
+      component.componentsSize = PoFieldSize.Small;
+      component.spacing = undefined;
+      expect(component['getDefaultSpacing']()).toBe(PoTableColumnSpacing.ExtraSmall);
+    });
+
+    it('should return ExtraSmall when accessibility size is Small', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+      localStorage.setItem('po-default-size', 'small');
+      component.componentsSize = PoFieldSize.Medium;
+      component.spacing = undefined;
+      expect(component['getDefaultSpacing']()).toBe(PoTableColumnSpacing.ExtraSmall);
+    });
+
+    it('should return Medium when accessibility size is Medium', () => {
+      localStorage.setItem('po-default-size', 'medium');
+      component.spacing = PoTableColumnSpacing.ExtraSmall;
+      expect(component['getDefaultSpacing']()).toBe(PoTableColumnSpacing.Medium);
+    });
+  });
+
+  it('changeHeaderWidth: should set width if noColumnsHeader ', () => {
+    const fakeTable = {
+      headerWidth: null,
+      noColumnsHeader: {
+        nativeElement: {
+          offsetWidth: 300
+        }
+      },
+      changeDetector: { detectChanges: () => {} }
+    };
+
+    component['changeHeaderWidth'].call(fakeTable);
+
+    expect(fakeTable.headerWidth).toBe(300);
+  });
+
+  it('should return 0 if columnMasterDetail is defined', () => {
+    component['columnMasterDetail'] = { property: 'detail' };
+    spyOnProperty(component, 'hasItems').and.returnValue(true);
+
+    const result = component['countExtraColumns']();
+
+    expect(result).toBe(0);
+  });
+
+  it('should return 1 if hasRowTemplate is true, hasRowTemplateWithArrowDirectionRight is false, and hasItems is true', () => {
+    component['columnMasterDetail'] = undefined;
+    spyOnProperty(component, 'hasRowTemplate').and.returnValue(true);
+    spyOnProperty(component, 'hasRowTemplateWithArrowDirectionRight').and.returnValue(false);
+    spyOnProperty(component, 'hasItems').and.returnValue(true);
+
+    const result = component['countExtraColumns']();
+
+    expect(result).toBe(1);
+  });
+
+  it('should return 1 if hasRowTemplateWithArrowDirectionRight is true, hasVisibleActions is true, and hasItems is true', () => {
+    component['columnMasterDetail'] = undefined;
+    spyOnProperty(component, 'hasRowTemplate').and.returnValue(true);
+    spyOnProperty(component, 'hasRowTemplateWithArrowDirectionRight').and.returnValue(true);
+    spyOnProperty(component, 'hasVisibleActions').and.returnValue(true);
+    spyOnProperty(component, 'hasItems').and.returnValue(true);
+
+    const result = component['countExtraColumns']();
+
+    expect(result).toBe(1);
+  });
+
+  it('should return 1 if hasRowTemplateWithArrowDirectionRight is true, hideColumnsManager is true, and hasItems is true', () => {
+    component['columnMasterDetail'] = undefined;
+    spyOnProperty(component, 'hasRowTemplate').and.returnValue(true);
+    spyOnProperty(component, 'hasRowTemplateWithArrowDirectionRight').and.returnValue(true);
+    component['hideColumnsManager'] = true;
+    spyOnProperty(component, 'hasItems').and.returnValue(true);
+
+    const result = component['countExtraColumns']();
+
+    expect(result).toBe(1);
+  });
+
+  it('should return 0 if no conditions are met and hasItems is true', () => {
+    component['columnMasterDetail'] = undefined;
+    spyOnProperty(component, 'hasRowTemplate').and.returnValue(false);
+    spyOnProperty(component, 'hasRowTemplateWithArrowDirectionRight').and.returnValue(false);
+    spyOnProperty(component, 'hasVisibleActions').and.returnValue(false);
+    component['hideColumnsManager'] = false;
+    spyOnProperty(component, 'hasItems').and.returnValue(true);
+
+    const result = component['countExtraColumns']();
+
+    expect(result).toBe(0);
+  });
+
+  it('should return 0 if hasItems is false, regardless of other conditions', () => {
+    component['columnMasterDetail'] = undefined;
+    spyOnProperty(component, 'hasRowTemplate').and.returnValue(true);
+    spyOnProperty(component, 'hasRowTemplateWithArrowDirectionRight').and.returnValue(true);
+    spyOnProperty(component, 'hasVisibleActions').and.returnValue(true);
+    component['hideColumnsManager'] = true;
+    spyOnProperty(component, 'hasItems').and.returnValue(false);
+
+    const result = component['countExtraColumns']();
+
+    expect(result).toBe(0);
+  });
+
+  describe('reapplySort', () => {
+    const mockfilteredItems = { id: 1, name: 'item1' };
+    const mockColumn: any = {
+      property: 'name',
+      ascending: true
+    };
+
+    it('should be sorting applied when there is valid data and configuration', () => {
+      component.filteredItems = [mockfilteredItems];
+      component.sortedColumn = mockColumn;
+
+      spyOn(component, 'sortArray');
+
+      component['reapplySort']();
+
+      expect(component.sortArray).toHaveBeenCalledWith(mockColumn.property, true);
+    });
+
+    it('should not be sorting applied when "filteredItems" is empty', () => {
+      component.filteredItems = [];
+      component.sortedColumn = mockColumn;
+
+      spyOn(component, 'sortArray');
+
+      component['reapplySort']();
+
+      expect(component.sortArray).not.toHaveBeenCalled();
+    });
+
+    it('should not be sorting applied when "sortedColumn" is null', () => {
+      component.filteredItems = [mockfilteredItems];
+      component.sortedColumn = null;
+
+      spyOn(component, 'sortArray');
+
+      component['reapplySort']();
+
+      expect(component.sortArray).not.toHaveBeenCalled();
+    });
+
+    it('should not applied sort when property inside "sortedColumn" is undefined', () => {
+      component.filteredItems = [mockfilteredItems];
+      component.sortedColumn = {
+        property: undefined,
+        ascending: false
+      };
+
+      spyOn(component, 'sortArray');
+
+      component['reapplySort']();
+
+      expect(component.sortArray).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateSearchAIQuery:', () => {
+    it('should do nothing when searchAiField is not configured', () => {
+      fixture.componentRef.setInput('p-search-ai-field', undefined);
+      component.searchAiComponent = { writeValueModel: jasmine.createSpy(), search: jasmine.createSpy() } as any;
+
+      component.updateSearchAIQuery('test query');
+
+      expect(component.searchAiComponent.writeValueModel).not.toHaveBeenCalled();
+    });
+
+    it('should do nothing when searchAiComponent is not available', () => {
+      fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+      component.searchAiComponent = undefined;
+
+      expect(() => component.updateSearchAIQuery('test query')).not.toThrow();
+    });
+
+    it('should call writeValueModel with the provided value', () => {
+      fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+      component.searchAiComponent = { writeValueModel: jasmine.createSpy(), search: jasmine.createSpy() } as any;
+
+      component.updateSearchAIQuery('clientes de SP');
+
+      expect(component.searchAiComponent.writeValueModel).toHaveBeenCalledWith('clientes de SP');
+    });
+
+    it('should not call search when triggerSearch is false (default)', () => {
+      fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+      component.searchAiComponent = { writeValueModel: jasmine.createSpy(), search: jasmine.createSpy() } as any;
+
+      component.updateSearchAIQuery('clientes de SP');
+
+      expect(component.searchAiComponent.search).not.toHaveBeenCalled();
+    });
+
+    it('should call search when triggerSearch is true', () => {
+      fixture.componentRef.setInput('p-search-ai-field', { url: '/ai' });
+      component.searchAiComponent = { writeValueModel: jasmine.createSpy(), search: jasmine.createSpy() } as any;
+
+      component.updateSearchAIQuery('clientes de SP com saldo acima de 500', true);
+
+      expect(component.searchAiComponent.writeValueModel).toHaveBeenCalledWith('clientes de SP com saldo acima de 500');
+      expect(component.searchAiComponent.search).toHaveBeenCalled();
+    });
   });
 });

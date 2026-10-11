@@ -2,10 +2,15 @@ import { ElementRef } from '@angular/core';
 
 import { expectPropertiesValues } from './../../util-test/util-expect.spec';
 
+import { PoThemeA11yEnum } from '../../services';
 import { PoPopupBaseComponent } from './po-popup-base.component';
 
 describe('PoPopupBaseComponent:', () => {
-  const component = new PoPopupBaseComponent();
+  let component: PoPopupBaseComponent;
+
+  beforeEach(() => {
+    component = new PoPopupBaseComponent();
+  });
 
   it('should be created', () => {
     expect(component instanceof PoPopupBaseComponent).toBeTruthy();
@@ -92,6 +97,109 @@ describe('PoPopupBaseComponent:', () => {
       const validValue = [[{ label: 'action1', action: () => {} }], [{ label: 'action2' }]];
 
       expectPropertiesValues(component, 'customPositions', validValue, validValue);
+    });
+
+    describe('computedListboxSubitems:', () => {
+      it('should return false when actions have no subItems', () => {
+        component.actions = [{ label: 'Action 1' }, { label: 'Action 2' }];
+
+        expect(component.computedListboxSubitems).toBeFalse();
+      });
+
+      it('should return true when at least one action has subItems', () => {
+        component.actions = [{ label: 'Action 1' }, { label: 'Group', subItems: [{ label: 'Sub 1' }] }];
+
+        expect(component.computedListboxSubitems).toBeTrue();
+      });
+
+      it('should return false when subItems is an empty array', () => {
+        component.actions = [{ label: 'Action 1', subItems: [] }];
+
+        expect(component.computedListboxSubitems).toBeFalse();
+      });
+
+      it('should return true when at least one action has $subItemTemplate', () => {
+        const templateRef = {} as any;
+        component.actions = [{ label: 'Action 1', $subItemTemplate: templateRef }];
+
+        expect(component.computedListboxSubitems).toBeTrue();
+      });
+
+      it('should return false when actions is empty', () => {
+        component.actions = [];
+
+        expect(component.computedListboxSubitems).toBeFalse();
+      });
+
+      it('should recalculate when actions change dynamically', () => {
+        component.actions = [{ label: 'Action 1' }];
+
+        expect(component.computedListboxSubitems).toBeFalse();
+
+        component.actions = [{ label: 'Group', subItems: [{ label: 'Sub 1' }] }];
+
+        expect(component.computedListboxSubitems).toBeTrue();
+      });
+
+      it('should return false when actions is set to invalid value', () => {
+        (component as { actions: any }).actions = undefined;
+
+        expect(component.computedListboxSubitems).toBeFalse();
+      });
+    });
+
+    describe('p-size', () => {
+      beforeEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      afterEach(() => {
+        document.documentElement.removeAttribute('data-a11y');
+        localStorage.removeItem('po-default-size');
+      });
+
+      it('should set property with valid values for accessibility level is AA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+        component.size = 'small';
+        expect(component.size).toBe('small');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should set property with valid values for accessibility level is AAA', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+        component.size = 'small';
+        expect(component.size).toBe('medium');
+
+        component.size = 'medium';
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return small when accessibility is AA and getA11yDefaultSize is small', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'small');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('small');
+      });
+
+      it('should return medium when accessibility is AA and getA11yDefaultSize is medium', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+        localStorage.setItem('po-default-size', 'medium');
+
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
+
+      it('should return medium when accessibility is AAA, regardless of getA11yDefaultSize', () => {
+        document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+        component['_size'] = undefined;
+        expect(component.size).toBe('medium');
+      });
     });
   });
 });

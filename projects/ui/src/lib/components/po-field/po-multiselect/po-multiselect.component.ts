@@ -1,38 +1,68 @@
 import {
   AfterViewInit,
+  ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ContentChild,
   DoCheck,
   ElementRef,
-  forwardRef,
+  OnChanges,
   OnDestroy,
   Renderer2,
-  ViewChild
+  SimpleChanges,
+  ViewChild,
+  forwardRef,
+  inject
 } from '@angular/core';
 import { NG_VALIDATORS, NG_VALUE_ACCESSOR } from '@angular/forms';
 
-import { isMobile } from './../../../utils/util';
-import { PoControlPositionService } from './../../../services/po-control-position/po-control-position.service';
-import { PoKeyCodeEnum } from './../../../enums/po-key-code.enum';
-import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { Observable, Subscription, fromEvent, of } from 'rxjs';
+import { catchError, tap } from 'rxjs/operators';
 
+import { PoLanguageService } from '../../../services/po-language/po-language.service';
+import { PoKeyCodeEnum } from './../../../enums/po-key-code.enum';
+import { PoControlPositionService } from './../../../services/po-control-position/po-control-position.service';
+import { setHelperSettings, PoUtils } from './../../../utils/util';
+
+import { poLocaleDefault } from '../../../services/po-language/po-language.constant';
+import { PoMultiselectOption } from './interfaces/po-multiselect-option.interface';
 import { PoMultiselectBaseComponent } from './po-multiselect-base.component';
+import { PoMultiselectFilterService } from './po-multiselect-filter.service';
+import { PoMultiselectOptionTemplateDirective } from './po-multiselect-option-template/po-multiselect-option-template.directive';
+import { PoHelperComponent } from '../../po-helper';
 
 const poMultiselectContainerOffset = 8;
-const poMultiselectContainerPositionDefault = 'bottom';
+const poMultiselectInputPaddingRight = 52;
+const poMultiselectSpaceBetweenTags = 8;
+
+const literalsTagRemoveOthers = {
+  pt: {
+    remove: 'Remover todos os itens selecionados'
+  },
+  ru: {
+    remove: 'Удалить все выбранные элементы'
+  },
+  es: {
+    remove: 'Eliminar todos los elementos seleccionados'
+  },
+  en: {
+    remove: 'Clear all selected items'
+  }
+};
 
 /* istanbul ignore next */
 const providers = [
+  PoMultiselectFilterService,
   PoControlPositionService,
   {
     provide: NG_VALUE_ACCESSOR,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoMultiselectComponent),
     multi: true
   },
   {
     provide: NG_VALIDATORS,
-    // tslint:disable-next-line
+    // eslint-disable-next-line
     useExisting: forwardRef(() => PoMultiselectComponent),
     multi: true
   }
@@ -62,37 +92,79 @@ const providers = [
  *   <file name="sample-po-multiselect-vacation-reactive-form/sample-po-multiselect-vacation-reactive-form.component.html"> </file>
  *   <file name="sample-po-multiselect-vacation-reactive-form/sample-po-multiselect-vacation-reactive-form.component.ts"> </file>
  * </example>
+ *
+ * <example name="po-multiselect-template" title="PO Multiselect - Template">
+ *   <file name="sample-po-multiselect-template/sample-po-multiselect-template.component.html"> </file>
+ *   <file name="sample-po-multiselect-template/sample-po-multiselect-template.component.ts"> </file>
+ *   <file name="sample-po-multiselect-template/sample-po-multiselect-template.component.css"> </file>
+ * </example>
+ *
+ * <example name="po-multiselect-heroes" title="PO Multiselect - Heroes - using API">
+ *   <file name="sample-po-multiselect-heroes/sample-po-multiselect-heroes.component.html"> </file>
+ *   <file name="sample-po-multiselect-heroes/sample-po-multiselect-heroes.component.ts"> </file>
+ *   <file name="sample-po-multiselect-heroes/sample-po-multiselect-heroes.service.ts"> </file>
+ * </example>
+ *
+ * <example name="po-multiselect-any-array" title="PO Multiselect - Array Any">
+ *   <file name="sample-po-multiselect-any-array/sample-po-multiselect-any-array.component.html"> </file>
+ *   <file name="sample-po-multiselect-any-array/sample-po-multiselect-any-array.component.ts"> </file>
+ * </example>
+ *
  */
 @Component({
   selector: 'po-multiselect',
   templateUrl: './po-multiselect.component.html',
-  providers
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  providers,
+  standalone: false
 })
-export class PoMultiselectComponent extends PoMultiselectBaseComponent implements AfterViewInit, DoCheck, OnDestroy {
-  @ViewChild('dropdownElement', { read: ElementRef, static: true }) dropdownElement: ElementRef;
-  @ViewChild('dropdownElement', { static: true }) dropdown;
-  @ViewChild('disclaimerContainer', { read: ElementRef, static: true }) disclaimerContainerElement: ElementRef;
-  @ViewChild('iconElement', { read: ElementRef, static: true }) iconElement: ElementRef;
-  @ViewChild('inputElement', { read: ElementRef, static: true }) inputElement: ElementRef;
+export class PoMultiselectComponent
+  extends PoMultiselectBaseComponent
+  implements AfterViewInit, DoCheck, OnDestroy, OnChanges
+{
+  private readonly renderer = inject(Renderer2);
+  private readonly changeDetector: ChangeDetectorRef;
+  private readonly el = inject(ElementRef);
+  private readonly controlPosition = inject(PoControlPositionService);
+  defaultService = inject(PoMultiselectFilterService);
 
-  disclaimerOffset = 0;
-  dropdownIcon: string = 'po-icon-arrow-down';
+  @ContentChild(PoMultiselectOptionTemplateDirective, { static: true })
+  multiselectOptionTemplate: PoMultiselectOptionTemplateDirective;
+
+  @ViewChild('dropdownElement', { read: ElementRef }) dropdownElement: ElementRef;
+  @ViewChild('dropdownElement') dropdown;
+  @ViewChild('iconElement', { read: ElementRef, static: true }) iconElement: ElementRef;
+  @ViewChild('outerContainer ', { read: ElementRef }) outerContainer: ElementRef;
+  @ViewChild('helperEl', { read: PoHelperComponent, static: false }) helperEl?: PoHelperComponent;
+
+  literalsTag;
+  dropdownIcon: string = 'ICON_ARROW_DOWN';
   dropdownOpen: boolean = false;
   initialized = false;
-  positionDisclaimerExtra;
+  hasMoreTag: boolean;
   timeoutResize;
   visibleElement = false;
+  containerWidth: number;
 
+  private subscription: Subscription = new Subscription();
+  private enterCloseTag = false;
+  private initCalculateItems = true;
   private isCalculateVisibleItems: boolean = true;
+  private cacheOptions: Array<PoMultiselectOption | any>;
+  private focusOnTag = false;
 
-  constructor(
-    private renderer: Renderer2,
-    private changeDetector: ChangeDetectorRef,
-    private el: ElementRef,
-    private controlPosition: PoControlPositionService,
-    languageService: PoLanguageService
-  ) {
-    super(languageService);
+  constructor() {
+    const changeDetector = inject(ChangeDetectorRef);
+    const languageService = inject(PoLanguageService);
+
+    super(languageService, changeDetector);
+    this.changeDetector = changeDetector;
+
+    const language = languageService.getShortLanguage();
+    this.literalsTag = {
+      ...literalsTagRemoveOthers[poLocaleDefault],
+      ...literalsTagRemoveOthers[language]
+    };
   }
 
   ngAfterViewInit() {
@@ -102,19 +174,36 @@ export class PoMultiselectComponent extends PoMultiselectBaseComponent implement
     this.initialized = true;
   }
 
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes.label) {
+      this.displayAdditionalHelp = false;
+    }
+    if (this.filterService && (changes.filterService || changes.fieldValue || changes.fieldLabel)) {
+      this.setService(this.filterService);
+    }
+  }
+
   ngDoCheck() {
     const inputWidth = this.inputElement.nativeElement.offsetWidth;
-    // Permite que os disclaimers sejam calculados na primeira vez que o componente torna-se visível,
+    // Permite que as tags sejam calculadas na primeira vez que o componente torna-se visível,
     // evitando com isso, problemas com Tabs ou Divs que iniciem escondidas.
     if ((inputWidth && !this.visibleElement && this.initialized) || (inputWidth && this.isCalculateVisibleItems)) {
       this.debounceResize();
       this.visibleElement = true;
-      return;
     }
   }
 
   ngOnDestroy() {
     this.removeListeners();
+    this.getObjectsByValuesSubscription?.unsubscribe();
+    this.filterSubject?.unsubscribe();
+    this.subscription.unsubscribe();
+  }
+
+  emitAdditionalHelp() {
+    if (this.label && this.isAdditionalHelpEventTriggered()) {
+      this.additionalHelp.emit();
+    }
   }
 
   /**
@@ -140,58 +229,96 @@ export class PoMultiselectComponent extends PoMultiselectBaseComponent implement
     }
   }
 
-  getInputWidth() {
-    return this.el.nativeElement.querySelector('.po-input').offsetWidth - 40;
+  getAdditionalHelpTooltip() {
+    return this.isAdditionalHelpEventTriggered() ? null : this.additionalHelpTooltip;
   }
 
-  getDisclaimersWidth() {
-    const disclaimers = this.el.nativeElement.querySelectorAll('po-disclaimer');
-    return Array.from(disclaimers).map(disclaimer => disclaimer['offsetWidth']);
+  getInputWidth() {
+    return this.el.nativeElement.querySelector('.po-multiselect-input').offsetWidth - poMultiselectInputPaddingRight;
+  }
+
+  getTagsWidth() {
+    const tags = this.el.nativeElement.querySelectorAll('po-tag');
+    return Array.from(tags).map(tag => tag['offsetWidth']);
+  }
+
+  getErrorPattern() {
+    return this.fieldErrorMessage && this.hasInvalidClass() ? this.fieldErrorMessage : '';
+  }
+
+  hasInvalidClass() {
+    return (
+      this.el.nativeElement.classList.contains('ng-invalid') && this.el.nativeElement.classList.contains('ng-dirty')
+    );
   }
 
   calculateVisibleItems() {
-    const disclaimersWidth = this.getDisclaimersWidth();
+    this.hasMoreTag = false;
+    const tagsWidth = this.getTagsWidth();
     const inputWidth = this.getInputWidth();
-    const extraDisclaimerSize = 38;
-    const disclaimersVisible = disclaimersWidth[0];
+    const extraTagSize = 63;
+    const tagsVisible = tagsWidth[0];
 
-    this.visibleDisclaimers = [];
+    this.visibleTags = [];
 
     if (inputWidth > 0) {
       let sum = 0;
       let i = 0;
       for (i = 0; i < this.selectedOptions.length; i++) {
-        sum += disclaimersWidth[i];
-        this.visibleDisclaimers.push(this.selectedOptions[i]);
+        sum += tagsWidth[i] + poMultiselectSpaceBetweenTags;
+        this.visibleTags.push(this.selectedOptions[i]);
 
         if (sum > inputWidth) {
-          sum -= disclaimersWidth[i];
+          sum -= tagsWidth[i];
           this.isCalculateVisibleItems = false;
           break;
         }
       }
 
-      if (disclaimersVisible || !this.selectedOptions.length) {
+      if (tagsVisible || !this.selectedOptions.length) {
         if (i === this.selectedOptions.length) {
           this.isCalculateVisibleItems = false;
           return;
         }
 
-        if (sum + extraDisclaimerSize > inputWidth) {
-          this.visibleDisclaimers.splice(-2, 2);
+        this.hasMoreTag = true;
+        if (sum + extraTagSize > inputWidth) {
+          this.visibleTags.splice(-2, 2);
           const label = '+' + (this.selectedOptions.length + 1 - i).toString();
-          this.visibleDisclaimers.push({ value: '', label: label });
+          this.visibleTags.push({ [this.fieldValue]: '', [this.fieldLabel]: label });
         } else {
-          this.visibleDisclaimers.splice(-1, 1);
+          this.visibleTags.splice(-1, 1);
           const label = '+' + (this.selectedOptions.length - i).toString();
-          this.visibleDisclaimers.push({ value: '', label: label });
+          this.visibleTags.push({ [this.fieldValue]: '', [this.fieldLabel]: label });
         }
       }
+      if (this.initCalculateItems) {
+        setTimeout(() => {
+          this.handleKeyboardNavigationTag();
+        }, 300);
+      }
+      this.initCalculateItems = false;
     }
+    this.changeDetector.markForCheck();
+  }
+
+  changeItems(changedItems) {
+    this.updateSelectedOptions(changedItems);
+    this.callOnChange(this.selectedOptions);
+
+    if (this.autoHeight && this.dropdownOpen) {
+      this.changeDetector.detectChanges();
+      this.adjustContainerPosition();
+    }
+    setTimeout(() => {
+      this.handleKeyboardNavigationTag();
+    }, 300);
   }
 
   updateVisibleItems() {
-    this.visibleDisclaimers = [].concat(this.selectedOptions);
+    if (this.selectedOptions) {
+      this.visibleTags = [].concat(this.selectedOptions);
+    }
 
     this.debounceResize();
 
@@ -202,22 +329,76 @@ export class PoMultiselectComponent extends PoMultiselectBaseComponent implement
   }
 
   debounceResize() {
-    clearTimeout(this.timeoutResize);
-    this.timeoutResize = setTimeout(() => {
-      this.calculateVisibleItems();
-    }, 200);
+    if (!this.autoHeight) {
+      clearTimeout(this.timeoutResize);
+      this.timeoutResize = setTimeout(() => {
+        this.calculateVisibleItems();
+      }, 200);
+    }
+    this.changeDetector.markForCheck();
+  }
+
+  onBlur(event: any) {
+    if (
+      typeof this.inputElement.nativeElement.getAttribute('aria-label') === 'string' &&
+      this.inputElement.nativeElement.getAttribute('aria-label').includes('Unselected')
+    ) {
+      this.inputElement.nativeElement.setAttribute('aria-label', this.label ? this.label : '');
+    }
+    this.onModelTouched?.();
+
+    if (event.type === 'blur') {
+      this.blur.emit();
+    }
   }
 
   onKeyDown(event?: any) {
-    if (event.keyCode === PoKeyCodeEnum.arrowUp || event.keyCode === PoKeyCodeEnum.arrowDown) {
+    const isFieldFocused = document.activeElement === this.inputElement.nativeElement;
+
+    if (event.shiftKey && event.keyCode === PoKeyCodeEnum.tab && !this.focusOnTag) {
+      this.controlDropdownVisibility(false);
+    }
+    this.focusOnTag = false;
+
+    if (event.keyCode === PoKeyCodeEnum.tab && this.appendBox && this.dropdownOpen) {
       event.preventDefault();
-      this.controlDropdownVisibility(true);
+      this.focusOnFirstItem();
       return;
     }
 
-    if (event.keyCode === PoKeyCodeEnum.tab) {
+    if (event.keyCode === PoKeyCodeEnum.esc) {
+      event.preventDefault();
       this.controlDropdownVisibility(false);
       return;
+    }
+
+    if (event.keyCode === PoKeyCodeEnum.arrowDown) {
+      event.preventDefault();
+      this.controlDropdownVisibility(true);
+      this.dropdown?.listbox?.setFocus();
+      return;
+    }
+
+    if (event.keyCode === PoKeyCodeEnum.enter && !this.enterCloseTag) {
+      if (this.visibleTags.length === 0) {
+        this.toggleDropdownVisibility();
+        this.focus();
+        return;
+      } else {
+        event.preventDefault();
+        this.toggleDropdownVisibility();
+        return;
+      }
+    }
+
+    if (event.keyCode === PoKeyCodeEnum.space) {
+      event.preventDefault();
+      this.toggleDropdownVisibility();
+    }
+    this.enterCloseTag = false;
+
+    if (isFieldFocused) {
+      this.keydown.emit(event);
     }
   }
 
@@ -226,7 +407,26 @@ export class PoMultiselectComponent extends PoMultiselectBaseComponent implement
       return;
     }
 
+    if (this.filterService) {
+      this.applyFilterInFirstClick();
+    }
+
     this.controlDropdownVisibility(!this.dropdownOpen);
+  }
+
+  onKeyDownDropdown(event: KeyboardEvent, index: number) {
+    if (event.key === 'Tab' && event.target['className'].includes('po-listbox-item-type-check')) {
+      event.preventDefault();
+      this.inputElement.nativeElement.focus();
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.controlDropdownVisibility(false);
+      setTimeout(() => {
+        this.inputElement.nativeElement.focus();
+      }, 50);
+    }
   }
 
   openDropdown(toOpen) {
@@ -241,60 +441,279 @@ export class PoMultiselectComponent extends PoMultiselectBaseComponent implement
 
   scrollToSelectedOptions() {
     if (this.selectedOptions && this.selectedOptions.length) {
-      const index = this.options.findIndex(option => option.value === this.selectedOptions[0].value);
+      const index = this.options.findIndex(
+        option => option[this.fieldValue] === this.selectedOptions[0][this.fieldValue]
+      );
       this.dropdown.scrollTo(index);
     }
   }
 
   setVisibleOptionsDropdown(options) {
     this.visibleOptionsDropdown = options;
+    this.changeDetector.markForCheck();
   }
 
   changeSearch(event) {
-    event && event.value
-      ? this.searchByLabel(event.value, this.options, this.filterMode)
-      : this.setVisibleOptionsDropdown(this.options);
+    if (event.event.keyCode === PoKeyCodeEnum.arrowDown || event.event.keyCode === PoKeyCodeEnum.tab) {
+      this.focusOnFirstItem();
+    }
+
+    if (event && event[this.fieldValue] !== undefined) {
+      if (this.filterService) {
+        this.filterSubject.next(event[this.fieldValue]);
+      } else {
+        this.searchByLabel(event[this.fieldValue], this.options, this.filterMode);
+      }
+    } else {
+      this.setVisibleOptionsDropdown(this.options);
+    }
 
     // timeout necessário para reposicionar corretamente quando dropdown estiver pra cima do input e realizar busca no input
     setTimeout(() => this.adjustContainerPosition());
   }
 
-  getPlaceholder() {
-    return this.placeholder && !this.visibleDisclaimers.length ? this.placeholder : '';
+  focusOnFirstItem() {
+    const items = this.dropdown.listbox.element.nativeElement.querySelectorAll('.po-listbox-item-type-check');
+    const item = items.length > 0 ? (items[0] as HTMLElement) : null;
+    if (item) {
+      item.focus();
+    } else {
+      this.close();
+      this.inputElement.nativeElement.focus();
+    }
   }
 
-  closeDisclaimer(value) {
-    const index = this.selectedOptions.findIndex(option => option.value === value);
-    this.selectedOptions.splice(index, 1);
+  closeTag(value, event) {
+    let index;
+    this.enterCloseTag = true;
+    if (value == null || value === '' || (typeof value === 'string' && value.includes('+'))) {
+      index = null;
+      const itemsNotInVisibleTags = this.selectedOptions.filter(option => !this.visibleTags.includes(option));
+      for (const option of this.visibleTags) {
+        if (!this.selectedOptions.includes(option)) {
+          this.selectedOptions.splice(this.visibleTags.length - 1, itemsNotInVisibleTags.length);
+          this.updateVisibleItems();
+          this.callOnChange(this.selectedOptions);
+        }
+      }
+    } else {
+      this.visibleTags = [];
+      this.changeDetector.detectChanges();
+      index = this.selectedOptions.findIndex(option => option[this.fieldValue] === value);
+      this.selectedOptions.splice(index, 1);
+      this.updateVisibleItems();
+      this.callOnChange(this.selectedOptions);
+    }
 
-    this.updateVisibleItems();
-    this.callOnChange(this.selectedOptions);
+    setTimeout(() => {
+      this.focusOnNextTag(index, event);
+    }, 300);
+  }
+
+  /**
+   * Método que exibe `p-helper` ou executa a ação definida em `p-helper{eventOnClick}` ou em `p-additionalHelp`.
+   * Para isso, será necessário configurar uma tecla de atalho utilizando o evento `p-keydown`.
+   *
+   * > Exibe ou oculta o conteúdo do componente `po-helper` quando o componente estiver com foco.
+   *
+   * ```
+   * // Exemplo com p-label e p-helper
+   * <po-multiselect
+   *  #multiselect
+   *  ...
+   *  p-label="Label do multiselect"
+   *  [p-helper]="helperOptions"
+   *  (p-keydown)="onKeyDown($event, multiselect)"
+   * ></po-multiselect>
+   * ```
+   * ```
+   * ...
+   * onKeyDown(event: KeyboardEvent, inp: PoMultiselectComponent): void {
+   *  if (event.code === 'F9') {
+   *    inp.showAdditionalHelp();
+   *  }
+   * }
+   * ```
+   */
+  showAdditionalHelp(): boolean {
+    this.displayAdditionalHelp = !this.displayAdditionalHelp;
+    const helper = this.poHelperComponent();
+    const isHelpEvt = this.isAdditionalHelpEventTriggered();
+    if (!this.label && (helper || this.additionalHelpTooltip || isHelpEvt)) {
+      if (isHelpEvt) {
+        this.additionalHelp.emit();
+      }
+      if (typeof helper !== 'string' && typeof helper?.eventOnClick === 'function') {
+        helper.eventOnClick();
+        return;
+      }
+      if (this.helperEl?.helperIsVisible()) {
+        this.helperEl?.closeHelperPopover();
+        return;
+      }
+      this.helperEl?.openHelperPopover();
+      return;
+    }
+    return this.displayAdditionalHelp;
   }
 
   wasClickedOnToggle(event: MouseEvent): void {
     if (
+      this.dropdownOpen &&
       !this.inputElement.nativeElement.contains(event.target) &&
-      !this.iconElement.nativeElement.contains(event.target) &&
-      !this.dropdownElement.nativeElement.contains(event.target) &&
-      !this.disclaimerContainerElement.nativeElement.contains(event.target) &&
-      this.dropdownOpen
+      !this.iconElement?.nativeElement?.contains(event.target) &&
+      !this.dropdownElement?.nativeElement?.contains(event.target)
     ) {
       this.controlDropdownVisibility(false);
     }
   }
 
+  applyFilter(value: string = ''): Observable<Array<PoMultiselectOption | any>> {
+    const param = { property: this.fieldLabel, value: value };
+    return this.service.getFilteredData(param).pipe(
+      catchError(err => {
+        this.isServerSearching = false;
+        return of([]);
+      }),
+      tap((options: Array<PoMultiselectOption | any>) => {
+        this.setOptionsByApplyFilter(options);
+      })
+    );
+  }
+
+  setHelper(label?: string, additionalHelpTooltip?: string) {
+    return setHelperSettings(
+      label,
+      additionalHelpTooltip,
+      this.poHelperComponent(),
+      this.size,
+      this.isAdditionalHelpEventTriggered() ? this.additionalHelp : undefined
+    );
+  }
+
+  private applyFilterInFirstClick() {
+    if (this.isFirstFilter) {
+      this.isServerSearching = true;
+
+      // necessario enviar um objeto string vazia para refazer a busca, quando alterar filterService, fieldValue e fieldLabel
+      // pois temos o distinctUntilChange no pipe do filterSubject
+      /* eslint-disable no-new-wrappers */
+      this.filterSubject.next(new String());
+    } else {
+      this.options = [...this.cacheOptions];
+    }
+  }
+
+  private setOptionsByApplyFilter(items: Array<PoMultiselectOption | any>) {
+    if (this.isFirstFilter) {
+      this.cacheOptions = [...items];
+      this.isFirstFilter = false;
+    }
+
+    this.options = [...items];
+    this.setVisibleOptionsDropdown(this.options);
+  }
+
   private adjustContainerPosition(): void {
-    this.controlPosition.adjustPosition(poMultiselectContainerPositionDefault);
+    this.controlPosition.adjustPosition(this.listboxControlPosition);
   }
 
   private close(): void {
-    this.dropdownIcon = 'po-icon-arrow-down';
+    this.dropdownIcon = 'ICON_ARROW_DOWN';
+    this.dropdown?.listbox?.searchElement?.resetKeys();
     this.dropdownOpen = false;
 
-    this.dropdown.controlVisibility(false);
+    this.dropdown?.controlVisibility(false);
     this.setVisibleOptionsDropdown(this.options);
 
     this.removeListeners();
+  }
+
+  private focusOnNextTag(indexClosed: number, clickOrEnter: string) {
+    if (clickOrEnter === 'enter') {
+      const tagRemoveElements: Array<any> = this.el.nativeElement.querySelectorAll('.po-tag-remove');
+      indexClosed = indexClosed || indexClosed === 0 ? indexClosed : tagRemoveElements.length;
+      if (tagRemoveElements.length === 0) {
+        this.inputElement.nativeElement.focus();
+        this.inputElement.nativeElement.setAttribute('aria-label', `Unselected items ${this.label}`);
+        this.controlDropdownVisibility(true);
+      }
+      this.focusOnRemoveTag(tagRemoveElements, indexClosed);
+    } else {
+      indexClosed = 0;
+    }
+    this.handleKeyboardNavigationTag(indexClosed);
+  }
+
+  private focusOnRemoveTag(tag: any, indexClosed: number) {
+    if (tag.length === indexClosed) {
+      tag[indexClosed - 1]?.focus();
+    } else {
+      tag[indexClosed]?.focus();
+    }
+  }
+
+  public handleKeyboardNavigationTag(initialIndex = 0) {
+    this.subscription.unsubscribe();
+    this.subscription = new Subscription();
+    const tagRemoveElements = this.el.nativeElement.querySelectorAll('.po-tag-remove');
+    this.initializeTagRemoveElements(tagRemoveElements, initialIndex);
+  }
+
+  private setTabIndex(element, tabIndex) {
+    element.setAttribute('tabindex', tabIndex);
+  }
+
+  private handleArrowLeft(tagRemoveElements, index) {
+    if (index > 0) {
+      this.setTabIndex(tagRemoveElements[index], -1);
+      tagRemoveElements[index - 1].focus();
+      this.setTabIndex(tagRemoveElements[index - 1], 0);
+    }
+  }
+
+  private handleArrowRight(tagRemoveElements, index) {
+    if (index < tagRemoveElements.length - 1) {
+      this.setTabIndex(tagRemoveElements[index], -1);
+      tagRemoveElements[index + 1].focus();
+      this.setTabIndex(tagRemoveElements[index + 1], 0);
+    }
+  }
+
+  private handleKeyDown(event: KeyboardEvent, tagRemoveElements, index) {
+    const KEY_SPACE = 'Space';
+    const KEY_ARROW_LEFT = 'ArrowLeft';
+    const KEY_ARROW_RIGHT = 'ArrowRight';
+    this.focusOnTag = true;
+
+    if (event.code === KEY_SPACE) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    if (event.key === KEY_ARROW_LEFT) {
+      this.handleArrowLeft(tagRemoveElements, index);
+    } else if (event.key === KEY_ARROW_RIGHT) {
+      this.handleArrowRight(tagRemoveElements, index);
+    }
+  }
+
+  private initializeTagRemoveElements(tagRemoveElements, initialIndex) {
+    tagRemoveElements.forEach((tagRemoveElement, index) => {
+      if (index === initialIndex) {
+        this.setTabIndex(tagRemoveElements[initialIndex], 0);
+      } else if (tagRemoveElements.length === initialIndex) {
+        this.setTabIndex(tagRemoveElements[initialIndex - 1], 0);
+      } else {
+        this.setTabIndex(tagRemoveElement, -1);
+      }
+
+      this.subscription.add(
+        fromEvent(tagRemoveElement, 'keydown').subscribe((event: KeyboardEvent) => {
+          this.handleKeyDown(event, tagRemoveElements, index);
+        })
+      );
+    });
   }
 
   private initializeListeners(): void {
@@ -305,18 +724,25 @@ export class PoMultiselectComponent extends PoMultiselectBaseComponent implement
     this.resizeListener = this.renderer.listen('window', 'resize', () => {
       this.updateVisibleItems();
 
-      isMobile() ? this.adjustContainerPosition() : this.close();
+      PoUtils.isMobile() ? this.adjustContainerPosition() : this.close();
     });
 
     window.addEventListener('scroll', this.onScroll, true);
   }
 
-  private onScroll = (): void => {
+  private isAdditionalHelpEventTriggered(): boolean {
+    return (
+      this.additionalHelpEventTrigger === 'event' ||
+      (this.additionalHelpEventTrigger === undefined && this.additionalHelp.observed)
+    );
+  }
+
+  private readonly onScroll = (): void => {
     this.adjustContainerPosition();
   };
 
   private open(): void {
-    this.dropdownIcon = 'po-icon-arrow-up';
+    this.dropdownIcon = 'ICON_ARROW_UP';
     this.dropdownOpen = true;
 
     this.dropdown.controlVisibility(true);
@@ -326,6 +752,10 @@ export class PoMultiselectComponent extends PoMultiselectBaseComponent implement
 
     this.changeDetector.detectChanges();
     this.setPositionDropdown();
+
+    if (this.dropdownOpen) {
+      this.setContainerWidth();
+    }
   }
 
   private removeListeners(): void {
@@ -338,6 +768,13 @@ export class PoMultiselectComponent extends PoMultiselectBaseComponent implement
     }
 
     window.removeEventListener('scroll', this.onScroll, true);
+    this.changeDetector.markForCheck();
+  }
+
+  private setContainerWidth(): void {
+    if (this.outerContainer) {
+      this.containerWidth = this.outerContainer.nativeElement.offsetWidth;
+    }
   }
 
   private setPositionDropdown(): void {

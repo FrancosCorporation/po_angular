@@ -7,7 +7,8 @@ import { PoPageLoginRecovery } from '../interfaces/po-page-login-recovery.interf
 
 @Component({
   selector: 'po-page-login-popover',
-  templateUrl: './po-page-login-popover.component.html'
+  templateUrl: './po-page-login-popover.component.html',
+  standalone: false
 })
 
 /**
@@ -18,10 +19,6 @@ import { PoPageLoginRecovery } from '../interfaces/po-page-login-recovery.interf
  * Componente para definição da mensagem de aviso de bloqueio do `po-page-login`.
  */
 export class PoPageLoginPopoverComponent {
-  recoveryType: string;
-
-  private _recovery: string | Function | PoPageLoginRecovery;
-
   @Input('p-literals') literals: PoPageLoginLiterals;
 
   /** exibe o link de 'esqueci minha senha' e verifica se o valor é um link interno ou externo */
@@ -42,6 +39,10 @@ export class PoPageLoginPopoverComponent {
 
   /** se 'p-recovery' for do tipo Function ou PoPageLoginRecovery, emite para o método 'openUrl' do componente 'po-page-login' */
   @Output('p-forgot-password') forgotPassword = new EventEmitter<any>();
+
+  recoveryType: string;
+
+  private _recovery: string | Function | PoPageLoginRecovery;
 
   onForgotPasswordClick(recovery) {
     this.forgotPassword.emit(recovery);

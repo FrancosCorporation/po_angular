@@ -25,19 +25,45 @@ import {
   sortValues,
   validateDateRange,
   validValue,
-  valuesFromObject
+  valuesFromObject,
+  removeDuplicateItems,
+  removeDuplicateItemsWithArrayKey,
+  sortArrayOfObjects,
+  getDefaultSize,
+  getDefaultSizeFn,
+  validateSize,
+  validateSizeFn
 } from './util';
 import { changeChromeProperties } from '../util-test/util-expect.spec';
+import { PoThemeA11yEnum, PoThemeService } from '@po-ui/ng-components';
+import { PoFieldSize } from 'projects/ui/src/lib/enums/po-field-size.enum';
 
 describe('Language:', () => {
   let navigatorLanguageSpy;
+  let navigatorUserLanguageSpy;
+
+  Object.defineProperty(navigator, 'userLanguage', {
+    get: function () {
+      return undefined;
+    },
+    configurable: true
+  });
+
+  Object.defineProperty(navigator, 'language', {
+    get: function () {
+      return undefined;
+    },
+    configurable: true
+  });
 
   beforeEach(() => {
     navigatorLanguageSpy = spyOnProperty(window.navigator, 'language', 'get');
+    navigatorUserLanguageSpy = spyOnProperty(window.navigator, <any>'userLanguage', 'get');
   });
 
   afterEach(() => {
     navigatorLanguageSpy.calls.reset();
+    navigatorUserLanguageSpy.calls.reset();
   });
 
   describe('Function getBrowserLanguage:', () => {
@@ -49,18 +75,14 @@ describe('Language:', () => {
 
     it('should return the value of `navigator.userLanguage` if it`s defined and `navigator.language` is undefined', () => {
       navigatorLanguageSpy.and.returnValue(undefined);
-
-      changeChromeProperties(navigator, 'userLanguage', 'en');
+      navigatorUserLanguageSpy.and.returnValue('en');
 
       expect(getShortBrowserLanguage()).toBe('en');
-
-      changeChromeProperties(navigator, 'userLanguage', undefined);
     });
 
     it('should return undefined if `navigator.language` and `navigator.userLanguage` are undefined', () => {
       navigatorLanguageSpy.and.returnValue(undefined);
-
-      changeChromeProperties(navigator, 'userLanguage', undefined);
+      navigatorUserLanguageSpy.and.returnValue(undefined);
 
       expect(getBrowserLanguage()).toBe(undefined);
     });
@@ -353,6 +375,120 @@ describe('Function removeUndefinedAndNullOptions:', () => {
     ];
     removeUndefinedAndNullOptions(options);
     expect(options.length).toBe(3);
+  });
+});
+
+describe('Function removeDuplicateItems:', () => {
+  it('should remove duplicate items', () => {
+    const item = [{ country: 'brasil' }, { country: 'china' }, { country: 'japao' }];
+
+    const item2 = [{ country: 'brasil' }, { country: 'chile' }, { country: 'canada' }];
+
+    const key = 'country';
+    removeDuplicateItems(item, item2, key);
+    expect(item2).toEqual([{ country: 'chile' }, { country: 'canada' }]);
+  });
+});
+
+describe('Function removeDuplicateItemsWithArrayKey:', () => {
+  it('should remove duplicate items with `id` property by sending an empty array', () => {
+    const item = [
+      { country: 'brasil', id: '1' },
+      { country: 'china', id: '2' },
+      { country: 'japao', id: '3' }
+    ];
+
+    const item2 = [
+      { country: 'brasil', id: '1' },
+      { country: 'chile', id: '4' },
+      { country: 'canada', id: '5' }
+    ];
+
+    const key = [];
+
+    const resultExpected = removeDuplicateItemsWithArrayKey(item, item2, key);
+
+    removeDuplicateItemsWithArrayKey(item, item2, key);
+    expect(resultExpected).toEqual([
+      { country: 'brasil', id: '1' },
+      { country: 'china', id: '2' },
+      { country: 'japao', id: '3' },
+      { country: 'chile', id: '4' },
+      { country: 'canada', id: '5' }
+    ]);
+  });
+
+  it('should remove duplicate items by sending a property', () => {
+    const item = [
+      { country: 'brasil', id: '1' },
+      { country: 'china', id: '2' },
+      { country: 'japao', id: '3' }
+    ];
+
+    const item2 = [
+      { country: 'brasil', id: '1' },
+      { country: 'chile', id: '4' },
+      { country: 'canada', id: '5' }
+    ];
+
+    const key = ['country'];
+    const resultExpected = removeDuplicateItemsWithArrayKey(item, item2, key);
+
+    removeDuplicateItemsWithArrayKey(item, item2, key);
+    expect(resultExpected).toEqual([
+      { country: 'brasil', id: '1' },
+      { country: 'china', id: '2' },
+      { country: 'japao', id: '3' },
+      { country: 'chile', id: '4' },
+      { country: 'canada', id: '5' }
+    ]);
+  });
+
+  it('should remove duplicate items by sending more than one comparison property', () => {
+    const item = [
+      { country: 'brasil', id: '1' },
+      { country: 'china', id: '2' },
+      { country: 'japao', id: '3' }
+    ];
+
+    const item2 = [
+      { country: 'brasil', id: '1' },
+      { country: 'chile', id: '4' },
+      { country: 'canada', id: '5' }
+    ];
+
+    const key = ['country', 'id'];
+    const resultExpected = removeDuplicateItemsWithArrayKey(item, item2, key);
+
+    expect(resultExpected).toEqual([
+      { country: 'brasil', id: '1' },
+      { country: 'china', id: '2' },
+      { country: 'japao', id: '3' },
+      { country: 'chile', id: '4' },
+      { country: 'canada', id: '5' }
+    ]);
+  });
+
+  it('should`t remove items with same property value but different object', () => {
+    const item = [
+      { country: 'brasil', capital: '1' },
+      { country: 'china', capital: '1' },
+      { country: 'japao', capital: '1' }
+    ];
+
+    const item2 = [
+      { country: 'argentina', capital: '1' },
+      { country: 'chile', capital: '1' },
+      { country: 'canada', capital: '1' }
+    ];
+
+    const key = ['capital', 'country'];
+    removeDuplicateItemsWithArrayKey(item, item2, key);
+    expect(item2).toEqual([
+      { country: 'argentina', capital: '1' },
+      { country: 'chile', capital: '1' },
+      { country: 'canada', capital: '1' }
+    ]);
   });
 });
 
@@ -1027,5 +1163,164 @@ describe('Function removeKeysProperties:', () => {
     const keys = ['id'];
 
     expect(removeKeysProperties(keys, newItemValue)).toEqual(expectedResult);
+  });
+});
+
+describe('Function sortArrayOfObjects:', () => {
+  it('should sort the array of objects in ascending order based on the country key', () => {
+    const items = [{ country: 'japao' }, { country: 'brasil' }, { country: 'china' }];
+    const sortedItems = sortArrayOfObjects(items, 'country', true);
+
+    expect(sortedItems).toEqual([{ country: 'brasil' }, { country: 'china' }, { country: 'japao' }]);
+  });
+
+  it('should sort the array of objects in descending order based on the country key', () => {
+    const items = [{ country: 'japao' }, { country: 'brasil' }, { country: 'china' }];
+    const sortedItems = sortArrayOfObjects(items, 'country', false);
+
+    expect(sortedItems).toEqual([{ country: 'japao' }, { country: 'china' }, { country: 'brasil' }]);
+  });
+
+  it('should sort the array of objects in ascending order based on the country id', () => {
+    const items = [
+      { country: 'japao', id: 1 },
+      { country: 'brasil', id: 3 },
+      { country: 'china', id: 2 }
+    ];
+    const sortedItems = sortArrayOfObjects(items, 'id', true);
+
+    expect(sortedItems).toEqual([
+      { country: 'japao', id: 1 },
+      { country: 'china', id: 2 },
+      { country: 'brasil', id: 3 }
+    ]);
+  });
+
+  it('should sort the array of objects in descending order based on the country id', () => {
+    const items = [
+      { country: 'japao', id: 1 },
+      { country: 'brasil', id: 3 },
+      { country: 'china', id: 2 }
+    ];
+    const sortedItems = sortArrayOfObjects(items, 'id', false);
+
+    expect(sortedItems).toEqual([
+      { country: 'brasil', id: 3 },
+      { country: 'china', id: 2 },
+      { country: 'japao', id: 1 }
+    ]);
+  });
+});
+
+describe('accessibility level: ', () => {
+  describe('getDefaultSize', () => {
+    let poThemeServiceMock: jasmine.SpyObj<PoThemeService>;
+
+    beforeEach(() => {
+      poThemeServiceMock = jasmine.createSpyObj('PoThemeService', ['getA11yLevel', 'getA11yDefaultSize']);
+    });
+
+    beforeEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    afterEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    it('should return `small` when the default component size is `small` in accessibility level AA (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AA);
+      poThemeServiceMock.getA11yDefaultSize.and.returnValue('small');
+
+      expect(getDefaultSize(poThemeServiceMock)).toBe(PoFieldSize.Small);
+    });
+
+    it('should return `small` when the default component size is `small` in accessibility level AA', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+      localStorage.setItem('po-default-size', 'small');
+
+      expect(getDefaultSizeFn()).toBe(PoFieldSize.Small);
+    });
+
+    it('should return `medium` if accessibility AA and default size is not set (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AA);
+
+      expect(getDefaultSize(poThemeServiceMock)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` if accessibility AA and default size is not set', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+      localStorage.removeItem('po-default-size');
+
+      expect(getDefaultSizeFn()).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` when the accessibility level is AAA (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AAA);
+
+      expect(getDefaultSize(poThemeServiceMock)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` when the accessibility level is AAA', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+      expect(getDefaultSizeFn()).toBe(PoFieldSize.Medium);
+    });
+  });
+
+  describe('validateSize', () => {
+    let poThemeServiceMock: jasmine.SpyObj<PoThemeService>;
+
+    beforeEach(() => {
+      poThemeServiceMock = jasmine.createSpyObj('PoThemeService', ['getA11yLevel', 'getA11yDefaultSize']);
+    });
+
+    beforeEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    afterEach(() => {
+      document.documentElement.removeAttribute('data-a11y');
+      localStorage.removeItem('po-default-size');
+    });
+
+    it('should return valid values based on accessibility level (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AA);
+
+      expect(validateSize(PoFieldSize.Small, poThemeServiceMock)).toBe(PoFieldSize.Small);
+      expect(validateSize(PoFieldSize.Medium, poThemeServiceMock)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return valid values based on accessibility level', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AA);
+
+      expect(validateSizeFn(PoFieldSize.Small)).toBe(PoFieldSize.Small);
+      expect(validateSizeFn(PoFieldSize.Medium)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` when the value is `small` but the accessibility level is not AA (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AAA);
+
+      expect(validateSize(PoFieldSize.Small, poThemeServiceMock)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return `medium` when the value is `small` but the accessibility level is not AA', () => {
+      document.documentElement.setAttribute('data-a11y', PoThemeA11yEnum.AAA);
+
+      expect(validateSizeFn(PoFieldSize.Small)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return the default size when an invalid value is provided (Service)', () => {
+      poThemeServiceMock.getA11yLevel.and.returnValue(PoThemeA11yEnum.AA);
+
+      expect(validateSize('xxg', poThemeServiceMock)).toBe(PoFieldSize.Medium);
+    });
+
+    it('should return the default size when an invalid value is provided', () => {
+      expect(validateSizeFn('xxg')).toBe(PoFieldSize.Medium);
+    });
   });
 });
