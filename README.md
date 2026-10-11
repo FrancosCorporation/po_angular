@@ -101,10 +101,10 @@ O Dockerfile prepara o pacote UI e inicia o aplicativo de demonstração do work
 
 ```bash
 docker build -t po-ui-dev .
-docker run --rm -p 4200:4200 po-ui-dev
+docker run --rm -p 127.0.0.1:4200:4200 po-ui-dev
 ```
 
-Acesse http://localhost:4200. Essa imagem usa o servidor de desenvolvimento Angular e destina-se a uma prévia local; para produção, use o processo de build e publicação do portal descrito nos scripts do projeto.
+Acesse http://localhost:4200. A porta fica disponível somente na máquina local. Essa imagem usa o servidor de desenvolvimento Angular e destina-se a uma prévia local; para produção, use o processo de build e publicação do portal descrito nos scripts do projeto.
 
 ----
 
