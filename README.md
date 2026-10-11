@@ -20,26 +20,16 @@ Biblioteca de componentes de UI para Angular.
 
 ### Pré-requisitos
 
-Para começar a utilizar o **PO UI** é pré-requisito ter o `Node.js` instalado (versão 20.11.x ou acima) e o seu gerenciador de pacote favorito na versão mais atual. Caso você ainda não tenha instalado o pacote `@angular/cli`, instale-o via `npm` ou `yarn`.
-
-Instalando com npm:
-```
-npm i -g @angular/cli@21
-```
-
-Caso prefira instalar com o yarn:
-```
-yarn global add @angular/cli@21
-```
+Para começar a utilizar o **PO UI 21**, use uma versão do `Node.js` compatível com o Angular 21: `20.19+`, `22.12+` ou `24+` (Node 24 é recomendado). O projeto usa Angular `21.2.x` e TypeScript `5.9.x`. Consulte a [matriz oficial de compatibilidade do Angular](https://angular.dev/reference/versions) antes de atualizar a versão principal.
 
 ### Passo 1 - Crie o seu primeiro projeto
 
 > Caso você já tenha um projeto criado e deseje apenas incluir o **Po**, pule esta etapa e vá para o **Passo 1.1**.
 
-O [Angular CLI](https://cli.angular.io/) se encarrega de construir toda estrutura inicial do projeto. Para isso, execute o seguinte comando:
+O [Angular CLI](https://cli.angular.io/) se encarrega de construir toda a estrutura inicial. Use a versão 21 do CLI sem instalá-la globalmente:
 
-```
-ng new my-po-project --skip-install
+```bash
+npx @angular/cli@21 new my-po-project --skip-install
 ```
 
 > O parâmetro `--skip-install` permite criar o projeto, contudo, não instalará as dependências automaticamente.
@@ -83,21 +73,14 @@ Instalando com npm:
 npm install
 ```
 
-> Caso utilizar a versão 7 do npm pode ocorrer erro de versão das dependências, neste caso utilize `npm install --legacy-peer-deps`.
+### Passo 2 - Adicionando o pacote @po-ui/ng-components
 
-Caso prefira instalar com o yarn:
-```
-yarn install
-```
-
-### Passo 2 - Adiconando o pacote @po-ui/ng-components
-
-Utilizando o comando `ng add` do [Angular CLI](https://cli.angular.io/), vamos adicionar o **Po** em seu projeto e o mesmo se encarregará de configurar o tema, instalar o  guia de primeiros passos **Po**. Além de importar também o modulo **HttpClientModule**.
+O comando `ng add` instala o pacote **PO UI**, importa `PoModule`, configura o tema padrão e prepara o cliente HTTP usado pelos serviços da biblioteca.
 
 Execute o comando abaixo na pasta raiz do seu projeto:
 
-```
-ng add @po-ui/ng-components
+```bash
+npx ng add @po-ui/ng-components
 ```
 
 > Ao executar o comando acima, será perguntado se deseja incluir uma estrutura inicial em seu projeto com menu lateral, página e toolbar, utilizando componentes do **Po**, **caso desejar, apenas informe: `Y`**.
@@ -111,6 +94,17 @@ ng serve
 ```
 
 Abra o *browser* e acesse a url http://localhost:4200. Pronto!
+
+### Prévia local com Docker
+
+O Dockerfile prepara o pacote UI e inicia o aplicativo de demonstração do workspace:
+
+```bash
+docker build -t po-ui-dev .
+docker run --rm -p 4200:4200 po-ui-dev
+```
+
+Acesse http://localhost:4200. Essa imagem usa o servidor de desenvolvimento Angular e destina-se a uma prévia local; para produção, use o processo de build e publicação do portal descrito nos scripts do projeto.
 
 ----
 
